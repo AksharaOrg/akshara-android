@@ -26,7 +26,7 @@ internal object KeyboardPaletteResolver {
             else -> context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
                 Configuration.UI_MODE_NIGHT_YES
         }
-        return if (theme == "system" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             dynamic(context, dark, highContrast)
         } else {
             fixed(dark, highContrast)
@@ -66,18 +66,18 @@ internal object KeyboardPaletteResolver {
                 key = color(android.R.color.system_neutral1_800),
                 utility = color(android.R.color.system_neutral2_700),
                 ink = color(android.R.color.system_neutral1_50),
-                selected = color(android.R.color.system_accent2_700),
+                selected = color(android.R.color.system_accent1_700),
                 dark = true,
                 highContrast = highContrast,
                 dynamic = true
             )
         } else {
             KeyboardPalette(
-                background = color(android.R.color.system_neutral1_50),
+                background = color(android.R.color.system_neutral1_10),
                 key = color(android.R.color.system_neutral1_0),
                 utility = color(android.R.color.system_neutral2_100),
                 ink = color(android.R.color.system_neutral1_900),
-                selected = color(android.R.color.system_accent2_200),
+                selected = color(android.R.color.system_accent1_100),
                 dark = false,
                 highContrast = highContrast,
                 dynamic = true

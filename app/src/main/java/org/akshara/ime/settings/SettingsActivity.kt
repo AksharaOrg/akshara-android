@@ -347,6 +347,10 @@ class SettingsActivity : Activity() {
     }
 
     private fun cardColor(): Int {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val dark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            return getColor(if (dark) android.R.color.system_neutral1_800 else android.R.color.system_neutral2_50)
+        }
         val window = attrColor(android.R.attr.colorBackground)
         val floating = attrColor(android.R.attr.colorBackgroundFloating)
         if (floating != 0 && floating != window) return floating
@@ -355,6 +359,10 @@ class SettingsActivity : Activity() {
     }
 
     private fun attrColor(attr: Int): Int {
+        if (attr == android.R.attr.colorAccent && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val dark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            return getColor(if (dark) android.R.color.system_accent1_200 else android.R.color.system_accent1_600)
+        }
         val typed = obtainStyledAttributes(intArrayOf(attr))
         val color = typed.getColor(0, 0)
         typed.recycle()
