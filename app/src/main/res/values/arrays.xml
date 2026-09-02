@@ -1,0 +1,16 @@
+<resources>
+    <string-array name="input_mode_entries"><item>Smart Phonetic</item><item>Phonetic</item><item>Wijesekara</item></string-array>
+    <string-array name="input_mode_values"><item>SMART_PHONETIC</item><item>PHONETIC</item><item>WIJESEKARA</item></string-array>
+    <string-array name="top_row_entries"><item>Off</item><item>Numbers</item><item>Emoji</item></string-array>
+    <string-array name="top_row_values"><item>none</item><item>numbers</item><item>emoji</item></string-array>
+    <string-array name="skin_tone_entries"><item>Default</item><item>🏻 Light</item><item>🏼 Medium-light</item><item>🏽 Medium</item><item>🏾 Medium-dark</item><item>🏿 Dark</item></string-array>
+    <string-array name="skin_tone_values"><item></item><item>🏻</item><item>🏼</item><item>🏽</item><item>🏾</item><item>🏿</item></string-array>
+    <string-array name="theme_entries"><item>Follow system</item><item>Light</item><item>Dark</item></string-array>
+    <string-array name="theme_values"><item>system</item><item>light</item><item>dark</item></string-array>
+    <string-array name="spacing_entries"><item>Compact</item><item>Standard</item><item>Spacious</item></string-array>
+    <string-array name="spacing_values"><item>compact</item><item>standard</item><item>spacious</item></string-array>
+    <string-array name="keyboard_size_entries"><item>Compact</item><item>Standard</item><item>Tall</item></string-array>
+    <string-array name="keyboard_size_values"><item>compact</item><item>standard</item><item>tall</item></string-array>
+    <string-array name="one_handed_entries"><item>Full width</item><item>Dock left</item><item>Dock right</item></string-array>
+    <string-array name="one_handed_values"><item>center</item><item>left</item><item>right</item></string-array>
+</resources>

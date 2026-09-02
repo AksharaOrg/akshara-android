@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">Akshara</string>
+    <string name="subtype_sinhala">Sinhala (Akshara)</string>
+    <string name="reset">Reset</string>
+    <string name="clear_clipboard_summary">Remove recent clips stored on this device. Pinned clips stay until you delete them from the keyboard.</string>
+    <string name="settings_subtitle">Sinhala keyboard</string>
+    <string name="category_get_started">Setup</string><string name="category_typing">Typing</string><string name="category_tools">Emoji &amp; clipboard</string>
+    <string name="category_appearance">Appearance &amp; feedback</string><string name="category_privacy">Privacy &amp; reset</string><string name="category_about">About</string>
+    <string name="enable_keyboard">Enable Akshara</string><string name="select_keyboard">Select active keyboard</string>
+    <string name="status_enabled">Enabled in Android settings</string><string name="status_enable_needed">Required before Akshara can be selected</string>
+    <string name="status_selected">Akshara is the active keyboard</string><string name="status_select_needed">Choose Akshara from the keyboard picker</string>
+    <string name="input_mode">Sinhala input method</string><string name="suggestions">Show suggestions</string><string name="suggestions_summary">Local Sinhala word predictions above the keys</string>
+    <string name="emoji_suggestions">Emoji suggestions</string><string name="emoji_suggestions_summary">Suggest emoji for Sinhala words</string><string name="top_row">Optional top row</string>
+    <string name="emoji_picker">Emoji key</string><string name="emoji_picker_summary">Show the built-in emoji picker</string><string name="skin_tone">Preferred skin tone</string>
+    <string name="clipboard_history">Clipboard history</string><string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device. Pin clips from the keyboard to keep them.</string>
+    <string name="theme">Theme</string>
+    <string name="key_spacing">Key spacing</string>
+    <string name="keyboard_size">Keyboard height</string>
+    <string name="spatial_decoder">Forgiving key detection</string>
+    <string name="spatial_decoder_summary">Prefer nearby keys when a tap lands on a border</string>
+    <string name="debug_overlay">Touch debug overlay</string>
+    <string name="debug_overlay_summary">Show hit bounds and candidate scores while typing</string>
+    <string name="reset_touch_title">Reset touch personalization</string>
+    <string name="reset_touch_summary">Clear learned tap-center offsets for this device</string>
+    <string name="reset_touch_message">Akshara will forget locally learned key-center offsets. No typed text is stored in this data.</string>
+    <string name="one_handed">One-handed layout</string>
+    <string name="haptics">Vibrate on keypress</string><string name="key_sounds">Sound on keypress</string>
+    <string name="high_contrast">High-contrast keys</string><string name="high_contrast_summary">Add stronger outlines to key surfaces</string>
+    <string name="clear_learning_title">Clear learned words</string><string name="clear_learning_summary">Erase local word and next-word history</string><string name="clear_learning_message">Akshara will forget locally learned words and typing patterns.</string>
+    <string name="clear_clipboard_title">Clear clipboard history</string><string name="clear_clipboard_message">Recent clips will be removed. Pinned clips stay until you delete them from the keyboard.</string>
+    <string name="reset_title">Reset keyboard settings</string><string name="reset_summary">Restore defaults and clear local keyboard data</string><string name="reset_message">This restores all keyboard settings and clears learned words and clipboard history.</string><string name="clear">Clear</string>
+    <string name="about_title">Akshara for Android</string><string name="about_summary">Version %1$s • Wijesekara, Phonetic, and Smart Phonetic</string>
+    <string name="privacy_title">Private by design</string><string name="privacy_summary">Typing, learning, emoji search, and clipboard history stay on this device. Akshara has no internet permission.</string>
+</resources>

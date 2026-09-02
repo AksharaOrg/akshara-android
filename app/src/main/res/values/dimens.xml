@@ -1,0 +1,5 @@
+<resources>
+    <dimen name="settings_gutter">16dp</dimen>
+    <dimen name="settings_section_gap">12dp</dimen>
+    <dimen name="settings_hero_size">36sp</dimen>
+</resources>
