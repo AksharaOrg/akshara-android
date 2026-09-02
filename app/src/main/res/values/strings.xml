@@ -17,7 +17,9 @@
     <string name="theme">Theme</string>
     <string name="key_spacing">Key spacing</string>
     <string name="keyboard_size">Keyboard height</string>
+    <string name="key_roundness">Key corner radius</string>
     <string name="height_percent">%1$d%%</string>
+    <string name="unit_dp">%1$d dp</string>
     <string name="spatial_decoder">Forgiving key detection</string>
     <string name="spatial_decoder_summary">Prefer nearby keys when a tap lands on a border</string>
     <string name="debug_overlay">Touch debug overlay</string>

@@ -27,6 +27,9 @@ class KeyboardPreferences(context: Context) {
     var keyboardSize: String
         get() = store.getString(KEYBOARD_SIZE, "standard") ?: "standard"
         set(value) = store.edit().putString(KEYBOARD_SIZE, value).apply()
+    var keyRoundness: Int
+        get() = store.getInt(KEY_ROUNDNESS, 8)
+        set(value) = store.edit().putInt(KEY_ROUNDNESS, value).apply()
     var spatialDecoder: Boolean by bool(SPATIAL_DECODER, true)
     var debugOverlay: Boolean by bool(DEBUG_OVERLAY, false)
     var theme: String
@@ -49,6 +52,7 @@ class KeyboardPreferences(context: Context) {
         private const val HIGH_CONTRAST = "high_contrast"; private const val CLIPBOARD = "clipboard"
         private const val TOP_ROW = "top_row"; private const val ONE_HANDED = "one_handed"
         private const val KEY_SPACING = "key_spacing"; private const val KEYBOARD_SIZE = "keyboard_size"
+        private const val KEY_ROUNDNESS = "key_roundness"
         private const val SPATIAL_DECODER = "spatial_decoder"; private const val DEBUG_OVERLAY = "debug_overlay"
         private const val THEME = "theme"; private const val SKIN_TONE = "skin_tone"
     }

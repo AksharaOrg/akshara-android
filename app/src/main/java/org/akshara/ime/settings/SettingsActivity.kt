@@ -152,6 +152,9 @@ class SettingsActivity : Activity() {
             slider(R.string.keyboard_size, R.drawable.ic_keyboard, 70, 200, currentPercent) {
                 prefs.keyboardSize = it.toString()
             }
+            slider(R.string.key_roundness, R.drawable.ic_keyboard, 0, 28, prefs.keyRoundness, R.string.unit_dp) {
+                prefs.keyRoundness = it
+            }
             toggle(R.string.spatial_decoder, R.string.spatial_decoder_summary, R.drawable.ic_keyboard, prefs.spatialDecoder) {
                 prefs.spatialDecoder = it
             }
@@ -263,7 +266,15 @@ class SettingsActivity : Activity() {
             }
         }
 
-        fun slider(title: Int, icon: Int, min: Int, max: Int, current: Int, onValueChange: (Int) -> Unit) {
+        fun slider(
+            title: Int,
+            icon: Int,
+            min: Int,
+            max: Int,
+            current: Int,
+            formatRes: Int = R.string.height_percent,
+            onValueChange: (Int) -> Unit
+        ) {
             val row = layoutInflater.inflate(R.layout.settings_item_slider, card, false)
             row.findViewById<ImageView>(R.id.settings_slider_icon).apply {
                 setImageResource(icon)
@@ -273,13 +284,13 @@ class SettingsActivity : Activity() {
             val valueView = row.findViewById<TextView>(R.id.settings_slider_value)
             val seek = row.findViewById<SeekBar>(R.id.settings_slider_seek)
             val clamped = current.coerceIn(min, max)
-            valueView.text = getString(R.string.height_percent, clamped)
+            valueView.text = getString(formatRes, clamped)
             seek.max = max - min
             seek.progress = clamped - min
             seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, progress: Int, fromUser: Boolean) {
                     val actual = min + progress
-                    valueView.text = getString(R.string.height_percent, actual)
+                    valueView.text = getString(formatRes, actual)
                     if (fromUser) onValueChange(actual)
                 }
                 override fun onStartTrackingTouch(s: SeekBar?) {}

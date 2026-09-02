@@ -41,6 +41,14 @@ internal class KeyCap(context: Context) : View(context) {
         set(value) { field = value; invalidate() }
     var flickActive = false
         set(value) { field = value; invalidate() }
+    var cornerRadiusDp: Float = KeyboardGeometry.LETTER_RADIUS_DP
+        set(value) {
+            if (field != value) {
+                field = value
+                currentRadius = -1f
+                invalidate()
+            }
+        }
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT }
@@ -62,8 +70,8 @@ internal class KeyCap(context: Context) : View(context) {
 
     private fun defaultRadius(key: KeySpec): Float {
         return when (key.action) {
-            KeyCode.LAYER, KeyCode.ENTER -> if (height > 0) height / 2f else dp(KeyboardGeometry.LETTER_RADIUS_DP)
-            else -> dp(KeyboardGeometry.LETTER_RADIUS_DP)
+            KeyCode.LAYER, KeyCode.ENTER -> if (height > 0) height / 2f else dp(cornerRadiusDp)
+            else -> dp(cornerRadiusDp)
         }
     }
 

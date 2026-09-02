@@ -86,6 +86,7 @@ internal class KeyboardPanel(
             row.keys.forEach { def ->
                 val cap = caps[index++]
                 cap.colors = colors
+                cap.cornerRadiusDp = prefs.keyRoundness.toFloat()
                 cap.spec = KeySpec(
                     def.id, def.label, def.output, def.action,
                     Bounds(0f, 0f, 0f, 0f), Bounds(0f, 0f, 0f, 0f), 0,
