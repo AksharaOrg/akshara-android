@@ -30,6 +30,7 @@
     <string name="reset_touch_message">Akshara will forget locally learned key-center offsets. No typed text is stored in this data.</string>
     <string name="one_handed">One-handed layout</string>
     <string name="haptics">Vibrate on keypress</string><string name="key_sounds">Sound on keypress</string>
+    <string name="key_popup">Popup on keypress</string><string name="key_popup_summary">Show character popup preview while typing</string>
     <string name="high_contrast">High-contrast keys</string><string name="high_contrast_summary">Add stronger outlines to key surfaces</string>
     <string name="clear_learning_title">Clear learned words</string><string name="clear_learning_summary">Erase local word and next-word history</string><string name="clear_learning_message">Akshara will forget locally learned words and typing patterns.</string>
     <string name="clear_clipboard_title">Clear clipboard history</string><string name="clear_clipboard_message">Recent clips will be removed. Pinned clips stay until you delete them from the keyboard.</string>

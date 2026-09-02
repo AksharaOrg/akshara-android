@@ -166,6 +166,7 @@ class SettingsActivity : Activity() {
             }
             toggle(R.string.haptics, 0, R.drawable.ic_vibration, prefs.haptics) { prefs.haptics = it }
             toggle(R.string.key_sounds, 0, R.drawable.ic_volume, prefs.keySounds) { prefs.keySounds = it }
+            toggle(R.string.key_popup, R.string.key_popup_summary, R.drawable.ic_keyboard, prefs.keyPopup) { prefs.keyPopup = it }
             toggle(R.string.high_contrast, R.string.high_contrast_summary, R.drawable.ic_palette, prefs.highContrast) {
                 prefs.highContrast = it
             }

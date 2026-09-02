@@ -219,6 +219,7 @@ internal class KeyboardPanel(
     }
 
     override fun onPreview(key: KeySpec) {
+        if (!prefs.keyPopup) return
         capFor(key)?.let { popups.showPreview(it, key.label.ifEmpty { key.output }, colors.key, colors.dark) }
     }
 

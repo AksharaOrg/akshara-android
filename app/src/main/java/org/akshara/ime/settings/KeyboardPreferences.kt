@@ -13,6 +13,7 @@ class KeyboardPreferences(context: Context) {
     var emojiPicker: Boolean by bool(EMOJI_PICKER, true)
     var haptics: Boolean by bool(HAPTICS, true)
     var keySounds: Boolean by bool(KEY_SOUNDS, false)
+    var keyPopup: Boolean by bool(KEY_POPUP, true)
     var highContrast: Boolean by bool(HIGH_CONTRAST, false)
     var clipboardHistory: Boolean by bool(CLIPBOARD, false)
     var topRow: String
@@ -50,6 +51,7 @@ class KeyboardPreferences(context: Context) {
         private const val MODE = "mode"; private const val SUGGESTIONS = "suggestions"
         private const val EMOJI_SUGGESTIONS = "emoji_suggestions"; private const val EMOJI_PICKER = "emoji_picker"
         private const val HAPTICS = "haptics"; private const val KEY_SOUNDS = "key_sounds"
+        private const val KEY_POPUP = "key_popup"
         private const val HIGH_CONTRAST = "high_contrast"; private const val CLIPBOARD = "clipboard"
         private const val TOP_ROW = "top_row"; private const val ONE_HANDED = "one_handed"
         private const val KEY_SPACING = "key_spacing"; private const val KEYBOARD_SIZE = "keyboard_size"
