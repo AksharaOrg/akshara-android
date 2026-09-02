@@ -9,6 +9,7 @@
     <string name="enable_keyboard">Enable Akshara</string><string name="select_keyboard">Select active keyboard</string>
     <string name="status_enabled">Enabled in Android settings</string><string name="status_enable_needed">Required before Akshara can be selected</string>
     <string name="status_selected">Akshara is the active keyboard</string><string name="status_select_needed">Choose Akshara from the keyboard picker</string>
+    <string name="test_keyboard_hint">Test here</string>
     <string name="input_mode">Sinhala input method</string><string name="suggestions">Show suggestions</string><string name="suggestions_summary">Local Sinhala word predictions above the keys</string>
     <string name="emoji_suggestions">Emoji suggestions</string><string name="emoji_suggestions_summary">Suggest emoji for Sinhala words</string><string name="top_row">Optional top row</string>
     <string name="emoji_picker">Emoji key</string><string name="emoji_picker_summary">Show the built-in emoji picker</string><string name="skin_tone">Preferred skin tone</string>

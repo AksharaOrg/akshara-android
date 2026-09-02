@@ -12,8 +12,11 @@ import android.provider.Settings
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
+import android.transition.AutoTransition
+import android.transition.TransitionManager
 import android.view.ViewOutlineProvider
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -63,6 +66,37 @@ class SettingsActivity : Activity() {
 
         val enabled = keyboardEnabled()
         val selected = keyboardSelected()
+        if (enabled && selected) {
+            val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
+            val testCard = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = cardBackground()
+                clipToOutline = true
+                outlineProvider = ViewOutlineProvider.BACKGROUND
+                elevation = 0f
+            }
+            val input = EditText(this).apply {
+                hint = getString(R.string.test_keyboard_hint)
+                background = null
+                val hPad = (16f * resources.displayMetrics.density).toInt()
+                val vPad = (14f * resources.displayMetrics.density).toInt()
+                setPadding(hPad, vPad, hPad, vPad)
+                setTextColor(attrColor(android.R.attr.textColorPrimary))
+                setHintTextColor(attrColor(android.R.attr.textColorSecondary))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            }
+            testCard.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            container.addView(
+                testCard,
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = gutter
+                    marginEnd = gutter
+                    topMargin = (4f * resources.displayMetrics.density).toInt()
+                    bottomMargin = resources.getDimensionPixelSize(R.dimen.settings_section_gap)
+                }
+            )
+        }
+        TransitionManager.beginDelayedTransition(container, AutoTransition().apply { duration = 250 })
         section(R.string.category_get_started) {
             action(
                 R.string.enable_keyboard,
@@ -115,7 +149,7 @@ class SettingsActivity : Activity() {
                 "tall" -> 130
                 else -> prefs.keyboardSize.toIntOrNull() ?: 100
             }
-            slider(R.string.keyboard_size, R.drawable.ic_keyboard, 70, 160, currentPercent) {
+            slider(R.string.keyboard_size, R.drawable.ic_keyboard, 70, 200, currentPercent) {
                 prefs.keyboardSize = it.toString()
             }
             toggle(R.string.spatial_decoder, R.string.spatial_decoder_summary, R.drawable.ic_keyboard, prefs.spatialDecoder) {
