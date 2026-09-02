@@ -17,6 +17,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
@@ -109,8 +110,13 @@ class SettingsActivity : Activity() {
             choice(R.string.key_spacing, R.drawable.ic_keyboard, R.array.spacing_entries, R.array.spacing_values, prefs.keySpacing) {
                 prefs.keySpacing = it
             }
-            choice(R.string.keyboard_size, R.drawable.ic_keyboard, R.array.keyboard_size_entries, R.array.keyboard_size_values, prefs.keyboardSize) {
-                prefs.keyboardSize = it
+            val currentPercent = when (prefs.keyboardSize) {
+                "compact" -> 80
+                "tall" -> 130
+                else -> prefs.keyboardSize.toIntOrNull() ?: 100
+            }
+            slider(R.string.keyboard_size, R.drawable.ic_keyboard, 70, 160, currentPercent) {
+                prefs.keyboardSize = it.toString()
             }
             toggle(R.string.spatial_decoder, R.string.spatial_decoder_summary, R.drawable.ic_keyboard, prefs.spatialDecoder) {
                 prefs.spatialDecoder = it
@@ -221,6 +227,31 @@ class SettingsActivity : Activity() {
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()
             }
+        }
+
+        fun slider(title: Int, icon: Int, min: Int, max: Int, current: Int, onValueChange: (Int) -> Unit) {
+            val row = layoutInflater.inflate(R.layout.settings_item_slider, card, false)
+            row.findViewById<ImageView>(R.id.settings_slider_icon).apply {
+                setImageResource(icon)
+                imageTintList = ColorStateList.valueOf(attrColor(android.R.attr.colorControlNormal))
+            }
+            row.findViewById<TextView>(R.id.settings_slider_title).setText(title)
+            val valueView = row.findViewById<TextView>(R.id.settings_slider_value)
+            val seek = row.findViewById<SeekBar>(R.id.settings_slider_seek)
+            val clamped = current.coerceIn(min, max)
+            valueView.text = getString(R.string.height_percent, clamped)
+            seek.max = max - min
+            seek.progress = clamped - min
+            seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, progress: Int, fromUser: Boolean) {
+                    val actual = min + progress
+                    valueView.text = getString(R.string.height_percent, actual)
+                    if (fromUser) onValueChange(actual)
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+            card.addView(row)
         }
     }
 

@@ -233,7 +233,7 @@ class KeyboardView(
         val rows = KeyboardLayoutFactory.typingRows(
             mode, layer, shifted, capsLock, editorLayout, prefs.topRow, prefs.emojiPicker, enterLabel, spaceLabel, false
         )
-        val rowHeight = KeyboardGeometry.rowHeightPx(prefs.keyboardSize, isLandscape(), resources.displayMetrics.density)
+        val rowHeight = KeyboardGeometry.rowHeightPx(prefs.keyboardSize, isLandscape(), resources.displayMetrics.density, rows.size)
         panel.debug = BuildConfig.DEBUG && prefs.debugOverlay
         panel.playSpaceIntro = animateSpaceLabel
         animateSpaceLabel = false
