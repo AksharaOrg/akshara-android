@@ -60,14 +60,19 @@ internal object KeyboardGeometry {
     const val EMOJI_ROWS_LANDSCAPE = 3
 
     fun keyAreaDp(size: String, landscape: Boolean): Int {
+        val percent = size.toIntOrNull()
+        if (percent != null) {
+            val base = if (landscape) 164f else KEY_AREA_STANDARD_DP.toFloat()
+            return (base * (percent / 100f)).toInt()
+        }
         if (landscape) return when (size) {
-            "compact" -> 152
-            "tall" -> 176
+            "compact" -> 130
+            "tall" -> 210
             else -> 164
         }
         return when (size) {
-            "compact" -> KEY_AREA_COMPACT_DP
-            "tall" -> KEY_AREA_TALL_DP
+            "compact" -> 185
+            "tall" -> 300
             else -> KEY_AREA_STANDARD_DP
         }
     }

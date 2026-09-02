@@ -21,10 +21,16 @@ internal class KeyboardPanel(
     private val prefs: KeyboardPreferences,
     private val popups: KeyPopups,
     private val actions: KeyboardActions,
-    private val colors: KeyboardColors,
+    colors: KeyboardColors,
     private val onLayer: (KeyboardLayer) -> Unit,
     private val onShift: () -> Unit
 ) : ViewGroup(context), TouchController.Listener {
+    var colors: KeyboardColors = colors
+        set(value) {
+            field = value
+            caps.forEach { it.colors = value }
+            invalidate()
+        }
     var layout: KeyboardLayout? = null
         private set
     var learningEnabled = true
@@ -86,6 +92,7 @@ internal class KeyboardPanel(
             row.keys.forEach { def ->
                 val cap = caps[index++]
                 cap.colors = colors
+                cap.cornerRadiusDp = prefs.keyRoundness.toFloat()
                 cap.spec = KeySpec(
                     def.id, def.label, def.output, def.action,
                     Bounds(0f, 0f, 0f, 0f), Bounds(0f, 0f, 0f, 0f), 0,
@@ -212,6 +219,7 @@ internal class KeyboardPanel(
     }
 
     override fun onPreview(key: KeySpec) {
+        if (!prefs.keyPopup) return
         capFor(key)?.let { popups.showPreview(it, key.label.ifEmpty { key.output }, colors.key, colors.dark) }
     }
 

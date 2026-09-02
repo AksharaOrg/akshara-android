@@ -12,11 +12,15 @@ import android.provider.Settings
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
+import android.transition.AutoTransition
+import android.transition.TransitionManager
 import android.view.ViewOutlineProvider
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
@@ -62,6 +66,37 @@ class SettingsActivity : Activity() {
 
         val enabled = keyboardEnabled()
         val selected = keyboardSelected()
+        if (enabled && selected) {
+            val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
+            val testCard = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = cardBackground()
+                clipToOutline = true
+                outlineProvider = ViewOutlineProvider.BACKGROUND
+                elevation = 0f
+            }
+            val input = EditText(this).apply {
+                hint = getString(R.string.test_keyboard_hint)
+                background = null
+                val hPad = (16f * resources.displayMetrics.density).toInt()
+                val vPad = (14f * resources.displayMetrics.density).toInt()
+                setPadding(hPad, vPad, hPad, vPad)
+                setTextColor(attrColor(android.R.attr.textColorPrimary))
+                setHintTextColor(attrColor(android.R.attr.textColorSecondary))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            }
+            testCard.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            container.addView(
+                testCard,
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = gutter
+                    marginEnd = gutter
+                    topMargin = (4f * resources.displayMetrics.density).toInt()
+                    bottomMargin = resources.getDimensionPixelSize(R.dimen.settings_section_gap)
+                }
+            )
+        }
+        TransitionManager.beginDelayedTransition(container, AutoTransition().apply { duration = 250 })
         section(R.string.category_get_started) {
             action(
                 R.string.enable_keyboard,
@@ -103,14 +138,23 @@ class SettingsActivity : Activity() {
             }
         }
         section(R.string.category_appearance) {
-            choice(R.string.theme, R.drawable.ic_palette, R.array.theme_entries, R.array.theme_values, prefs.theme) {
-                prefs.theme = it
+            themeChoice(R.string.theme, R.drawable.ic_palette, R.array.theme_entries, R.array.theme_values, prefs.theme)
+            choice(R.string.keyboard_shape, R.drawable.ic_keyboard, R.array.keyboard_shape_entries, R.array.keyboard_shape_values, prefs.keyboardShape) {
+                prefs.keyboardShape = it
             }
             choice(R.string.key_spacing, R.drawable.ic_keyboard, R.array.spacing_entries, R.array.spacing_values, prefs.keySpacing) {
                 prefs.keySpacing = it
             }
-            choice(R.string.keyboard_size, R.drawable.ic_keyboard, R.array.keyboard_size_entries, R.array.keyboard_size_values, prefs.keyboardSize) {
-                prefs.keyboardSize = it
+            val currentPercent = when (prefs.keyboardSize) {
+                "compact" -> 80
+                "tall" -> 130
+                else -> prefs.keyboardSize.toIntOrNull() ?: 100
+            }
+            slider(R.string.keyboard_size, R.drawable.ic_keyboard, 70, 200, currentPercent) {
+                prefs.keyboardSize = it.toString()
+            }
+            slider(R.string.key_roundness, R.drawable.ic_keyboard, 0, 28, prefs.keyRoundness, R.string.unit_dp) {
+                prefs.keyRoundness = it
             }
             toggle(R.string.spatial_decoder, R.string.spatial_decoder_summary, R.drawable.ic_keyboard, prefs.spatialDecoder) {
                 prefs.spatialDecoder = it
@@ -125,6 +169,7 @@ class SettingsActivity : Activity() {
             }
             toggle(R.string.haptics, 0, R.drawable.ic_vibration, prefs.haptics) { prefs.haptics = it }
             toggle(R.string.key_sounds, 0, R.drawable.ic_volume, prefs.keySounds) { prefs.keySounds = it }
+            toggle(R.string.key_popup, R.string.key_popup_summary, R.drawable.ic_keyboard, prefs.keyPopup) { prefs.keyPopup = it }
             toggle(R.string.high_contrast, R.string.high_contrast_summary, R.drawable.ic_palette, prefs.highContrast) {
                 prefs.highContrast = it
             }
@@ -222,6 +267,104 @@ class SettingsActivity : Activity() {
                     .show()
             }
         }
+
+        fun themeChoice(title: Int, icon: Int, entries: Int, values: Int, current: String) {
+            val labels = resources.getStringArray(entries)
+            val keys = resources.getStringArray(values)
+            val selected = labels.getOrNull(keys.indexOf(current))
+            val row = inflateRow(card, title, selected, icon, clickable = true)
+            row.setOnClickListener {
+                val context = this@SettingsActivity
+                val dialogView = LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(0, dp(8), 0, dp(8))
+                }
+
+                val toggleRow = layoutInflater.inflate(R.layout.settings_item, dialogView, false)
+                toggleRow.findViewById<TextView>(R.id.settings_item_title).setText(R.string.use_system_color)
+                toggleRow.findViewById<TextView>(R.id.settings_item_summary).visibility = View.GONE
+                toggleRow.findViewById<ImageView>(R.id.settings_item_icon).apply {
+                    setImageResource(R.drawable.ic_palette)
+                    imageTintList = ColorStateList.valueOf(attrColor(android.R.attr.colorControlNormal))
+                }
+                val switchView = toggleRow.findViewById<Switch>(R.id.settings_item_switch).apply {
+                    visibility = View.VISIBLE
+                    isChecked = prefs.useSystemColor
+                }
+                toggleRow.setOnClickListener {
+                    val next = !switchView.isChecked
+                    switchView.isChecked = next
+                    prefs.useSystemColor = next
+                    render()
+                }
+                dialogView.addView(toggleRow)
+
+                var dialogRef: AlertDialog? = null
+
+                var selectedIndex = keys.indexOf(current).coerceAtLeast(0)
+                val radioGroup = android.widget.RadioGroup(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(16), 0, dp(16), 0)
+                }
+
+                labels.forEachIndexed { i, label ->
+                    val rb = android.widget.RadioButton(context).apply {
+                        text = label
+                        id = View.generateViewId()
+                        isChecked = (i == selectedIndex)
+                        textSize = 16f
+                        setPadding(dp(8), dp(12), dp(8), dp(12))
+                        setOnClickListener {
+                            prefs.theme = keys[i]
+                            render()
+                            dialogRef?.dismiss()
+                        }
+                    }
+                    radioGroup.addView(rb)
+                }
+                dialogView.addView(radioGroup)
+
+                val dialog = AlertDialog.Builder(context)
+                    .setTitle(title)
+                    .setView(dialogView)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                dialogRef = dialog
+            }
+        }
+
+        fun slider(
+            title: Int,
+            icon: Int,
+            min: Int,
+            max: Int,
+            current: Int,
+            formatRes: Int = R.string.height_percent,
+            onValueChange: (Int) -> Unit
+        ) {
+            val row = layoutInflater.inflate(R.layout.settings_item_slider, card, false)
+            row.findViewById<ImageView>(R.id.settings_slider_icon).apply {
+                setImageResource(icon)
+                imageTintList = ColorStateList.valueOf(attrColor(android.R.attr.colorControlNormal))
+            }
+            row.findViewById<TextView>(R.id.settings_slider_title).setText(title)
+            val valueView = row.findViewById<TextView>(R.id.settings_slider_value)
+            val seek = row.findViewById<SeekBar>(R.id.settings_slider_seek)
+            val clamped = current.coerceIn(min, max)
+            valueView.text = getString(formatRes, clamped)
+            seek.max = max - min
+            seek.progress = clamped - min
+            seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, progress: Int, fromUser: Boolean) {
+                    val actual = min + progress
+                    valueView.text = getString(formatRes, actual)
+                    if (fromUser) onValueChange(actual)
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+            card.addView(row)
+        }
     }
 
     private fun inflateRow(
@@ -282,6 +425,10 @@ class SettingsActivity : Activity() {
     }
 
     private fun cardColor(): Int {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val dark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            return getColor(if (dark) android.R.color.system_neutral1_800 else android.R.color.system_neutral2_50)
+        }
         val window = attrColor(android.R.attr.colorBackground)
         val floating = attrColor(android.R.attr.colorBackgroundFloating)
         if (floating != 0 && floating != window) return floating
@@ -290,9 +437,15 @@ class SettingsActivity : Activity() {
     }
 
     private fun attrColor(attr: Int): Int {
+        if (attr == android.R.attr.colorAccent && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val dark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            return getColor(if (dark) android.R.color.system_accent1_200 else android.R.color.system_accent1_600)
+        }
         val typed = obtainStyledAttributes(intArrayOf(attr))
         val color = typed.getColor(0, 0)
         typed.recycle()
         return color
     }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }

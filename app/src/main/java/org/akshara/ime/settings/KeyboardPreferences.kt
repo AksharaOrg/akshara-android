@@ -13,6 +13,7 @@ class KeyboardPreferences(context: Context) {
     var emojiPicker: Boolean by bool(EMOJI_PICKER, true)
     var haptics: Boolean by bool(HAPTICS, true)
     var keySounds: Boolean by bool(KEY_SOUNDS, false)
+    var keyPopup: Boolean by bool(KEY_POPUP, true)
     var highContrast: Boolean by bool(HIGH_CONTRAST, false)
     var clipboardHistory: Boolean by bool(CLIPBOARD, false)
     var topRow: String
@@ -27,11 +28,18 @@ class KeyboardPreferences(context: Context) {
     var keyboardSize: String
         get() = store.getString(KEYBOARD_SIZE, "standard") ?: "standard"
         set(value) = store.edit().putString(KEYBOARD_SIZE, value).apply()
+    var keyboardShape: String
+        get() = store.getString(KEYBOARD_SHAPE, "flat") ?: "flat"
+        set(value) = store.edit().putString(KEYBOARD_SHAPE, value).apply()
+    var keyRoundness: Int
+        get() = store.getInt(KEY_ROUNDNESS, 8)
+        set(value) = store.edit().putInt(KEY_ROUNDNESS, value).apply()
     var spatialDecoder: Boolean by bool(SPATIAL_DECODER, true)
     var debugOverlay: Boolean by bool(DEBUG_OVERLAY, false)
     var theme: String
         get() = store.getString(THEME, "system") ?: "system"
         set(value) = store.edit().putString(THEME, value).apply()
+    var useSystemColor: Boolean by bool(USE_SYSTEM_COLOR, true)
     var skinTone: String
         get() = store.getString(SKIN_TONE, "") ?: ""
         set(value) = store.edit().putString(SKIN_TONE, value).apply()
@@ -46,10 +54,13 @@ class KeyboardPreferences(context: Context) {
         private const val MODE = "mode"; private const val SUGGESTIONS = "suggestions"
         private const val EMOJI_SUGGESTIONS = "emoji_suggestions"; private const val EMOJI_PICKER = "emoji_picker"
         private const val HAPTICS = "haptics"; private const val KEY_SOUNDS = "key_sounds"
+        private const val KEY_POPUP = "key_popup"
         private const val HIGH_CONTRAST = "high_contrast"; private const val CLIPBOARD = "clipboard"
         private const val TOP_ROW = "top_row"; private const val ONE_HANDED = "one_handed"
         private const val KEY_SPACING = "key_spacing"; private const val KEYBOARD_SIZE = "keyboard_size"
+        private const val KEYBOARD_SHAPE = "keyboard_shape"
+        private const val KEY_ROUNDNESS = "key_roundness"
         private const val SPATIAL_DECODER = "spatial_decoder"; private const val DEBUG_OVERLAY = "debug_overlay"
-        private const val THEME = "theme"; private const val SKIN_TONE = "skin_tone"
+        private const val THEME = "theme"; private const val USE_SYSTEM_COLOR = "use_system_color"; private const val SKIN_TONE = "skin_tone"
     }
 }

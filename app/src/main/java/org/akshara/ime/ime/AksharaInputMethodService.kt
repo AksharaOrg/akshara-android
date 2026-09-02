@@ -3,6 +3,7 @@ package org.akshara.ime.ime
 import android.content.ClipboardManager
 import android.content.Context
 import android.inputmethodservice.InputMethodService
+import android.inputmethodservice.InputMethodService.Insets
 import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
@@ -53,6 +54,15 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         window?.window?.let { WindowCompat.setDecorFitsSystemWindows(it, false) }
         keyboard = KeyboardView(this, this, prefs)
         return keyboard
+    }
+    override fun onComputeInsets(outInsets: Insets) {
+        super.onComputeInsets(outInsets)
+        if (!::keyboard.isInitialized) return
+        val extra = keyboard.liquidCurveHeight
+        if (extra > 0) {
+            outInsets.contentTopInsets += extra
+            outInsets.visibleTopInsets += extra
+        }
     }
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting); cancelComposition(false)

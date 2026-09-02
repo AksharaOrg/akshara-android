@@ -19,17 +19,23 @@ internal data class KeyboardPalette(
 )
 
 internal object KeyboardPaletteResolver {
-    fun resolve(context: Context, theme: String, highContrast: Boolean): KeyboardPalette {
+    fun resolve(context: Context, theme: String, highContrast: Boolean, useSystemColor: Boolean = true): KeyboardPalette {
         val dark = when (theme) {
-            "dark" -> true
+            "dark", "black" -> true
             "light" -> false
             else -> context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
                 Configuration.UI_MODE_NIGHT_YES
         }
-        return if (theme == "system" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val isBlack = theme == "black"
+        val basePalette = if (useSystemColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             dynamic(context, dark, highContrast)
         } else {
             fixed(dark, highContrast)
+        }
+        return if (isBlack) {
+            basePalette.copy(background = Color.BLACK)
+        } else {
+            basePalette
         }
     }
 
@@ -66,18 +72,18 @@ internal object KeyboardPaletteResolver {
                 key = color(android.R.color.system_neutral1_800),
                 utility = color(android.R.color.system_neutral2_700),
                 ink = color(android.R.color.system_neutral1_50),
-                selected = color(android.R.color.system_accent2_700),
+                selected = color(android.R.color.system_accent1_700),
                 dark = true,
                 highContrast = highContrast,
                 dynamic = true
             )
         } else {
             KeyboardPalette(
-                background = color(android.R.color.system_neutral1_50),
+                background = color(android.R.color.system_neutral1_10),
                 key = color(android.R.color.system_neutral1_0),
                 utility = color(android.R.color.system_neutral2_100),
                 ink = color(android.R.color.system_neutral1_900),
-                selected = color(android.R.color.system_accent2_200),
+                selected = color(android.R.color.system_accent1_100),
                 dark = false,
                 highContrast = highContrast,
                 dynamic = true
