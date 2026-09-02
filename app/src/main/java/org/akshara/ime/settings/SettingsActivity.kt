@@ -138,9 +138,7 @@ class SettingsActivity : Activity() {
             }
         }
         section(R.string.category_appearance) {
-            choice(R.string.theme, R.drawable.ic_palette, R.array.theme_entries, R.array.theme_values, prefs.theme) {
-                prefs.theme = it
-            }
+            themeChoice(R.string.theme, R.drawable.ic_palette, R.array.theme_entries, R.array.theme_values, prefs.theme)
             choice(R.string.key_spacing, R.drawable.ic_keyboard, R.array.spacing_entries, R.array.spacing_values, prefs.keySpacing) {
                 prefs.keySpacing = it
             }
@@ -266,6 +264,71 @@ class SettingsActivity : Activity() {
             }
         }
 
+        fun themeChoice(title: Int, icon: Int, entries: Int, values: Int, current: String) {
+            val labels = resources.getStringArray(entries)
+            val keys = resources.getStringArray(values)
+            val selected = labels.getOrNull(keys.indexOf(current))
+            val row = inflateRow(card, title, selected, icon, clickable = true)
+            row.setOnClickListener {
+                val context = this@SettingsActivity
+                val dialogView = LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(0, dp(8), 0, dp(8))
+                }
+
+                val toggleRow = layoutInflater.inflate(R.layout.settings_item, dialogView, false)
+                toggleRow.findViewById<TextView>(R.id.settings_item_title).setText(R.string.use_system_color)
+                toggleRow.findViewById<TextView>(R.id.settings_item_summary).visibility = View.GONE
+                toggleRow.findViewById<ImageView>(R.id.settings_item_icon).apply {
+                    setImageResource(R.drawable.ic_palette)
+                    imageTintList = ColorStateList.valueOf(attrColor(android.R.attr.colorControlNormal))
+                }
+                val switchView = toggleRow.findViewById<Switch>(R.id.settings_item_switch).apply {
+                    visibility = View.VISIBLE
+                    isChecked = prefs.useSystemColor
+                }
+                toggleRow.setOnClickListener {
+                    val next = !switchView.isChecked
+                    switchView.isChecked = next
+                    prefs.useSystemColor = next
+                    render()
+                }
+                dialogView.addView(toggleRow)
+
+                var dialogRef: AlertDialog? = null
+
+                var selectedIndex = keys.indexOf(current).coerceAtLeast(0)
+                val radioGroup = android.widget.RadioGroup(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(16), 0, dp(16), 0)
+                }
+
+                labels.forEachIndexed { i, label ->
+                    val rb = android.widget.RadioButton(context).apply {
+                        text = label
+                        id = View.generateViewId()
+                        isChecked = (i == selectedIndex)
+                        textSize = 16f
+                        setPadding(dp(8), dp(12), dp(8), dp(12))
+                        setOnClickListener {
+                            prefs.theme = keys[i]
+                            render()
+                            dialogRef?.dismiss()
+                        }
+                    }
+                    radioGroup.addView(rb)
+                }
+                dialogView.addView(radioGroup)
+
+                val dialog = AlertDialog.Builder(context)
+                    .setTitle(title)
+                    .setView(dialogView)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                dialogRef = dialog
+            }
+        }
+
         fun slider(
             title: Int,
             icon: Int,
@@ -379,4 +442,6 @@ class SettingsActivity : Activity() {
         typed.recycle()
         return color
     }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }

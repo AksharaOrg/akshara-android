@@ -21,10 +21,16 @@ internal class KeyboardPanel(
     private val prefs: KeyboardPreferences,
     private val popups: KeyPopups,
     private val actions: KeyboardActions,
-    private val colors: KeyboardColors,
+    colors: KeyboardColors,
     private val onLayer: (KeyboardLayer) -> Unit,
     private val onShift: () -> Unit
 ) : ViewGroup(context), TouchController.Listener {
+    var colors: KeyboardColors = colors
+        set(value) {
+            field = value
+            caps.forEach { it.colors = value }
+            invalidate()
+        }
     var layout: KeyboardLayout? = null
         private set
     var learningEnabled = true

@@ -19,17 +19,23 @@ internal data class KeyboardPalette(
 )
 
 internal object KeyboardPaletteResolver {
-    fun resolve(context: Context, theme: String, highContrast: Boolean): KeyboardPalette {
+    fun resolve(context: Context, theme: String, highContrast: Boolean, useSystemColor: Boolean = true): KeyboardPalette {
         val dark = when (theme) {
-            "dark" -> true
+            "dark", "black" -> true
             "light" -> false
             else -> context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
                 Configuration.UI_MODE_NIGHT_YES
         }
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val isBlack = theme == "black"
+        val basePalette = if (useSystemColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             dynamic(context, dark, highContrast)
         } else {
             fixed(dark, highContrast)
+        }
+        return if (isBlack) {
+            basePalette.copy(background = Color.BLACK)
+        } else {
+            basePalette
         }
     }
 

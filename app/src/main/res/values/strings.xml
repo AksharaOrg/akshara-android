@@ -15,6 +15,7 @@
     <string name="emoji_picker">Emoji key</string><string name="emoji_picker_summary">Show the built-in emoji picker</string><string name="skin_tone">Preferred skin tone</string>
     <string name="clipboard_history">Clipboard history</string><string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device. Pin clips from the keyboard to keep them.</string>
     <string name="theme">Theme</string>
+    <string name="use_system_color">Use system color</string>
     <string name="key_spacing">Key spacing</string>
     <string name="keyboard_size">Keyboard height</string>
     <string name="key_roundness">Key corner radius</string>

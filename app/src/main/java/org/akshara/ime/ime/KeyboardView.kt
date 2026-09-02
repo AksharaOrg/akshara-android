@@ -71,11 +71,11 @@ class KeyboardView(
     private var emojiQuery = ""
     private var emojiCategoryIndex = 1
     private val handler = Handler(Looper.getMainLooper())
-    private val palette = KeyboardPaletteResolver.resolve(context, prefs.theme, prefs.highContrast)
-    private val bg = palette.background
-    private val key = palette.key
-    private val utility = palette.utility
-    private val ink = palette.ink
+    private var palette = KeyboardPaletteResolver.resolve(context, prefs.theme, prefs.highContrast, prefs.useSystemColor)
+    private var bg = palette.background
+    private var key = palette.key
+    private var utility = palette.utility
+    private var ink = palette.ink
     private val rail = SuggestionRail(context, ink, { actions.onCandidate(it) }) {
         layer = KeyboardLayer.CLIPBOARD; render()
     }
@@ -178,6 +178,13 @@ class KeyboardView(
     }
 
     fun configure(mode: InputMode, offerGlobe: Boolean, enter: String, editor: EditorLayout = EditorLayout.TEXT) {
+        palette = KeyboardPaletteResolver.resolve(context, prefs.theme, prefs.highContrast, prefs.useSystemColor)
+        bg = palette.background
+        key = palette.key
+        utility = palette.utility
+        ink = palette.ink
+        setBackgroundColor(bg)
+        panel.colors = KeyboardColors(key, utility, ink, palette.dark, palette.highContrast)
         this.mode = mode; enterLabel = enter; editorLayout = editor; this.offerGlobe = offerGlobe
         shiftLatch.reset(); layer = KeyboardLayer.LETTERS
         animateSpaceLabel = true

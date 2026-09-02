@@ -35,6 +35,7 @@ class KeyboardPreferences(context: Context) {
     var theme: String
         get() = store.getString(THEME, "system") ?: "system"
         set(value) = store.edit().putString(THEME, value).apply()
+    var useSystemColor: Boolean by bool(USE_SYSTEM_COLOR, true)
     var skinTone: String
         get() = store.getString(SKIN_TONE, "") ?: ""
         set(value) = store.edit().putString(SKIN_TONE, value).apply()
@@ -54,6 +55,6 @@ class KeyboardPreferences(context: Context) {
         private const val KEY_SPACING = "key_spacing"; private const val KEYBOARD_SIZE = "keyboard_size"
         private const val KEY_ROUNDNESS = "key_roundness"
         private const val SPATIAL_DECODER = "spatial_decoder"; private const val DEBUG_OVERLAY = "debug_overlay"
-        private const val THEME = "theme"; private const val SKIN_TONE = "skin_tone"
+        private const val THEME = "theme"; private const val USE_SYSTEM_COLOR = "use_system_color"; private const val SKIN_TONE = "skin_tone"
     }
 }
