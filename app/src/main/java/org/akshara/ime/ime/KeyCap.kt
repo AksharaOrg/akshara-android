@@ -27,6 +27,10 @@ internal class KeyCap(context: Context) : View(context) {
     var spec: KeySpec? = null
         set(value) {
             if (value?.action != KeyCode.SPACE) cancelSpaceCaption()
+            if (field?.action != value?.action) {
+                radiusAnimator?.cancel()
+                currentRadius = -1f
+            }
             field = value
             tag = value?.id
             contentDescription = value?.let { description(it) }
@@ -53,15 +57,27 @@ internal class KeyCap(context: Context) : View(context) {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
+    private var currentRadius = -1f
+    private var radiusAnimator: ValueAnimator? = null
+
+    private fun defaultRadius(key: KeySpec): Float {
+        return when (key.action) {
+            KeyCode.LAYER, KeyCode.ENTER -> if (height > 0) height / 2f else dp(KeyboardGeometry.LETTER_RADIUS_DP)
+            else -> dp(KeyboardGeometry.LETTER_RADIUS_DP)
+        }
+    }
+
     override fun onDraw(canvas: Canvas) {
         val key = spec ?: return
         val pressed = isPressed
         val base = if (key.utility) colors.utility else colors.key
         fill.color = if (pressed) ColorUtils.blendARGB(base, if (colors.dark) 0xFFFFFFFF.toInt() else 0xFF000000.toInt(), 0.18f) else base
-        val radius = when (key.action) {
-            KeyCode.LAYER, KeyCode.ENTER -> height / 2f
-            else -> dp(KeyboardGeometry.LETTER_RADIUS_DP)
+        val defRadius = defaultRadius(key)
+        val targetRadius = if (pressed) dp(4f) else defRadius
+        if (currentRadius < 0f || (!pressed && (key.action == KeyCode.LAYER || key.action == KeyCode.ENTER) && currentRadius < defRadius)) {
+            currentRadius = targetRadius
         }
+        val radius = currentRadius
         rect.set(0f, 0f, width.toFloat(), height.toFloat())
         canvas.drawRoundRect(rect, radius, radius, fill)
         if (colors.highContrast) {
@@ -108,11 +124,37 @@ internal class KeyCap(context: Context) : View(context) {
 
     override fun drawableStateChanged() {
         super.drawableStateChanged()
+        val key = spec
+        if (key != null) {
+            val defaultRad = defaultRadius(key)
+            val targetRadius = if (isPressed) dp(4f) else defaultRad
+            if (currentRadius < 0f) {
+                currentRadius = targetRadius
+            } else if (currentRadius != targetRadius) {
+                radiusAnimator?.cancel()
+                if (ValueAnimator.areAnimatorsEnabled() && isAttachedToWindow) {
+                    radiusAnimator = ValueAnimator.ofFloat(currentRadius, targetRadius).apply {
+                        duration = if (isPressed) 70L else 180L
+                        interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
+                        addUpdateListener {
+                            currentRadius = it.animatedValue as Float
+                            invalidate()
+                        }
+                        start()
+                    }
+                } else {
+                    currentRadius = targetRadius
+                    invalidate()
+                }
+            }
+        }
         invalidate()
     }
 
     override fun onDetachedFromWindow() {
         cancelSpaceCaption()
+        radiusAnimator?.cancel()
+        radiusAnimator = null
         super.onDetachedFromWindow()
     }
 
