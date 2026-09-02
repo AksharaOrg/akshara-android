@@ -123,7 +123,11 @@ internal class KeyCap(context: Context) : View(context) {
         if (!hint.isNullOrEmpty() && !flickActive) {
             hintPaint.color = ColorUtils.setAlphaComponent(colors.ink, 150)
             hintPaint.textSize = KeyTypography.hintPx(resources)
-            canvas.drawText(hint, width - dp(4), dp(13), hintPaint)
+            // Inset hint from the corner to avoid clipping
+            val cornerInset = radius * 0.29f
+            val hintX = width - dp(4) - cornerInset
+            val hintY = dp(13) + cornerInset
+            canvas.drawText(hint, hintX, hintY, hintPaint)
         }
     }
 
