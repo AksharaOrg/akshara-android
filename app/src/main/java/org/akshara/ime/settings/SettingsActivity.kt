@@ -139,6 +139,9 @@ class SettingsActivity : Activity() {
         }
         section(R.string.category_appearance) {
             themeChoice(R.string.theme, R.drawable.ic_palette, R.array.theme_entries, R.array.theme_values, prefs.theme)
+            choice(R.string.keyboard_shape, R.drawable.ic_keyboard, R.array.keyboard_shape_entries, R.array.keyboard_shape_values, prefs.keyboardShape) {
+                prefs.keyboardShape = it
+            }
             choice(R.string.key_spacing, R.drawable.ic_keyboard, R.array.spacing_entries, R.array.spacing_values, prefs.keySpacing) {
                 prefs.keySpacing = it
             }

@@ -18,6 +18,7 @@
     <string name="use_system_color">Use system color</string>
     <string name="key_spacing">Key spacing</string>
     <string name="keyboard_size">Keyboard height</string>
+    <string name="keyboard_shape">Keyboard shape</string>
     <string name="key_roundness">Key corner radius</string>
     <string name="height_percent">%1$d%%</string>
     <string name="unit_dp">%1$d dp</string>

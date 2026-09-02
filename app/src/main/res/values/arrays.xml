@@ -11,6 +11,8 @@
     <string-array name="spacing_values"><item>compact</item><item>standard</item><item>spacious</item></string-array>
     <string-array name="keyboard_size_entries"><item>Compact</item><item>Standard</item><item>Tall</item></string-array>
     <string-array name="keyboard_size_values"><item>compact</item><item>standard</item><item>tall</item></string-array>
+    <string-array name="keyboard_shape_entries"><item>Bubble</item><item>Flat</item><item>Liquid</item></string-array>
+    <string-array name="keyboard_shape_values"><item>bubble</item><item>flat</item><item>liquid</item></string-array>
     <string-array name="one_handed_entries"><item>Full width</item><item>Dock left</item><item>Dock right</item></string-array>
     <string-array name="one_handed_values"><item>center</item><item>left</item><item>right</item></string-array>
 </resources>

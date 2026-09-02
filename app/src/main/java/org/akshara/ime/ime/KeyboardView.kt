@@ -3,7 +3,10 @@ package org.akshara.ime.ime
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Outline
+import android.graphics.Path
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Build
@@ -13,6 +16,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.*
 import androidx.core.graphics.ColorUtils
@@ -183,7 +187,6 @@ class KeyboardView(
         key = palette.key
         utility = palette.utility
         ink = palette.ink
-        setBackgroundColor(bg)
         panel.colors = KeyboardColors(key, utility, ink, palette.dark, palette.highContrast)
         this.mode = mode; enterLabel = enter; editorLayout = editor; this.offerGlobe = offerGlobe
         shiftLatch.reset(); layer = KeyboardLayer.LETTERS
@@ -191,7 +194,79 @@ class KeyboardView(
         val width = if (prefs.oneHanded == "center") LayoutParams.MATCH_PARENT else (resources.displayMetrics.widthPixels * .82f).toInt()
         (body.layoutParams as LayoutParams).apply { this.width = width; gravity = when (prefs.oneHanded) { "left" -> Gravity.START; "right" -> Gravity.END; else -> Gravity.CENTER } }
         panel.learningEnabled = learningEnabled && editor == EditorLayout.TEXT
+        applyKeyboardShape(prefs.keyboardShape)
         render()
+    }
+
+    private var shapePath = Path()
+    private var shapeClipEnabled = false
+    private val shapePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    var liquidCurveHeight: Int = 0
+        private set
+
+    private fun buildLiquidPath() {
+        val curveHeight = dp(24).toFloat()
+        shapePath.rewind()
+        shapePath.moveTo(0f, 0f)
+        shapePath.quadTo(0f, curveHeight, curveHeight, curveHeight)
+        shapePath.lineTo(width - curveHeight, curveHeight)
+        shapePath.quadTo(width.toFloat(), curveHeight, width.toFloat(), 0f)
+        shapePath.lineTo(width.toFloat(), height.toFloat())
+        shapePath.lineTo(0f, height.toFloat())
+        shapePath.close()
+    }
+
+    private fun applyKeyboardShape(shape: String) {
+        val cornerRadius = dp(24).toFloat()
+        val curveH = dp(24)
+        when (shape) {
+            "bubble" -> {
+                shapeClipEnabled = false
+                liquidCurveHeight = 0
+                setLayerType(LAYER_TYPE_HARDWARE, null)
+                setBackgroundColor(bg)
+                setPadding(0, dp(KeyboardGeometry.TOP_PAD_DP), 0, 0)
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setRoundRect(0, 0, view.width, view.height + cornerRadius.toInt(), cornerRadius)
+                    }
+                }
+                clipToOutline = true
+            }
+            "liquid" -> {
+                shapeClipEnabled = true
+                liquidCurveHeight = curveH
+                setLayerType(LAYER_TYPE_SOFTWARE, null)
+                setBackgroundColor(Color.TRANSPARENT)
+                setPadding(0, dp(KeyboardGeometry.TOP_PAD_DP) + curveH, 0, 0)
+                clipToOutline = false
+                outlineProvider = ViewOutlineProvider.BACKGROUND
+            }
+            else -> {
+                shapeClipEnabled = false
+                liquidCurveHeight = 0
+                setLayerType(LAYER_TYPE_HARDWARE, null)
+                setBackgroundColor(bg)
+                setPadding(0, dp(KeyboardGeometry.TOP_PAD_DP), 0, 0)
+                outlineProvider = ViewOutlineProvider.BACKGROUND
+                clipToOutline = false
+            }
+        }
+        invalidate()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (shapeClipEnabled && width > 0 && height > 0) {
+            buildLiquidPath()
+            shapePaint.color = bg
+            canvas.drawPath(shapePath, shapePaint)
+        } else {
+            super.onDraw(canvas)
+        }
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
     }
     fun setCandidates(values: List<String>) {
         candidates = values.take(3)
