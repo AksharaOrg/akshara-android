@@ -14,7 +14,8 @@
         android:layout_height="wrap_content"
         android:text="@string/app_name"
         android:textColor="?android:attr/textColorPrimary"
-        android:textSize="@dimen/settings_hero_size" />
+        android:textSize="@dimen/settings_hero_size"
+        android:textStyle="bold" />
 
     <TextView
         android:id="@+id/settings_hero_subtitle"

@@ -28,7 +28,7 @@ internal class HandlerScheduler(private val handler: android.os.Handler) : TaskS
     }
 }
 
-internal enum class PointerState { IDLE, PRESSED, LONG_PRESS, FLICK, SPACE_DRAG, DELETE_SWIPE, CANCELLED }
+internal enum class PointerState { IDLE, PRESSED, LONG_PRESS, FLICK, SPACE_DRAG, SPACE_SWIPE, DELETE_SWIPE, CANCELLED }
 
 internal class TouchController(
     var decoder: TouchDecoder,
@@ -64,6 +64,7 @@ internal class TouchController(
         fun onCommitPreviewDelete()
         fun onCancelPreviewDelete()
         fun onDebug(frame: DebugFrame)
+        fun onSpaceSwipe(up: Boolean)
     }
 
     data class DebugFrame(
@@ -138,7 +139,16 @@ internal class TouchController(
             PointerState.FLICK -> Unit
             PointerState.PRESSED -> {
                 val key = selected
-                if (key?.action == KeyCode.SPACE && kotlin.math.abs(dx) > KeyboardGeometry.SPACE_DRAG_DP * density) {
+                val absDx = kotlin.math.abs(dx)
+                val absDy = kotlin.math.abs(dy)
+                if (key?.action == KeyCode.SPACE &&
+                    absDy > KeyboardGeometry.SPACE_SWIPE_DP * density &&
+                    absDy > absDx * 1.2f
+                ) {
+                    scheduler.cancel(LONG_PRESS)
+                    listener.onHidePreview()
+                    state = PointerState.SPACE_SWIPE
+                } else if (key?.action == KeyCode.SPACE && absDx > KeyboardGeometry.SPACE_DRAG_DP * density) {
                     scheduler.cancel(LONG_PRESS)
                     listener.onHidePreview()
                     state = PointerState.SPACE_DRAG
@@ -188,6 +198,7 @@ internal class TouchController(
                 key.flickOutput?.let(listener::onCommit)
             }
             PointerState.SPACE_DRAG -> Unit
+            PointerState.SPACE_SWIPE -> listener.onSpaceSwipe(lastY < downY)
             PointerState.DELETE_SWIPE -> {
                 if (swipeClusters > 0) listener.onCommitPreviewDelete() else listener.onCancelPreviewDelete()
             }

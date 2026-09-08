@@ -36,6 +36,23 @@ class SettingsActivityTest {
         assertTrue(switches.all { it.javaClass == Switch::class.java })
         assertTrue(hasText(root, activity.getString(R.string.category_typing)))
         assertTrue(hasText(root, activity.getString(R.string.app_name)))
+        assertTrue(hasText(root, activity.getString(R.string.double_space_period)))
+        assertTrue(hasText(root, activity.getString(R.string.english_one_word)))
+        assertTrue(hasText(root, activity.getString(R.string.website_title)))
+    }
+
+    @Test fun aboutOpensIosMatchingPages() {
+        val home = activity.findViewById<View>(android.R.id.content)
+        rowWithTitle(home, activity.getString(R.string.about_title))!!.performClick()
+        val about = activity.findViewById<View>(android.R.id.content)
+        assertTrue(hasText(about, activity.getString(R.string.privacy_title)))
+        assertTrue(hasText(about, activity.getString(R.string.notices_title)))
+        assertTrue(hasText(about, activity.getString(R.string.credits_title)))
+        assertTrue(hasText(about, activity.getString(R.string.diagnostics_title)))
+        assertTrue(hasText(about, activity.getString(R.string.about_copyright_value)))
+        assertTrue(hasText(about, activity.getString(R.string.about_license_value)))
+        rowWithTitle(about, activity.getString(R.string.privacy_title))!!.performClick()
+        assertTrue(hasText(activity.findViewById(android.R.id.content), activity.getString(R.string.privacy_on_device_body)))
     }
 
     @Test fun togglingSuggestionsPersists() {

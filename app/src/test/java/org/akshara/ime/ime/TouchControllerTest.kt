@@ -55,6 +55,19 @@ class TouchControllerTest {
         assertTrue(recorder2.cursor != 0)
     }
 
+    @Test fun spaceSwipeUpDoesNotInsertASpace() {
+        val recorder = Recorder()
+        val space = KeySpec("space", " ", " ", KeyCode.SPACE, Bounds(0f, 50f, 100f, 100f), Bounds(4f, 54f, 96f, 96f), 1)
+        val controller = controller(recorder)
+        controller.layout = KeyboardLayout(listOf(space), 100f, 100f, 50f, 50f, 1)
+        controller.pointerDown(50f, 75f)
+        controller.pointerMove(50f, 40f, 50f)
+        assertEquals(PointerState.SPACE_SWIPE, controller.state)
+        controller.pointerUp()
+        assertEquals(listOf("up"), recorder.swipes)
+        assertTrue(recorder.commits.isEmpty())
+    }
+
     private fun key(id: String, left: Float, right: Float) = KeySpec(
         id, id, id, KeyCode.CHAR,
         Bounds(left, 0f, right, 50f),
@@ -96,6 +109,7 @@ class TouchControllerTest {
         var picker = false
         var picked: String? = null
         var cursor = 0
+        val swipes = mutableListOf<String>()
         override fun onPressed(key: KeySpec?) = Unit
         override fun onFlick(key: KeySpec, active: Boolean) = Unit
         override fun onPreview(key: KeySpec) = Unit
@@ -118,5 +132,6 @@ class TouchControllerTest {
         override fun onCommitPreviewDelete() = Unit
         override fun onCancelPreviewDelete() = Unit
         override fun onDebug(frame: TouchController.DebugFrame) = Unit
+        override fun onSpaceSwipe(up: Boolean) { swipes += if (up) "up" else "down" }
     }
 }

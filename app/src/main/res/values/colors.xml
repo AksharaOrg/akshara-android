@@ -1,4 +1,15 @@
 <resources>
     <color name="akshara_seed">#315DA8</color>
     <color name="akshara_icon_background">#101010</color>
+    <color name="settings_icon_blue">#007AFF</color>
+    <color name="settings_icon_gray">#8E8E93</color>
+    <color name="settings_icon_green">#34C759</color>
+    <color name="settings_icon_teal">#30B0C0</color>
+    <color name="settings_icon_orange">#FF9500</color>
+    <color name="settings_icon_pink">#FF2D55</color>
+    <color name="settings_icon_red">#FF3B30</color>
+    <color name="settings_icon_indigo">#5856D6</color>
+    <color name="settings_icon_purple">#AF52DE</color>
+    <color name="settings_icon_mint">#00C7BE</color>
+    <color name="settings_icon_yellow">#FFCC00</color>
 </resources>

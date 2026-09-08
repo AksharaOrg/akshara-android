@@ -16,8 +16,19 @@ internal data class KeyboardMetrics(
     val shiftWidth: Int,
     val thirdRowInnerGap: Int,
     val keyHeight: Int,
-    val rowHeight: Int
+    val rowHeight: Int,
+    val usable: Int
 ) {
+    fun equalKeyWidth(count: Int): Int {
+        val gaps = gap * (count - 1).coerceAtLeast(0)
+        return max(1, (usable - gaps) / count)
+    }
+
+    fun rowStart(count: Int, keyWidth: Int): Int {
+        val used = count * keyWidth + gap * (count - 1).coerceAtLeast(0)
+        return inset + max(0, (usable - used) / 2)
+    }
+
     companion object {
         fun phonetic(
             widthPx: Int,
@@ -45,7 +56,8 @@ internal data class KeyboardMetrics(
                 shiftWidth = shift,
                 thirdRowInnerGap = gap,
                 keyHeight = keyHeight,
-                rowHeight = rowHeight
+                rowHeight = rowHeight,
+                usable = usable
             )
         }
 

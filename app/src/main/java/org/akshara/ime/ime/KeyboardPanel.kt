@@ -2,6 +2,7 @@ package org.akshara.ime.ime
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -63,6 +64,7 @@ internal class KeyboardPanel(
         setWillNotDraw(false)
         clipChildren = false
         clipToPadding = false
+        blockForceDark()
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
@@ -112,11 +114,12 @@ internal class KeyboardPanel(
         val width = (r - l).toFloat()
         if (width <= 0f || rows.isEmpty()) return
         val density = resources.displayMetrics.density
+        val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val metrics = KeyboardMetrics.phonetic(width.toInt(), prefs.keySpacing, density, landscape)
         val placed = KeyboardLayoutFactory.place(
-            rows, width, rowHeight,
+            rows, width, rowHeight, metrics, KeyboardGeometry.SLIVER_DP * density,
             KeyboardGeometry.visualInsetH(density, prefs.keySpacing),
-            KeyboardGeometry.visualInsetV(density, prefs.keySpacing),
-            KeyboardGeometry.SLIVER_DP * density
+            KeyboardGeometry.visualInsetV(density, prefs.keySpacing)
         )
         layout = placed
         controller.layout = placed
@@ -251,6 +254,7 @@ internal class KeyboardPanel(
     override fun onCursorTick() {
         if (prefs.haptics) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
+    override fun onSpaceSwipe(up: Boolean) = actions.onSpaceSwipe(up)
     override fun onPreviewDelete(length: Int) = actions.onPreviewDelete(length)
     override fun onCommitPreviewDelete() = actions.onCommitPreviewDelete()
     override fun onCancelPreviewDelete() = actions.onCancelPreviewDelete()

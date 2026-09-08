@@ -2,17 +2,41 @@
     <string name="app_name">Akshara</string>
     <string name="subtype_sinhala">Sinhala (Akshara)</string>
     <string name="reset">Reset</string>
+    <string name="navigate_up">Back</string>
     <string name="clear_clipboard_summary">Remove recent clips stored on this device. Pinned clips stay until you delete them from the keyboard.</string>
     <string name="settings_subtitle">Sinhala keyboard</string>
-    <string name="category_get_started">Setup</string><string name="category_typing">Typing</string><string name="category_tools">Emoji &amp; clipboard</string>
-    <string name="category_appearance">Appearance &amp; feedback</string><string name="category_privacy">Privacy &amp; reset</string><string name="category_about">About</string>
-    <string name="enable_keyboard">Enable Akshara</string><string name="select_keyboard">Select active keyboard</string>
-    <string name="status_enabled">Enabled in Android settings</string><string name="status_enable_needed">Required before Akshara can be selected</string>
-    <string name="status_selected">Akshara is the active keyboard</string><string name="status_select_needed">Choose Akshara from the keyboard picker</string>
-    <string name="input_mode">Sinhala input method</string><string name="suggestions">Show suggestions</string><string name="suggestions_summary">Local Sinhala word predictions above the keys</string>
-    <string name="emoji_suggestions">Emoji suggestions</string><string name="emoji_suggestions_summary">Suggest emoji for Sinhala words</string><string name="top_row">Optional top row</string>
-    <string name="emoji_picker">Emoji key</string><string name="emoji_picker_summary">Show the built-in emoji picker</string><string name="skin_tone">Preferred skin tone</string>
-    <string name="clipboard_history">Clipboard history</string><string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device. Pin clips from the keyboard to keep them.</string>
+    <string name="category_get_started">Setup</string>
+    <string name="category_typing">Typing</string>
+    <string name="category_tools">Emoji &amp; clipboard</string>
+    <string name="category_appearance">Appearance &amp; feedback</string>
+    <string name="category_privacy">Privacy &amp; data</string>
+    <string name="category_about">About</string>
+    <string name="category_links">Links</string>
+    <string name="enable_keyboard">Enable Akshara</string>
+    <string name="select_keyboard">Select active keyboard</string>
+    <string name="status_enabled">Enabled in Android settings</string>
+    <string name="status_enable_needed">Required before Akshara can be selected</string>
+    <string name="status_selected">Akshara is the active keyboard</string>
+    <string name="status_select_needed">Choose Akshara from the keyboard picker</string>
+    <string name="input_mode">Sinhala input method</string>
+    <string name="suggestions">Show suggestions</string>
+    <string name="suggestions_summary">Local Sinhala word predictions above the keys</string>
+    <string name="emoji_suggestions">Emoji suggestions</string>
+    <string name="emoji_suggestions_summary">Suggest emoji for Sinhala words</string>
+    <string name="top_row">Optional top row</string>
+    <string name="double_space_period">Double-space period</string>
+    <string name="double_space_period_summary">Two spaces insert a period</string>
+    <string name="smart_quotes">Smart quotes</string>
+    <string name="smart_quotes_summary">Curly quotes while typing</string>
+    <string name="smart_punctuation">Smart punctuation</string>
+    <string name="smart_punctuation_summary">Trim spaces around marks; add a space after . ? !</string>
+    <string name="english_one_word">English for one word</string>
+    <string name="english_one_word_summary">Swipe up on Space for one Latin word</string>
+    <string name="emoji_picker">Emoji key</string>
+    <string name="emoji_picker_summary">Show the built-in emoji picker</string>
+    <string name="skin_tone">Preferred skin tone</string>
+    <string name="clipboard_history">Clipboard history</string>
+    <string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device. Pin clips from the keyboard to keep them.</string>
     <string name="theme">Theme</string>
     <string name="key_spacing">Key spacing</string>
     <string name="keyboard_size">Keyboard height</string>
@@ -24,11 +48,82 @@
     <string name="reset_touch_summary">Clear learned tap-center offsets for this device</string>
     <string name="reset_touch_message">Akshara will forget locally learned key-center offsets. No typed text is stored in this data.</string>
     <string name="one_handed">One-handed layout</string>
-    <string name="haptics">Vibrate on keypress</string><string name="key_sounds">Sound on keypress</string>
-    <string name="high_contrast">High-contrast keys</string><string name="high_contrast_summary">Add stronger outlines to key surfaces</string>
-    <string name="clear_learning_title">Clear learned words</string><string name="clear_learning_summary">Erase local word and next-word history</string><string name="clear_learning_message">Akshara will forget locally learned words and typing patterns.</string>
-    <string name="clear_clipboard_title">Clear clipboard history</string><string name="clear_clipboard_message">Recent clips will be removed. Pinned clips stay until you delete them from the keyboard.</string>
-    <string name="reset_title">Reset keyboard settings</string><string name="reset_summary">Restore defaults and clear local keyboard data</string><string name="reset_message">This restores all keyboard settings and clears learned words and clipboard history.</string><string name="clear">Clear</string>
-    <string name="about_title">Akshara for Android</string><string name="about_summary">Version %1$s • Wijesekara, Phonetic, and Smart Phonetic</string>
-    <string name="privacy_title">Private by design</string><string name="privacy_summary">Typing, learning, emoji search, and clipboard history stay on this device. Akshara has no internet permission.</string>
+    <string name="haptics">Vibrate on keypress</string>
+    <string name="key_sounds">Sound on keypress</string>
+    <string name="high_contrast">High-contrast keys</string>
+    <string name="high_contrast_summary">Add stronger outlines to key surfaces</string>
+    <string name="clear_learning_title">Clear learned words</string>
+    <string name="clear_learning_summary">Erase local word and next-word history</string>
+    <string name="clear_learning_message">Akshara will forget locally learned words and typing patterns.</string>
+    <string name="clear_clipboard_title">Clear clipboard history</string>
+    <string name="clear_clipboard_message">Recent clips will be removed. Pinned clips stay until you delete them from the keyboard.</string>
+    <string name="reset_title">Reset keyboard settings</string>
+    <string name="reset_summary">Restore layout and feature options to their defaults</string>
+    <string name="reset_message">This restores layout and feature options to their defaults.</string>
+    <string name="clear">Clear</string>
+    <string name="about_title">About</string>
+    <string name="about_summary">Version %1$s</string>
+    <string name="privacy_title">Privacy Policy</string>
+    <string name="privacy_summary">Typing stays on this device</string>
+    <string name="notices_title">Open Source Notices</string>
+    <string name="credits_title">Credits</string>
+    <string name="diagnostics_title">Diagnostics</string>
+    <string name="developer_title">Developer</string>
+    <string name="website_title">Website</string>
+    <string name="github_title">GitHub</string>
+    <string name="about_version">Version</string>
+    <string name="about_build">Build</string>
+    <string name="about_copyright_label">Copyright</string>
+    <string name="about_copyright_value">© 2026 Lahiru Himesh Madusanka</string>
+    <string name="about_license_label">License</string>
+    <string name="about_license_value">MIT License</string>
+    <string name="privacy_on_device_title">On your device</string>
+    <string name="privacy_on_device_body">Typing stays on your device. Akshara does not send keystrokes, suggestions, or analytics off the device.</string>
+    <string name="privacy_permissions_title">Permissions</string>
+    <string name="privacy_permissions_body">Akshara has no internet permission. Vibration is used only for keypress haptics. The keyboard can read text fields while it is open, which Android requires for any IME.</string>
+    <string name="privacy_clipboard_title">Clipboard history</string>
+    <string name="privacy_clipboard_body">When enabled, Akshara saves copied text while the keyboard is open. Items stay on this device and are never sent over the network. Pin important clips from the keyboard; they stay until you delete them manually.</string>
+    <string name="privacy_predictions_title">Predictions</string>
+    <string name="privacy_predictions_body">Word suggestions use compact models bundled with the app. Source corpora are not included and never leave your device.</string>
+    <string name="privacy_diagnostics_title">Diagnostics</string>
+    <string name="privacy_diagnostics_body">Akshara does not collect crash or analytics data. If you opted into Google Play usage and diagnostics, Google may receive crash reports independently of Akshara. Typed text is never included in those system reports.</string>
+    <string name="privacy_tracking_title">No tracking</string>
+    <string name="privacy_tracking_body">Akshara has no account, no advertising identifiers, and no third-party analytics or tracking SDKs.</string>
+    <string name="privacy_contact_title">Contact</string>
+    <string name="notices_akshara_title">Akshara</string>
+    <string name="notices_akshara_body">Copyright © 2026 Lahiru Himesh Madusanka. Licensed under the MIT License.</string>
+    <string name="notices_source_code">Source code</string>
+    <string name="notices_contributors_title">Contributors</string>
+    <string name="credits_thimira_title">Thimira Thenuwara</string>
+    <string name="credits_thimira_body">Phonetic and Smart Phonetic layout fixes.</string>
+    <string name="notices_language_title">Language resources</string>
+    <string name="notices_frequency_title">A Word Frequency List for Sinhala</string>
+    <string name="notices_frequency_body">The bundled frequency model is a compact derivative of the University of Moratuwa National Languages Processing Centre word-frequency list. It retains the first 40,000 high-frequency entries, filters malformed or overlong tokens, and is sorted for on-device prefix lookup.\n\nCitation: Aloka Fernando and Gihan Dias (2021), “Building a Linguistic Resource: A Word Frequency List for Sinhala,” ICON 2021, pages 606–610.</string>
+    <string name="notices_frequency_source">Source</string>
+    <string name="notices_corpus_title">CleanSinhalaTextCorpus</string>
+    <string name="notices_corpus_body">The bundled next-word and trigram models are compact count-only models derived from CleanSinhalaTextCorpus by Remeinium AI and Kusal Darshana (2025). Conversational lines are up-weighted. Source text is not distributed with Akshara.</string>
+    <string name="notices_dataset">Dataset</string>
+    <string name="notices_dataset_doi">Dataset DOI</string>
+    <string name="notices_cc_by">CC BY 4.0</string>
+    <string name="notices_privacy_title">Privacy</string>
+    <string name="notices_privacy_body">The source corpus is not included in the app. Predictions use the compact on-device models bundled with Akshara.</string>
+    <string name="diagnostics_app_title">App</string>
+    <string name="diagnostics_device_label">Device</string>
+    <string name="diagnostics_android_label">Android</string>
+    <string name="diagnostics_keyboard_label">Keyboard</string>
+    <string name="diagnostics_keyboard_ready">Enabled and selected</string>
+    <string name="diagnostics_keyboard_enabled">Enabled, not selected</string>
+    <string name="diagnostics_keyboard_off">Not enabled</string>
+    <string name="diagnostics_clipboard_label">Clipboard history</string>
+    <string name="diagnostics_on">On</string>
+    <string name="diagnostics_off">Off</string>
+    <string name="diagnostics_footer">Akshara stores nothing for crash reporting. This screen is only local status for support.</string>
+    <string name="developer_welcome">welcome to the අක්ෂර 🇱🇰</string>
+    <string name="link_website">https://akshara.org.lk</string>
+    <string name="link_github">https://github.com/AksharaOrg/akshara-android</string>
+    <string name="link_thimira">https://thimirathenuwara.com/</string>
+    <string name="link_frequency">https://github.com/nlpcuom/Word-Frequency-List-for-Sinhala</string>
+    <string name="link_corpus">https://huggingface.co/datasets/Remeinium/CleanSinhalaTextCorpus</string>
+    <string name="link_corpus_doi">https://doi.org/10.57967/hf/6460</string>
+    <string name="link_cc_by">https://creativecommons.org/licenses/by/4.0/</string>
 </resources>

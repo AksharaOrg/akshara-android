@@ -26,7 +26,7 @@ android {
         applicationId = "lk.org.akshara.keyboard"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
+        versionCode = 16
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

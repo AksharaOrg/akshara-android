@@ -7,18 +7,25 @@
     android:gravity="center_vertical"
     android:minHeight="?android:attr/listPreferredItemHeightSmall"
     android:orientation="horizontal"
-    android:paddingStart="?android:attr/listPreferredItemPaddingStart"
-    android:paddingEnd="?android:attr/listPreferredItemPaddingEnd"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
     android:paddingTop="12dp"
     android:paddingBottom="12dp">
 
-    <ImageView
-        android:id="@+id/settings_item_icon"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
-        android:layout_marginEnd="16dp"
-        android:contentDescription="@null"
-        android:importantForAccessibility="no" />
+    <FrameLayout
+        android:id="@+id/settings_item_icon_well"
+        android:layout_width="@dimen/settings_icon_tile"
+        android:layout_height="@dimen/settings_icon_tile"
+        android:layout_marginEnd="@dimen/settings_row_gap">
+
+        <ImageView
+            android:id="@+id/settings_item_icon"
+            android:layout_width="@dimen/settings_icon_glyph"
+            android:layout_height="@dimen/settings_icon_glyph"
+            android:layout_gravity="center"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no" />
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="0dp"
@@ -44,14 +51,34 @@
             android:textColor="?android:attr/textColorSecondary" />
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/settings_item_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:textAlignment="viewEnd"
+        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:textColor="?android:attr/textColorSecondary"
+        android:visibility="gone" />
+
     <Switch
         android:id="@+id/settings_item_switch"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="8dp"
         android:clickable="false"
         android:focusable="false"
         android:showText="false"
         android:visibility="gone"
         tools:ignore="UseSwitchCompatOrMaterialXml" />
+
+    <ImageView
+        android:id="@+id/settings_item_chevron"
+        android:layout_width="@dimen/settings_chevron"
+        android:layout_height="@dimen/settings_chevron"
+        android:layout_marginStart="4dp"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_chevron"
+        android:visibility="gone" />
 </LinearLayout>

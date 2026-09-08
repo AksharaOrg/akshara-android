@@ -45,7 +45,7 @@ class TouchDecoderTest {
             org.akshara.ime.engine.InputMode.PHONETIC, KeyboardLayer.LETTERS, false, false,
             EditorLayout.TEXT, "none", false, "↵", "Phonetic"
         )
-        val board = KeyboardLayoutFactory.place(rows, width, 53f, 4f, 5.5f, 4f)
+        val board = KeyboardLayoutFactory.place(rows, width, 52f)
         val decoder = SpatialTouchDecoder()
         val space = board.keyById("space")!!
         val period = board.keyById(".")!!

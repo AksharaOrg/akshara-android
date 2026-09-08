@@ -35,8 +35,17 @@ class KeyboardPreferences(context: Context) {
     var skinTone: String
         get() = store.getString(SKIN_TONE, "") ?: ""
         set(value) = store.edit().putString(SKIN_TONE, value).apply()
+    var developerUnlocked: Boolean by bool(DEVELOPER, false)
+    var doubleSpacePeriod: Boolean by bool(DOUBLE_SPACE, true)
+    var smartQuotes: Boolean by bool(SMART_QUOTES, true)
+    var smartPunctuation: Boolean by bool(SMART_PUNCTUATION, true)
+    var englishForOneWord: Boolean by bool(ENGLISH_ONE_WORD, false)
 
-    fun reset() { store.edit().clear().apply() }
+    fun reset() {
+        val keepDeveloper = developerUnlocked
+        store.edit().clear().apply()
+        if (keepDeveloper) developerUnlocked = true
+    }
     private fun bool(key: String, default: Boolean) = object : kotlin.properties.ReadWriteProperty<Any?, Boolean> {
         override fun getValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>) = store.getBoolean(key, default)
         override fun setValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>, value: Boolean) { store.edit().putBoolean(key, value).apply() }
@@ -51,5 +60,10 @@ class KeyboardPreferences(context: Context) {
         private const val KEY_SPACING = "key_spacing"; private const val KEYBOARD_SIZE = "keyboard_size"
         private const val SPATIAL_DECODER = "spatial_decoder"; private const val DEBUG_OVERLAY = "debug_overlay"
         private const val THEME = "theme"; private const val SKIN_TONE = "skin_tone"
+        private const val DEVELOPER = "developer_unlocked"
+        private const val DOUBLE_SPACE = "double_space_period"
+        private const val SMART_QUOTES = "smart_quotes"
+        private const val SMART_PUNCTUATION = "smart_punctuation"
+        private const val ENGLISH_ONE_WORD = "english_for_one_word"
     }
 }

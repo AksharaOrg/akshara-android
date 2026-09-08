@@ -1,6 +1,6 @@
 package org.akshara.ime.ime
 
-/** Percentage geometry and tunable constants. Logical centers must stay stable. */
+/** Gboard UK slots with 2dp extra chin and slightly more keycap gutters. */
 internal object KeyboardGeometry {
     const val LETTER = 0.10f
     const val ROW2_OFFSET = 0.05f
@@ -20,13 +20,13 @@ internal object KeyboardGeometry {
     /** Fraction of each neighbouring cell the space bar steals as extra hit area. */
     const val SPACE_STEAL = 0.28f
     const val SHIFT_DOUBLE_MS = 400L
-    const val VISUAL_INSET_H_DP = 4f
-    const val VISUAL_INSET_V_DP = 5.5f
+    const val VISUAL_INSET_H_DP = 2f
+    const val VISUAL_INSET_V_DP = 5f
     const val RAIL_PORTRAIT_DP = 46
     const val RAIL_LANDSCAPE_DP = 38
-    const val KEY_AREA_COMPACT_DP = 216
-    const val KEY_AREA_STANDARD_DP = 232
-    const val KEY_AREA_TALL_DP = 248
+    const val KEY_AREA_COMPACT_DP = 218
+    const val KEY_AREA_STANDARD_DP = 234
+    const val KEY_AREA_TALL_DP = 250
     const val SLIVER_DP = 4
     const val LONG_PRESS_MS = 400L
     const val DELETE_REPEAT_START_MS = 420L
@@ -37,11 +37,12 @@ internal object KeyboardGeometry {
     const val EWMA_NEW = 0.02f
     const val FLICK_ROW_FRACTION = 0.45f
     const val SPACE_DRAG_DP = 12
+    const val SPACE_SWIPE_DP = 28
     const val SPACE_STEP_DP = 24
     const val DELETE_SWIPE_DP = 24
     const val ICON_DP = 22f
     const val TOP_PAD_DP = 8
-    const val BOTTOM_PAD_DP = 28
+    const val BOTTOM_PAD_DP = 30
     const val LETTER_RADIUS_DP = 8f
     const val SPACE_INTRO_MS = 1200L
     const val SPACE_COLLAPSE_MS = 580L
@@ -61,9 +62,9 @@ internal object KeyboardGeometry {
 
     fun keyAreaDp(size: String, landscape: Boolean): Int {
         if (landscape) return when (size) {
-            "compact" -> 152
-            "tall" -> 176
-            else -> 164
+            "compact" -> 154
+            "tall" -> 178
+            else -> 166
         }
         return when (size) {
             "compact" -> KEY_AREA_COMPACT_DP
@@ -84,8 +85,8 @@ internal object KeyboardGeometry {
 
     fun visualInsetH(density: Float, spacing: String): Float {
         val dp = when (spacing) {
-            "compact" -> 3f
-            "spacious" -> 5f
+            "compact" -> 1f
+            "spacious" -> 3f
             else -> VISUAL_INSET_H_DP
         }
         return dp * density
@@ -93,8 +94,8 @@ internal object KeyboardGeometry {
 
     fun visualInsetV(density: Float, spacing: String): Float {
         val dp = when (spacing) {
-            "compact" -> 4.5f
-            "spacious" -> 6.5f
+            "compact" -> 4f
+            "spacious" -> 6f
             else -> VISUAL_INSET_V_DP
         }
         return dp * density

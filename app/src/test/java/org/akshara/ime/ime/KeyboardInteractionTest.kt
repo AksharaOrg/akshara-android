@@ -14,6 +14,50 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class KeyboardInteractionTest {
+    @Test @org.robolectric.annotation.Config(qualifiers = "land")
+    fun landscapePanelsAlsoKeepTheSameHeight() = allPanelsKeepTheSameHeightIncludingTallAndOptionalRows()
+    @Test fun emojiSearchTypingDoesNotWriteIntoHostEditor() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        var hostText = ""
+        val actions = object : KeyboardActions by idleActions() {
+            override fun onCharacter(value: String) { hostText += value }
+        }
+        val view = KeyboardView(context, actions, KeyboardPreferences(context))
+        view.configure(InputMode.SMART_PHONETIC, false, "↵")
+        findButton(view, "Emoji")!!.performClick()
+        findButton(view, "Search emoji")!!.performClick()
+        "heart".forEach { findButton(view, it.toString())!!.performClick() }
+        assertEquals("", hostText)
+        assertNotNull(findButton(view, "Back to emoji"))
+    }
+    @Test fun allPanelsKeepTheSameHeightIncludingTallAndOptionalRows() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val prefs = KeyboardPreferences(context)
+        for (size in listOf("compact", "standard", "tall")) {
+            for (top in listOf("none", "numbers", "emoji")) {
+                prefs.keyboardSize = size; prefs.topRow = top; prefs.clipboardHistory = true
+                val view = KeyboardView(context, idleActions(), prefs)
+                view.configure(InputMode.SMART_PHONETIC, false, "↵")
+                fun height(): Int {
+                    view.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                    view.layout(0, 0, 1080, view.measuredHeight)
+                    return view.measuredHeight
+                }
+                val typing = height()
+                findButton(view, "Clipboard history")!!.performClick()
+                assertEquals("Clipboard $size $top", typing, height())
+                findButton(view, "Clipboard history")!!.performClick()
+                findButton(view, "Emoji")!!.performClick()
+                assertEquals("Emoji $size $top", typing, height())
+                findButton(view, "Search emoji")!!.performClick()
+                assertEquals("Search $size $top", typing, height())
+                findButton(view, "Back to emoji")!!.performClick()
+                assertEquals(typing, height())
+            }
+        }
+        prefs.reset()
+    }
     @Test fun globeIsLeftToTheSystemAndLayerTransitionWorks() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         var switches = 0
@@ -61,7 +105,8 @@ class KeyboardInteractionTest {
         view.configure(InputMode.SMART_PHONETIC, true, "↵")
         findButton(view, "Emoji")!!.performClick()
         assertEquals(0, (view.getChildAt(0).layoutParams as LinearLayout.LayoutParams).height)
-        assertNotNull(findButton(view, "Smileys")); assertNotNull(findButton(view, "Search emoji"))
+        assertNotNull(findButton(view, "Smileys & People")); assertNotNull(findButton(view, "Search emoji"))
+        assertNotNull(findButton(view, "Flags"))
         findButton(view, "Search emoji")!!.performClick()
         "heart".forEach { findButton(view, it.toString())!!.performClick() }
         view.measure(
@@ -161,6 +206,9 @@ class KeyboardInteractionTest {
         layoutKeyboard(view)
         assertNotNull(findButton(view, "Back"))
         assertTrue(findText(view, "Recent 1"))
+        assertNull(findButton(view, "Hide keyboard"))
+        assertNull(findButton(view, "Return to letters"))
+        assertEquals(View.VISIBLE, findButton(view, "Clipboard history")!!.visibility)
         findButton(view, "Paste copied text")!!.performClick()
         layoutKeyboard(view)
         assertEquals("copied text", pasted)
@@ -186,6 +234,29 @@ class KeyboardInteractionTest {
         view.configure(InputMode.PHONETIC, false, "↵")
         layoutKeyboard(view)
         assertEquals("Akshara - Phonetic", view.typingLayout()!!.keyById("space")!!.label)
+    }
+
+    @Test fun englishOneWordUsesSpaceCaption() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val view = KeyboardView(context, idleActions(), KeyboardPreferences(context))
+        view.configure(InputMode.SMART_PHONETIC, false, "↵")
+        layoutKeyboard(view)
+        view.setEnglishOneWord(true)
+        layoutKeyboard(view)
+        assertEquals("English · one word", view.typingLayout()!!.keyById("space")!!.label)
+    }
+
+    @Test fun spaceOnSymbolsReturnsToLetters() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val view = KeyboardView(context, idleActions(), KeyboardPreferences(context))
+        view.configure(InputMode.SMART_PHONETIC, false, "↵")
+        layoutKeyboard(view)
+        findButton(view, "Numbers and symbols")!!.performClick()
+        layoutKeyboard(view)
+        assertNotNull(findButton(view, "Letters"))
+        findButton(view, "Space")!!.performClick()
+        layoutKeyboard(view)
+        assertNotNull(findButton(view, "Numbers and symbols"))
     }
 
     private fun idleActions() = object : KeyboardActions {

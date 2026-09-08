@@ -6,6 +6,32 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeyboardPolicyTest {
+    @Test fun emojiAlwaysUsesRightmostSlotEvenWithoutWords() {
+        assertEquals(listOf(null, null, "😀"), SuggestionRail.present(emptyList(), "😀"))
+        assertEquals(listOf(null, "word", "😀"), SuggestionRail.present(listOf("word"), "😀"))
+        assertEquals(listOf("second", "first", "😀"), SuggestionRail.present(listOf("first", "second", "third"), "😀"))
+    }
+    @Test fun multilineDoneAndNoEnterActionUseReturn() {
+        val info = EditorInfo().apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            imeOptions = EditorInfo.IME_ACTION_DONE
+        }
+        assertEquals("↵", AksharaInputMethodService.enterLabel(info))
+        assertEquals(EditorInfo.IME_ACTION_NONE, AksharaInputMethodService.enterAction(info))
+        info.inputType = InputType.TYPE_CLASS_TEXT
+        info.imeOptions = EditorInfo.IME_ACTION_SEND or EditorInfo.IME_FLAG_NO_ENTER_ACTION
+        assertEquals("↵", AksharaInputMethodService.enterLabel(info))
+    }
+    @Test fun literalLettersNeverExposeSinhalaHintsOrAlternates() {
+        for (mode in org.akshara.ime.engine.InputMode.values()) {
+            for (editor in listOf(EditorLayout.ASCII, EditorLayout.URI, EditorLayout.EMAIL)) {
+                val rows = KeyboardLayoutFactory.typingRows(mode, KeyboardLayer.LETTERS, false, false, editor, "none", false, "Go", "English")
+                val letters = rows.flatMap { it.keys }.filter { it.id.length == 1 && it.id[0] in 'a'..'z' }
+                assertEquals(26, letters.size)
+                assertTrue(letters.all { it.hint == null && it.extras.isEmpty() && it.flickOutput == null })
+            }
+        }
+    }
     @Test fun qwertyGeometryIsCanonical() {
         assertEquals("qwertyuiop", KeyboardView.qwertyRows[0].joinToString(""))
         assertEquals("asdfghjkl", KeyboardView.qwertyRows[1].joinToString(""))
@@ -32,8 +58,8 @@ class KeyboardPolicyTest {
             org.akshara.ime.engine.InputMode.PHONETIC, KeyboardLayer.LETTERS, false, false,
             EditorLayout.URI, "none", false, "Go", "English"
         )
-        val emailLayout = KeyboardLayoutFactory.place(email, 360f, 53f, 2.5f, 3f, 4f)
-        val uriLayout = KeyboardLayoutFactory.place(uri, 360f, 53f, 2.5f, 3f, 4f)
+        val emailLayout = KeyboardLayoutFactory.place(email, 360f, 52f)
+        val uriLayout = KeyboardLayoutFactory.place(uri, 360f, 52f)
         assertEquals("@", emailLayout.keyById("@")?.output)
         assertEquals("/", uriLayout.keyById("/")?.output)
         assertEquals(".", emailLayout.keyById(".")?.output)

@@ -1,5 +1,10 @@
 <resources>
     <dimen name="settings_gutter">16dp</dimen>
-    <dimen name="settings_section_gap">12dp</dimen>
-    <dimen name="settings_hero_size">36sp</dimen>
+    <dimen name="settings_section_gap">16dp</dimen>
+    <dimen name="settings_hero_size">34sp</dimen>
+    <dimen name="settings_icon_tile">32dp</dimen>
+    <dimen name="settings_icon_glyph">18dp</dimen>
+    <dimen name="settings_icon_radius">8dp</dimen>
+    <dimen name="settings_row_gap">12dp</dimen>
+    <dimen name="settings_chevron">18dp</dimen>
 </resources>

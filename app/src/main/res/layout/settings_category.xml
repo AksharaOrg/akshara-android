@@ -9,4 +9,5 @@
     android:paddingBottom="8dp"
     android:textAllCaps="false"
     android:textAppearance="?android:attr/textAppearanceSmall"
-    android:textColor="?android:attr/colorAccent" />
+    android:textColor="?android:attr/colorAccent"
+    android:textStyle="bold" />

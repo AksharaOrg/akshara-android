@@ -7,7 +7,6 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -22,7 +21,6 @@ internal class ClipboardBoard(
     private val colors: KeyboardColors,
     private val onPaste: (String) -> Unit,
     private val onBack: () -> Unit,
-    private val onHide: () -> Unit,
     private val onClearRecent: () -> Unit,
     private val onPinRecent: (Int) -> Unit,
     private val onRemoveRecent: (Int) -> Unit,
@@ -62,7 +60,6 @@ internal class ClipboardBoard(
         })
         addView(list, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
         addView(empty, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
-        addView(bottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, dp(54)))
         bind()
     }
 
@@ -124,30 +121,6 @@ internal class ClipboardBoard(
         setPadding(dp(3), dp(3), dp(3), dp(3))
         addView(recentTab, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
         addView(pinnedTab, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
-    }
-
-    private fun bottomBar() = LinearLayout(context).apply {
-        orientation = HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        addView(actionKey("ABC", "Return to letters") { onBack() }, LayoutParams(0, dp(48), 1f).apply {
-            setMargins(dp(6), dp(4), dp(6), dp(4))
-        })
-        addView(View(context), LayoutParams(0, dp(48), 3f))
-        addView(toolbarIcon(org.akshara.ime.R.drawable.ic_key_hide, "Hide keyboard") { onHide() }.apply {
-            background = keySurface(colors.utility)
-        }, LayoutParams(0, dp(48), 1f).apply { setMargins(dp(6), dp(4), dp(6), dp(4)) })
-    }
-
-    private fun actionKey(label: String, description: String, click: () -> Unit) = TextView(context).apply {
-        text = label
-        textSize = 16f
-        gravity = Gravity.CENTER
-        setTextColor(colors.ink)
-        contentDescription = description
-        isClickable = true
-        isFocusable = true
-        background = keySurface(colors.utility)
-        setOnClickListener { click() }
     }
 
     private fun tabChip(label: String, click: () -> Unit) = TextView(context).apply {

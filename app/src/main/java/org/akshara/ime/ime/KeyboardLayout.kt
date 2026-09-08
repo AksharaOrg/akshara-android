@@ -2,6 +2,7 @@ package org.akshara.ime.ime
 
 import org.akshara.ime.engine.InputMode
 import org.akshara.ime.engine.SinhalaEngine
+import kotlin.math.max
 
 internal data class KeyboardLayout(
     val keys: List<KeySpec>,
@@ -21,41 +22,36 @@ internal object KeyboardLayoutFactory {
         rows: List<RowDef>,
         width: Float,
         rowHeight: Float,
+        metrics: KeyboardMetrics,
+        sliver: Float,
         insetH: Float,
-        insetV: Float,
-        sliver: Float
+        insetV: Float
     ): KeyboardLayout {
+        val widthPx = width.toInt().coerceAtLeast(1)
+        val halfGap = metrics.gap / 2f
         val specs = ArrayList<KeySpec>(48)
         rows.forEachIndexed { rowIndex, row ->
             val y = rowIndex * rowHeight
-            var x = row.startFraction * width
+            val slots = packRow(row.keys, metrics, widthPx)
             row.keys.forEachIndexed { index, def ->
-                val cell = def.widthFraction * width
-                val visualLeft = x
-                val visualRight = x + cell
-                var logicalLeft = visualLeft
-                var logicalRight = visualRight
+                val slot = slots[index]
+                val cell = (slot.right - slot.left).toFloat().coerceAtLeast(1f)
+                val letter = metrics.tenKeyWidth.toFloat().coerceAtLeast(1f)
+                val scale = (cell / letter).coerceIn(0.55f, 1f)
+                val ih = (insetH * scale).coerceAtMost(cell * 0.22f)
+                val iv = insetV.coerceAtMost(rowHeight * 0.18f)
+                var logicalLeft = slot.left - halfGap
+                var logicalRight = slot.right + halfGap
                 if (row.expandEdges && index == 0) logicalLeft = 0f
                 if (row.expandEdges && index == row.keys.lastIndex) logicalRight = width
                 val topSliver = if (row.sliverTop) sliver else 0f
-                val logical = Bounds(logicalLeft, y - topSliver, logicalRight, y + rowHeight)
-                val letter = width * KeyboardGeometry.LETTER
-                val scale = if (letter > 0f) (cell / letter).coerceIn(0.55f, 1f) else 1f
-                val ih = (insetH * scale).coerceAtMost(cell * 0.22f)
-                val iv = (insetV * scale.coerceAtLeast(0.75f)).coerceAtMost(rowHeight * 0.18f)
-                val visual = Bounds(
-                    visualLeft + ih,
-                    y + iv,
-                    visualRight - ih,
-                    y + rowHeight - iv
-                )
                 specs += KeySpec(
                     id = def.id,
                     label = def.label,
                     output = def.output,
                     action = def.action,
-                    logical = logical,
-                    visual = visual,
+                    logical = Bounds(logicalLeft, y - topSliver, logicalRight, y + rowHeight),
+                    visual = Bounds(slot.left + ih, y + iv, slot.right - ih, y + rowHeight - iv),
                     row = rowIndex,
                     hint = def.hint,
                     extras = def.extras,
@@ -64,17 +60,131 @@ internal object KeyboardLayoutFactory {
                     utility = def.utility,
                     payload = def.payload
                 )
-                x += cell
             }
         }
-        val letterWidth = specs.filter { !it.utility && it.action == KeyCode.CHAR }
-            .map { it.logical.width }
-            .average()
-            .toFloat()
-            .takeIf { it.isFinite() && it > 0f }
-            ?: width * KeyboardGeometry.LETTER
         stealSpaceHits(specs)
-        return KeyboardLayout(specs, width, rows.size * rowHeight, rowHeight, letterWidth, rows.size)
+        return KeyboardLayout(
+            specs, width, rows.size * rowHeight, rowHeight, metrics.tenKeyWidth.toFloat(), rows.size
+        )
+    }
+
+    fun place(
+        rows: List<RowDef>,
+        width: Float,
+        rowHeight: Float,
+        sliver: Float = 4f,
+        spacing: String = "standard",
+        density: Float = 1f,
+        landscape: Boolean = false
+    ): KeyboardLayout = place(
+        rows,
+        width,
+        rowHeight,
+        KeyboardMetrics.phonetic(width.toInt(), spacing, density, landscape),
+        sliver,
+        KeyboardGeometry.visualInsetH(density, spacing),
+        KeyboardGeometry.visualInsetV(density, spacing)
+    )
+
+    private data class PackedKey(val left: Int, val right: Int)
+
+    private fun packRow(keys: List<KeyDef>, metrics: KeyboardMetrics, widthPx: Int): List<PackedKey> {
+        val n = keys.size
+        if (n == 0) return emptyList()
+        val first = keys.first().action
+        val last = keys.last().action
+        return when {
+            last == KeyCode.ENTER -> packBottom(keys, metrics, widthPx)
+            last == KeyCode.DELETE && (first == KeyCode.SHIFT || first == KeyCode.LAYER) ->
+                packModifierLetterRow(n - 2, metrics, widthPx)
+            keys.all { it.action == KeyCode.CHAR } -> packLetterRow(n, metrics, widthPx)
+            else -> packLetterRow(n, metrics, widthPx)
+        }
+    }
+
+    private fun packLetterRow(count: Int, metrics: KeyboardMetrics, widthPx: Int): List<PackedKey> {
+        if (count == 9) {
+            return packEqual(count, metrics.inset + metrics.secondRowInset, metrics.tenKeyWidth, metrics.gap)
+        }
+        if (count == 10) {
+            val slots = packEqual(count, metrics.inset, metrics.tenKeyWidth, metrics.gap).toMutableList()
+            val last = slots.last()
+            slots[slots.lastIndex] = last.copy(right = max(last.right, widthPx - metrics.inset))
+            return slots
+        }
+        return packEqualFill(count, metrics.inset, widthPx - metrics.inset, metrics.gap)
+    }
+
+    private fun packModifierLetterRow(letters: Int, metrics: KeyboardMetrics, widthPx: Int): List<PackedKey> {
+        val gap = metrics.gap
+        val inset = metrics.inset
+        val end = widthPx - inset
+        val letterW = if (letters == 7) metrics.tenKeyWidth else metrics.equalKeyWidth(11)
+        val side = if (letters == 7) {
+            metrics.shiftWidth
+        } else {
+            val inner = letters * letterW + (letters - 1).coerceAtLeast(0) * gap
+            max(1, (metrics.usable - inner - 2 * gap) / 2)
+        }
+        var x = inset
+        val slots = ArrayList<PackedKey>(letters + 2)
+        slots += PackedKey(x, x + side)
+        x += side + gap
+        repeat(letters) {
+            slots += PackedKey(x, x + letterW)
+            x += letterW + gap
+        }
+        slots += PackedKey(x, end)
+        return slots
+    }
+
+    private fun packBottom(keys: List<KeyDef>, metrics: KeyboardMetrics, widthPx: Int): List<PackedKey> {
+        val n = keys.size
+        val gap = metrics.gap
+        val ten = metrics.tenKeyWidth
+        val shift = metrics.shiftWidth
+        val widths = IntArray(n)
+        var spaceIndex = -1
+        keys.forEachIndexed { index, key ->
+            when (key.action) {
+                KeyCode.SPACE -> spaceIndex = index
+                KeyCode.CHAR, KeyCode.EMOJI -> widths[index] = ten
+                else -> widths[index] = shift
+            }
+        }
+        val gaps = gap * (n - 1).coerceAtLeast(0)
+        val fixed = widths.sum()
+        if (spaceIndex >= 0) widths[spaceIndex] = max(ten, metrics.usable - fixed - gaps)
+        return packFrom(metrics.inset, widths, gap, widthPx - metrics.inset)
+    }
+
+    private fun packEqual(count: Int, start: Int, keyW: Int, gap: Int): List<PackedKey> {
+        var x = start
+        return List(count) {
+            PackedKey(x, x + keyW).also { x += keyW + gap }
+        }
+    }
+
+    private fun packEqualFill(count: Int, start: Int, end: Int, gap: Int): List<PackedKey> {
+        val inner = (end - start).coerceAtLeast(count)
+        val keyW = max(1, (inner - gap * (count - 1).coerceAtLeast(0)) / count)
+        var rem = inner - (keyW * count + gap * (count - 1).coerceAtLeast(0))
+        var x = start
+        return List(count) {
+            val extra = if (rem > 0) 1 else 0
+            rem -= extra
+            PackedKey(x, x + keyW + extra).also { x += keyW + extra + gap }
+        }
+    }
+
+    private fun packFrom(start: Int, widths: IntArray, gap: Int, end: Int): List<PackedKey> {
+        var x = start
+        return widths.indices.map { index ->
+            val left = x
+            val right = if (index == widths.lastIndex) end else left + widths[index]
+            x = right + gap
+            PackedKey(left, right)
+        }
     }
 
     /** Space is used far more than "." / emoji; give it the gutter and a sliver of each neighbour. */
@@ -169,9 +279,12 @@ internal object KeyboardLayoutFactory {
                 )
             }
         } else {
-            val q = KeyboardView.qwertyRows[0].map { letterDef(it, mode, false, shifted, caps, KeyboardGeometry.LETTER) }
-            val a = KeyboardView.qwertyRows[1].map { letterDef(it, mode, false, shifted, caps, KeyboardGeometry.LETTER) }
-            val z = KeyboardView.qwertyRows[2].map { letterDef(it, mode, false, shifted, caps, KeyboardGeometry.LETTER) }
+            fun key(id: String) = letterDef(id, mode, false, shifted, caps, KeyboardGeometry.LETTER).let {
+                if (literal) it.copy(label = it.output, hint = null, extras = emptyList(), flickOutput = null) else it
+            }
+            val q = KeyboardView.qwertyRows[0].map(::key)
+            val a = KeyboardView.qwertyRows[1].map(::key)
+            val z = KeyboardView.qwertyRows[2].map(::key)
             rows += RowDef(q, startFraction = 0f, expandEdges = true, sliverTop = firstLetters)
             rows += RowDef(a, startFraction = KeyboardGeometry.ROW2_OFFSET, expandEdges = true)
             rows += RowDef(
@@ -180,7 +293,7 @@ internal object KeyboardLayoutFactory {
                     listOf(deleteDef().copy(widthFraction = KeyboardGeometry.DELETE))
             )
         }
-        rows += bottomRow(editor, emojiPicker, enterLabel, spaceLabel, offerGlobe)
+        rows += bottomRow(editor, emojiPicker, enterLabel, spaceLabel, offerGlobe, ukComma = !wijesekara)
         return rows
     }
 
@@ -212,8 +325,9 @@ internal object KeyboardLayoutFactory {
                 deleteDef().copy(widthFraction = KeyboardGeometry.DELETE)
         )
 
-        val bottom = ArrayList<KeyDef>(5)
+        val bottom = ArrayList<KeyDef>(6)
         bottom += KeyDef("ABC", "ABC", "", KeyCode.LAYER, KeyboardGeometry.SYMBOLS, utility = true, payload = KeyboardLayer.LETTERS.name)
+        bottom += commaDef()
         if (emojiPicker) {
             bottom += KeyDef("emoji", "", "", KeyCode.EMOJI, KeyboardGeometry.PUNCT, icon = org.akshara.ime.R.drawable.ic_key_emoji, utility = true)
         }
@@ -229,14 +343,15 @@ internal object KeyboardLayoutFactory {
         emojiPicker: Boolean,
         enterLabel: String,
         spaceLabel: String,
-        offerGlobe: Boolean
+        offerGlobe: Boolean,
+        ukComma: Boolean
     ): RowDef {
         val keys = ArrayList<KeyDef>(8)
         keys += KeyDef("?123", "?123", "", KeyCode.LAYER, KeyboardGeometry.SYMBOLS, utility = true, payload = KeyboardLayer.NUMBERS.name)
         when (editor) {
             EditorLayout.EMAIL -> keys += charDef("@", "@", KeyboardGeometry.PUNCT)
             EditorLayout.URI -> keys += charDef("/", "/", KeyboardGeometry.PUNCT)
-            else -> Unit
+            else -> if (ukComma) keys += commaDef()
         }
         if (emojiPicker && editor == EditorLayout.TEXT) {
             keys += KeyDef("emoji", "", "", KeyCode.EMOJI, KeyboardGeometry.PUNCT, icon = org.akshara.ime.R.drawable.ic_key_emoji, utility = true)
@@ -261,7 +376,13 @@ internal object KeyboardLayoutFactory {
         width: Float = KeyboardGeometry.LETTER
     ): KeyDef {
         val label = letterLabel(id, wijesekara, shifted, caps)
-        val output = if (wijesekara) SinhalaEngine.slsCharacter(id, shifted || caps) else label
+        val output = if (wijesekara) {
+            SinhalaEngine.slsCharacter(id, shifted || caps)
+        } else if (shifted || caps) {
+            id.uppercase()
+        } else {
+            id
+        }
         val extras = KeyAlternates.extras(id, mode, KeyboardLayer.LETTERS, shifted || caps)
         val hint = KeyAlternates.hint(id, mode, KeyboardLayer.LETTERS) ?: phoneticHint(id, mode, wijesekara, shifted, caps)
         val flick = extras.firstOrNull()?.second
@@ -273,11 +394,19 @@ internal object KeyboardLayoutFactory {
         return KeyDef(id, id, output, KeyCode.CHAR, width, extras = extras, flickOutput = extras.firstOrNull()?.second)
     }
 
+    private fun commaDef(): KeyDef {
+        val extras = KeyAlternates.extras(",", InputMode.PHONETIC, KeyboardLayer.NUMBERS, false)
+        return KeyDef(
+            ",", ",", ",", KeyCode.CHAR, KeyboardGeometry.PUNCT,
+            extras = extras, flickOutput = extras.firstOrNull()?.second
+        )
+    }
+
     private fun periodDef(): KeyDef {
         val extras = KeyAlternates.extras(".", InputMode.PHONETIC, KeyboardLayer.NUMBERS, false)
         return KeyDef(
             ".", ".", ".", KeyCode.CHAR, KeyboardGeometry.PUNCT,
-            hint = ",", extras = extras, flickOutput = extras.firstOrNull()?.second
+            extras = extras, flickOutput = extras.firstOrNull()?.second
         )
     }
 
@@ -312,8 +441,7 @@ internal object KeyboardLayoutFactory {
         id == "rakaranshaya" -> if (shifted || caps) "ZWJ" else "්‍ර"
         id == "h" && wijesekara && (shifted || caps) -> "්‍ය"
         wijesekara -> SinhalaEngine.slsKeyLabel(id.single(), shifted || caps)
-        shifted || caps -> id.uppercase()
-        else -> id
+        else -> id.uppercase()
     }
 
     fun phoneticHint(id: String, mode: InputMode, wijesekara: Boolean, shifted: Boolean, caps: Boolean): String? {

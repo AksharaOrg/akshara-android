@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputType
 import android.view.KeyEvent
 import android.view.View
@@ -28,6 +29,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private lateinit var emoji: EmojiRepository
     private lateinit var clipboardHistory: ClipboardHistoryStore
     private val composition = CompositionSession()
+    private val preview = UnmarkedPreview()
     private val slsSource = StringBuilder()
     private val executor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -38,6 +40,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private var previousCommittedWord: String? = null
     private var recentEmoji = mutableListOf<String>()
     private var editorLayout = EditorLayout.TEXT
+    private var spaceIntroAllowed = true
+    private var latinWordActive = false
+    private var lastSpaceAt = 0L
 
     private var precedingDirty = true
     private var cachedPreceding = emptyList<String>()
@@ -52,6 +57,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onCreateInputView(): View {
         window?.window?.let { WindowCompat.setDecorFitsSystemWindows(it, false) }
         keyboard = KeyboardView(this, this, prefs)
+        applySystemBarAppearance()
         return keyboard
     }
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
@@ -64,17 +70,24 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         super.onStartInputView(info, restarting)
         prefs = KeyboardPreferences(this); restricted = info?.let(::isRestrictedEditor) ?: true
         editorLayout = editorLayout(info)
-        keyboard.configure(prefs.mode, offerSystemSwitch(), enterLabel(info), editorLayout)
+        val intro = spaceIntroAllowed && restarting != true
+        spaceIntroAllowed = false
+        latinWordActive = false
+        keyboard.configure(prefs.mode, offerSystemSwitch(), enterLabel(info), editorLayout, intro)
         keyboard.learningEnabled = !restricted && editorLayout == EditorLayout.TEXT
         if (prefs.clipboardHistory) captureClipboard()
         keyboard.setClipboardItems(clipboardHistory.items(), clipboardHistory.pinnedItems())
         listenForClipboard()
         keyboard.setRecentEmoji(recentEmoji)
+        applySystemBarAppearance()
         updateSuggestions()
     }
     override fun onFinishInput() { deleteAnchor = -1; deleteLength = 0; cancelComposition(false); super.onFinishInput() }
     override fun onDestroy() {
         stopClipboardListener()
+        predictionTask?.cancel(true)
+        executor.shutdownNow()
+        main.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
     override fun onFinishInputView(finishingInput: Boolean) {
@@ -83,29 +96,47 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         super.onFinishInputView(finishingInput)
     }
 
+    override fun onWindowHidden() {
+        spaceIntroAllowed = true
+        super.onWindowHidden()
+    }
+
     override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int, candidatesStart: Int, candidatesEnd: Int) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
-        if (composition.active && candidatesStart >= 0 && (newSelEnd < candidatesStart || newSelEnd > candidatesEnd)) cancelComposition(false)
+        if (composition.active && currentInputConnection?.let { !preview.matches(it) } == true) {
+            cancelComposition(false)
+            previousCommittedWord = null
+        }
+        if (oldSelStart != newSelStart || oldSelEnd != newSelEnd) {
+            precedingDirty = true
+        }
         lastSelectionEnd = newSelEnd
     }
 
     override fun onCharacter(value: String) {
+        validatePreview()
+        if (latinWordActive) {
+            insertCommitted(value)
+            updateSuggestions()
+            return
+        }
         if (editorLayout != EditorLayout.TEXT) {
-            commitComposition(); currentInputConnection?.commitText(value, 1)
+            commitComposition(); insertCommitted(value)
         } else if (prefs.mode == InputMode.WIJESEKARA && (value == "\u200D" || value.codePoints().anyMatch { it in 0x0D80..0xE0FF })) {
             slsSource.append(value)
             val rendered = SinhalaEngine.normalizeSls(slsSource.toString())
-            composition.replace(rendered); currentInputConnection?.setComposingText(rendered, 1)
+            composition.replace(rendered); writePreview(rendered)
         } else if (prefs.mode != InputMode.WIJESEKARA && value.length == 1 && value[0].isLetter() && value[0].code < 128) {
             val rendered = composition.type(value, prefs.mode)
-            currentInputConnection?.setComposingText(rendered, 1)
+            writePreview(rendered)
         } else {
-            commitComposition(); currentInputConnection?.commitText(value, 1); if (value.codePoints().anyMatch { it > 0x1F000 }) rememberEmoji(value)
+            commitComposition(); insertCommitted(value); if (value.codePoints().anyMatch { it > 0x1F000 }) rememberEmoji(value)
         }
         updateSuggestions()
     }
 
     override fun onBackspace(word: Boolean) {
+        validatePreview()
         if (composition.active) {
             if (prefs.mode == InputMode.WIJESEKARA) {
                 if (slsSource.isNotEmpty()) {
@@ -118,18 +149,18 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
                 val rendered = SinhalaEngine.normalizeSls(slsSource.toString())
                 composition.replace(rendered)
                 if (rendered.isEmpty()) {
-                    currentInputConnection?.setComposingText("", 1)
+                    writePreview("")
                     currentInputConnection?.finishComposingText()
                     slsSource.clear()
                 } else {
-                    currentInputConnection?.setComposingText(rendered, 1)
+                    writePreview(rendered)
                 }
             } else {
                 val rendered = composition.backspace(prefs.mode)
                 if (rendered.isEmpty()) {
-                    currentInputConnection?.setComposingText("", 1)
+                    writePreview("")
                     currentInputConnection?.finishComposingText()
-                } else currentInputConnection?.setComposingText(rendered, 1)
+                } else writePreview(rendered)
             }
         } else {
             deleteFromHost(word)
@@ -137,31 +168,61 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         }
         updateSuggestions()
     }
-    override fun onSpace() { val word = commitComposition(); currentInputConnection?.commitText(" ", 1); learn(word); precedingDirty = true; updateSuggestions() }
+    override fun onSpace() {
+        val word = commitComposition()
+        if (latinWordActive) endLatinWord()
+        val ic = currentInputConnection
+        if (ic != null && tryDoubleSpace(ic)) {
+            lastSpaceAt = 0L
+        } else {
+            ic?.commitText(" ", 1)
+            lastSpaceAt = SystemClock.elapsedRealtime()
+        }
+        learn(word)
+        precedingDirty = true
+        updateSuggestions()
+    }
+
+    override fun onSpaceSwipe(up: Boolean) {
+        if (!prefs.englishForOneWord || prefs.mode != InputMode.SMART_PHONETIC || editorLayout != EditorLayout.TEXT) return
+        if (latinWordActive) {
+            endLatinWord()
+            return
+        }
+        if (!up) return
+        commitComposition()
+        latinWordActive = true
+        keyboard.setEnglishOneWord(true)
+        updateSuggestions()
+    }
     override fun onEnter() {
-        val word = commitComposition(); learn(word)
+        val word = commitComposition(); if (latinWordActive) endLatinWord(); learn(word)
         val info = currentInputEditorInfo
-        val action = info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION) ?: EditorInfo.IME_ACTION_NONE
+        val action = enterAction(info)
         if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
             currentInputConnection?.performEditorAction(action)
             if (action == EditorInfo.IME_ACTION_DONE) requestHideSelf(0)
         }
-        else currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER)).also { currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER)) }
+        else currentInputConnection?.commitText("\n", 1)
         cancelComposition(false); updateSuggestions()
     }
     override fun onCandidate(value: String) {
-        feedback(); val source = composition.source
+        validatePreview()
+        feedback()
         if (value == AksharaEasterEgg.TRUE_NAME_DISPLAY) {
-            currentInputConnection?.setComposingText(AksharaEasterEgg.TRUE_NAME_INSERT, 1); currentInputConnection?.finishComposingText()
+            writePreview(AksharaEasterEgg.TRUE_NAME_INSERT); preview.clear()
             composition.clear(); slsSource.clear(); updateSuggestions(); return
         }
-        currentInputConnection?.setComposingText(value, 1); currentInputConnection?.finishComposingText()
+        writePreview(value); preview.clear()
         composition.clear(); slsSource.clear(); learn(value); currentInputConnection?.commitText(" ", 1)
         precedingDirty = true
         updateSuggestions()
     }
-    override fun onGlobe() { commitComposition(); switchSystemKeyboard() }
-    override fun onModeRequested(mode: InputMode) { commitComposition(); prefs.mode = mode; keyboard.configure(mode, offerSystemSwitch(), enterLabel(currentInputEditorInfo), editorLayout) }
+    override fun onGlobe() { commitComposition(); if (latinWordActive) endLatinWord(); switchSystemKeyboard() }
+    override fun onModeRequested(mode: InputMode) {
+        commitComposition(); if (latinWordActive) endLatinWord(); prefs.mode = mode
+        keyboard.configure(mode, offerSystemSwitch(), enterLabel(currentInputEditorInfo), editorLayout)
+    }
     override fun onHide() { commitComposition(); requestHideSelf(0) }
     override fun onCursorDelta(delta: Int) {
         if (delta == 0) return; commitComposition(); val ic = currentInputConnection ?: return
@@ -174,7 +235,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     override fun languageScoreForKey(output: String): Float {
-        if (restricted || editorLayout != EditorLayout.TEXT) return 0f
+        if (restricted || editorLayout != EditorLayout.TEXT || latinWordActive) return 0f
         val next = if (prefs.mode != InputMode.WIJESEKARA && output.length == 1 && output[0].isLetter() && output[0].code < 128) {
             SinhalaEngine.transliterate(composition.source + output, prefs.mode)
         } else if (prefs.mode == InputMode.WIJESEKARA) {
@@ -229,20 +290,68 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         return super.onKeyDown(keyCode, event)
     }
 
+    private fun insertCommitted(value: String) {
+        val ic = currentInputConnection ?: return
+        val quoted = if (prefs.smartQuotes && editorLayout == EditorLayout.TEXT) {
+            val previous = ic.getTextBeforeCursor(1, 0)?.toString()?.lastOrNull()
+            SmartPunctuationSpacing.smartQuote(value, previous)
+        } else value
+        if (prefs.smartPunctuation && quoted.isNotEmpty() && quoted != " " && !quoted.startsWith("\n")) {
+            val before = ic.getTextBeforeCursor(8, 0)?.toString().orEmpty()
+            val change = SmartPunctuationSpacing.adjustment(quoted, before, punctuationField())
+            if (change.deletePrecedingCount > 0) ic.deleteSurroundingText(change.deletePrecedingCount, 0)
+            ic.commitText(change.text, 1)
+        } else {
+            ic.commitText(quoted, 1)
+        }
+        lastSpaceAt = 0L
+    }
+
+    private fun tryDoubleSpace(ic: InputConnection): Boolean {
+        val before = ic.getTextBeforeCursor(8, 0)?.toString().orEmpty()
+        val elapsed = SystemClock.elapsedRealtime() - lastSpaceAt
+        if (!SmartPunctuationSpacing.DoubleSpace.shouldReplace(prefs.doubleSpacePeriod && editorLayout == EditorLayout.TEXT, elapsed, before)) {
+            return false
+        }
+        ic.deleteSurroundingText(1, 0)
+        ic.commitText(". ", 1)
+        return true
+    }
+
+    private fun punctuationField(): SmartPunctuationSpacing.FieldKind =
+        if (editorLayout == EditorLayout.TEXT) SmartPunctuationSpacing.FieldKind.STANDARD
+        else SmartPunctuationSpacing.FieldKind.SUPPRESSES_SENTENCE_SPACING
+
+    private fun endLatinWord() {
+        if (!latinWordActive) return
+        latinWordActive = false
+        if (::keyboard.isInitialized) keyboard.setEnglishOneWord(false)
+    }
+
+    private fun validatePreview() {
+        if (composition.active && currentInputConnection?.let { !preview.matches(it) } == true) cancelComposition(false)
+    }
+
+    private fun writePreview(value: String) {
+        currentInputConnection?.let { if (!preview.replace(it, value)) cancelComposition(false) }
+    }
+
     private fun commitComposition(): String? {
+        validatePreview()
         if (!composition.active) return null
         val word = composition.rendered.takeIf { it.isNotBlank() }
-        currentInputConnection?.finishComposingText(); composition.clear(); slsSource.clear(); generation++
+        currentInputConnection?.finishComposingText(); preview.clear(); composition.clear(); slsSource.clear(); generation++
         return word
     }
     private fun cancelComposition(removeHostText: Boolean) {
         if (removeHostText && composition.rendered.isNotEmpty()) currentInputConnection?.deleteSurroundingText(composition.rendered.length, 0)
-        currentInputConnection?.finishComposingText(); composition.clear(); slsSource.clear(); generation++; predictionTask?.cancel(true)
+        currentInputConnection?.finishComposingText(); preview.clear(); composition.clear(); slsSource.clear(); generation++; predictionTask?.cancel(true)
         precedingDirty = true
         if (::keyboard.isInitialized) keyboard.setCandidates(emptyList())
     }
     private fun deleteFromHost(word: Boolean) {
         val ic = currentInputConnection ?: return
+        if (!ic.getSelectedText(0).isNullOrEmpty()) { ic.commitText("", 1); return }
         val before = ic.getTextBeforeCursor(if (word) 256 else 32, 0)?.toString().orEmpty()
         if (word) {
             val target = GraphemeDelete.lastWordSegment(before)
@@ -266,16 +375,16 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         ic.endBatchEdit()
     }
     private fun updateSuggestions() {
-        if (!::keyboard.isInitialized || restricted || !prefs.suggestions) { if (::keyboard.isInitialized) keyboard.setCandidates(emptyList()); return }
+        if (!::keyboard.isInitialized || restricted || !prefs.suggestions || latinWordActive || editorLayout != EditorLayout.TEXT) { if (::keyboard.isInitialized) keyboard.setCandidates(emptyList()); return }
         if (!composition.active) precedingDirty = true
-        val prefix = composition.rendered; val context = precedingWords(); val token = ++generation
+        val prefix = composition.rendered; val source = composition.source; val context = precedingWords(); val token = ++generation
         predictionTask?.cancel(true)
         predictionTask = executor.submit {
             try {
                 val values = prediction.candidates(prefix, context, 3).map { it.text }.toMutableList()
-                if (AksharaEasterEgg.isCompleteTrueName(prefix, composition.source)) values.add(0, AksharaEasterEgg.TRUE_NAME_DISPLAY)
-                if (prefs.emojiSuggestions && prefix.isNotBlank()) values.addAll(emoji.search(prefix, 2, scanNames = false))
-                main.post { if (token == generation) keyboard.setCandidates(values.distinct().take(3)) }
+                if (AksharaEasterEgg.isCompleteTrueName(prefix, source)) values.add(0, AksharaEasterEgg.TRUE_NAME_DISPLAY)
+                val emojiCandidate = if (prefs.emojiSuggestions && prefix.isNotBlank()) emoji.search(prefix, 1, scanNames = false).firstOrNull() else null
+                main.post { if (token == generation) keyboard.setCandidates(values.distinct().take(3), emojiCandidate) }
             } catch (_: Throwable) {
                 main.post { if (token == generation) keyboard.setCandidates(emptyList()) }
             }
@@ -334,7 +443,27 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         else (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).switchToNextInputMethod(window.window?.attributes?.token, false)
     }
 
+    private fun applySystemBarAppearance() {
+        val win = window?.window ?: return
+        WindowCompat.setDecorFitsSystemWindows(win, false)
+        win.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+        val darkKeyboard = ::keyboard.isInitialized && keyboard.isDarkTheme()
+        WindowCompat.getInsetsController(win, win.decorView).isAppearanceLightNavigationBars = !darkKeyboard
+        if (Build.VERSION.SDK_INT >= 29) {
+            win.isNavigationBarContrastEnforced = false
+            win.decorView.isForceDarkAllowed = false
+        }
+        win.navigationBarColor = if (::keyboard.isInitialized) keyboard.keyboardBackground() else android.graphics.Color.TRANSPARENT
+    }
+
     companion object {
+        fun enterAction(info: EditorInfo?): Int {
+            if (info == null) return EditorInfo.IME_ACTION_NONE
+            val multiline = info.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_TEXT &&
+                info.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
+            if (multiline || info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0) return EditorInfo.IME_ACTION_NONE
+            return info.imeOptions and EditorInfo.IME_MASK_ACTION
+        }
         fun isRestrictedEditor(info: EditorInfo): Boolean {
             val cls = info.inputType and InputType.TYPE_MASK_CLASS
             val variation = info.inputType and InputType.TYPE_MASK_VARIATION
@@ -346,7 +475,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             return info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0 ||
                 info.imeOptions and EditorInfo.IME_MASK_ACTION == EditorInfo.IME_ACTION_SEARCH
         }
-        fun enterLabel(info: EditorInfo?): String = when (info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)) {
+        fun enterLabel(info: EditorInfo?): String = when (enterAction(info)) {
             EditorInfo.IME_ACTION_GO -> "Go"; EditorInfo.IME_ACTION_SEARCH -> "⌕"; EditorInfo.IME_ACTION_SEND -> "Send"
             EditorInfo.IME_ACTION_NEXT -> "Next"; EditorInfo.IME_ACTION_DONE -> "Done"; else -> "↵"
         }
