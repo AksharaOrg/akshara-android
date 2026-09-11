@@ -7,9 +7,13 @@ import org.junit.Test
 
 class KeyboardPolicyTest {
     @Test fun emojiAlwaysUsesRightmostSlotEvenWithoutWords() {
-        assertEquals(listOf(null, null, "😀"), SuggestionRail.present(emptyList(), "😀"))
-        assertEquals(listOf(null, "word", "😀"), SuggestionRail.present(listOf("word"), "😀"))
-        assertEquals(listOf("second", "first", "😀"), SuggestionRail.present(listOf("first", "second", "third"), "😀"))
+        assertEquals(listOf(null, null, null), SuggestionRail.present(emptyList(), listOf("😀")).slots)
+        assertEquals(listOf("😀"), SuggestionRail.present(emptyList(), listOf("😀")).emoji)
+        assertEquals(listOf(null, "word", null), SuggestionRail.present(listOf("word"), listOf("😀")).slots)
+        assertEquals(listOf("😀"), SuggestionRail.present(listOf("word"), listOf("😀")).emoji)
+        assertEquals(listOf("second", "first", null), SuggestionRail.present(listOf("first", "second", "third"), listOf("😀", "😂")).slots)
+        assertEquals(listOf("😀", "😂"), SuggestionRail.present(listOf("first", "second", "third"), listOf("😀", "😂")).emoji)
+        assertEquals(listOf("😀"), SuggestionRail.present(emptyList(), listOf("😀", "😀", " ")).emoji)
     }
     @Test fun multilineDoneAndNoEnterActionUseReturn() {
         val info = EditorInfo().apply {

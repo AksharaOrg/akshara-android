@@ -27,7 +27,10 @@ internal class SuggestionRail(
 ) : FrameLayout(context) {
     var keySliver = 0
     private val chips = Array(3) { MorphChip(context, ink) }
+    private val emojiChips = Array(2) { MorphChip(context, ink) }
     private val chipRow = LinearLayout(context)
+    private val emojiRow = LinearLayout(context)
+    private val rightColumn = FrameLayout(context)
     private val empty = TextView(context)
     private val clipboard = ImageView(context)
     private val emptyRow = LinearLayout(context)
@@ -39,10 +42,23 @@ internal class SuggestionRail(
         chipRow.orientation = LinearLayout.HORIZONTAL
         chipRow.clipChildren = false
         chipRow.clipToPadding = false
-        chips.forEachIndexed { index, chip ->
+        chips.take(2).forEachIndexed { index, chip ->
             if (index > 0) chipRow.addView(divider())
             chipRow.addView(chip, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
         }
+        emojiRow.orientation = LinearLayout.HORIZONTAL
+        emojiRow.clipChildren = false
+        emojiRow.clipToPadding = false
+        emojiRow.visibility = GONE
+        emojiChips.forEach { chip ->
+            emojiRow.addView(chip, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        }
+        rightColumn.clipChildren = false
+        rightColumn.clipToPadding = false
+        rightColumn.addView(chips[2], LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        rightColumn.addView(emojiRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        chipRow.addView(divider())
+        chipRow.addView(rightColumn, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
         addView(chipRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
         empty.blockForceDark()
@@ -86,12 +102,27 @@ internal class SuggestionRail(
         if (visible) clipboard.bringToFront()
     }
 
-    fun setSuggestions(ranked: List<String>, animated: Boolean, emoji: String? = null) {
+    fun setSuggestions(ranked: List<String>, animated: Boolean, emoji: List<String> = emptyList()) {
         val presented = present(ranked, emoji)
         val motion = animated && motionEnabled()
-        showEmpty(presented.all { it == null })
-        chips.forEachIndexed { index, chip ->
-            chip.setCandidate(presented[index], motion)
+        showEmpty(presented.isEmpty)
+        chips[0].setCandidate(presented.slots[0], motion)
+        chips[1].setCandidate(presented.slots[1], motion)
+        val showEmoji = presented.emoji.isNotEmpty()
+        chips[2].visibility = if (showEmoji) GONE else VISIBLE
+        emojiRow.visibility = if (showEmoji) VISIBLE else GONE
+        if (showEmoji) {
+            chips[2].setCandidate(null, false)
+            emojiChips[0].setCandidate(presented.emoji[0], motion)
+            val second = presented.emoji.getOrNull(1)
+            emojiChips[1].setCandidate(second, if (second != null) motion else false)
+            emojiChips[1].visibility = if (second != null) VISIBLE else GONE
+        } else {
+            emojiChips.forEach { chip ->
+                chip.setCandidate(null, false)
+                chip.visibility = VISIBLE
+            }
+            chips[2].setCandidate(presented.slots[2], motion)
         }
     }
 
@@ -117,14 +148,20 @@ internal class SuggestionRail(
     private fun motionEnabled() = ValueAnimator.areAnimatorsEnabled()
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
+    data class Presented(val slots: List<String?>, val emoji: List<String> = emptyList()) {
+        val isEmpty get() = slots.all { it == null } && emoji.isEmpty()
+    }
+
     companion object {
-        fun present(ranked: List<String>, emoji: String? = null): List<String?> = if (emoji != null) {
-            listOf(ranked.getOrNull(1), ranked.firstOrNull(), emoji)
-        } else when (ranked.size) {
-            3 -> listOf(ranked[1], ranked[0], ranked[2])
-            2 -> listOf(ranked[1], ranked[0], null)
-            1 -> listOf(null, ranked[0], null)
-            else -> listOf(null, null, null)
+        fun present(ranked: List<String>, emoji: List<String> = emptyList()): Presented {
+            val slots = when (ranked.size) {
+                3 -> listOf<String?>(ranked[1], ranked[0], ranked[2])
+                2 -> listOf(ranked[1], ranked[0], null)
+                1 -> listOf(null, ranked[0], null)
+                else -> listOf(null, null, null)
+            }
+            val hits = emoji.filter { it.isNotBlank() }.distinct().take(2)
+            return if (hits.isEmpty()) Presented(slots) else Presented(listOf(slots[0], slots[1], null), hits)
         }
     }
 

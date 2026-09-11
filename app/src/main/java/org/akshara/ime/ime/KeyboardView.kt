@@ -3,7 +3,9 @@ package org.akshara.ime.ime
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Build
@@ -11,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
@@ -25,6 +28,8 @@ import org.akshara.ime.engine.InputMode
 import org.akshara.ime.engine.SinhalaEngine
 import org.akshara.ime.settings.KeyboardPreferences
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 enum class KeyboardLayer { LETTERS, NUMBERS, SYMBOLS, EMOJI, CLIPBOARD }
 enum class EditorLayout { TEXT, ASCII, EMAIL, URI, NUMBER, SIGNED_NUMBER, DECIMAL, SIGNED_DECIMAL, PHONE, DATETIME }
@@ -63,7 +68,7 @@ class KeyboardView(
     private var offerGlobe = false
     private var animateSpaceLabel = false
     private var candidates = emptyList<String>()
-    private var emojiCandidate: String? = null
+    private var emojiCandidates = emptyList<String>()
     private var clipboardRecent = emptyList<String>()
     private var clipboardPinned = emptyList<String>()
     private var clipboardHistoryEnabled = prefs.clipboardHistory
@@ -76,6 +81,13 @@ class KeyboardView(
     private var searchLayer = KeyboardLayer.LETTERS
     private var emojiCategoryIndex = 1
     private var englishOneWord = false
+    private var clipboardExtraPx = 0
+    private var clipboardDragActive = false
+    private var clipboardDragTracking = false
+    private var clipboardDragStartRawY = 0f
+    private var clipboardDragStartExtra = 0
+    private var clipboardVelocity: VelocityTracker? = null
+    private val clipboardHandlePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val handler = Handler(Looper.getMainLooper())
     private val palette = KeyboardPaletteResolver.resolve(context, prefs.theme, prefs.highContrast)
     private val bg = palette.background
@@ -83,8 +95,14 @@ class KeyboardView(
     private val utility = palette.utility
     private val ink = palette.ink
     private val rail = SuggestionRail(context, ink, { actions.onCandidate(it) }) {
-        layer = if (layer == KeyboardLayer.CLIPBOARD) KeyboardLayer.LETTERS else KeyboardLayer.CLIPBOARD
-        render()
+        leaveClipboardOrToggle()
+    }
+    private val clipboardHandle = View(context).apply {
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+        isClickable = true
+        isFocusable = true
+        contentDescription = "Expand clipboard"
+        setOnClickListener { toggleClipboardExpanded() }
     }
     private val body = LinearLayout(context)
     private val homePad = View(context)
@@ -162,6 +180,10 @@ class KeyboardView(
         body.clipToPadding = true
         addView(body, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(homePad, LayoutParams(LayoutParams.MATCH_PARENT, dp(KeyboardGeometry.BOTTOM_PAD_DP)))
+        addView(clipboardHandle, LayoutParams(LayoutParams.MATCH_PARENT, 0))
+        clipboardHandlePaint.color = ColorUtils.setAlphaComponent(ink, 90)
+        clipboardHandlePaint.style = Paint.Style.FILL
+        updateClipboardHandle()
         render()
     }
 
@@ -174,7 +196,98 @@ class KeyboardView(
         popups.dismiss()
         handler.removeCallbacksAndMessages(null)
         sliverPanel = null
+        releaseClipboardVelocity()
         super.onDetachedFromWindow()
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        super.onLayout(changed, l, t, r, b)
+        layoutClipboardHandle()
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        if (layer != KeyboardLayer.CLIPBOARD) return
+        val widthPx = dp(KeyboardGeometry.CLIPBOARD_HANDLE_WIDTH_DP).toFloat()
+        val heightPx = dp(KeyboardGeometry.CLIPBOARD_HANDLE_HEIGHT_DP).toFloat()
+        val left = (width - widthPx) / 2f
+        val top = (paddingTop - heightPx) / 2f
+        val radius = heightPx / 2f
+        canvas.drawRoundRect(left, top, left + widthPx, top + heightPx, radius, radius, clipboardHandlePaint)
+    }
+
+    override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+        if (layer != KeyboardLayer.CLIPBOARD) return super.onInterceptTouchEvent(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (inClipboardHandleZone(event.x, event.y)) {
+                    clipboardDragTracking = true
+                    clipboardDragActive = false
+                    clipboardDragStartRawY = event.rawY
+                    clipboardDragStartExtra = clipboardExtraPx
+                    obtainClipboardVelocity().addMovement(event)
+                    return false
+                }
+                clipboardDragTracking = false
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (clipboardDragTracking && !clipboardDragActive) {
+                    obtainClipboardVelocity().addMovement(event)
+                    val dy = abs(event.rawY - clipboardDragStartRawY)
+                    if (dy >= dp(KeyboardGeometry.CLIPBOARD_DRAG_SLOP_DP)) {
+                        clipboardDragActive = true
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                        return true
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (clipboardDragTracking && !clipboardDragActive) {
+                    clipboardDragTracking = false
+                    releaseClipboardVelocity()
+                }
+            }
+        }
+        return clipboardDragActive || super.onInterceptTouchEvent(event)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (layer != KeyboardLayer.CLIPBOARD || (!clipboardDragTracking && !clipboardDragActive)) {
+            return super.onTouchEvent(event)
+        }
+        obtainClipboardVelocity().addMovement(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                if (!clipboardDragActive) {
+                    val dy = abs(event.rawY - clipboardDragStartRawY)
+                    if (dy >= dp(KeyboardGeometry.CLIPBOARD_DRAG_SLOP_DP)) {
+                        clipboardDragActive = true
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                    } else {
+                        return true
+                    }
+                }
+                val delta = (clipboardDragStartRawY - event.rawY).roundToInt()
+                setClipboardExtra(clipboardDragStartExtra + delta)
+                return true
+            }
+            MotionEvent.ACTION_UP -> {
+                val moved = abs(event.rawY - clipboardDragStartRawY)
+                if (!clipboardDragActive && moved < dp(KeyboardGeometry.CLIPBOARD_DRAG_SLOP_DP)) {
+                    toggleClipboardExpanded()
+                } else {
+                    snapClipboardExpanded(event)
+                }
+                endClipboardDrag()
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                snapClipboardExpanded(event)
+                endClipboardDrag()
+                return true
+            }
+        }
+        return true
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
@@ -206,16 +319,19 @@ class KeyboardView(
         this.mode = mode; enterLabel = enter; editorLayout = editor; this.offerGlobe = offerGlobe
         clipboardHistoryEnabled = KeyboardPreferences(context).clipboardHistory
         shiftLatch.reset(); layer = KeyboardLayer.LETTERS
+        clipboardExtraPx = 0
+        endClipboardDrag()
         englishOneWord = false
         animateSpaceLabel = playSpaceIntro
         val width = if (prefs.oneHanded == "center") LayoutParams.MATCH_PARENT else (resources.displayMetrics.widthPixels * .82f).toInt()
         (body.layoutParams as LayoutParams).apply { this.width = width; gravity = when (prefs.oneHanded) { "left" -> Gravity.START; "right" -> Gravity.END; else -> Gravity.CENTER } }
         panel.learningEnabled = learningEnabled && editor == EditorLayout.TEXT
+        updateClipboardHandle()
         render()
     }
-    fun setCandidates(values: List<String>, emoji: String? = null) {
+    fun setCandidates(values: List<String>, emoji: List<String> = emptyList()) {
         candidates = values.take(3)
-        emojiCandidate = emoji
+        emojiCandidates = emoji.filter { it.isNotBlank() }.distinct().take(2)
         bindRail(true)
     }
     fun setClipboardItems(recent: List<String>, pinned: List<String> = emptyList()) {
@@ -236,10 +352,12 @@ class KeyboardView(
     private fun render() {
         popups.dismiss()
         sliverPanel = null
+        if (layer != KeyboardLayer.CLIPBOARD) clipboardExtraPx = 0
         rail.layoutParams = (rail.layoutParams as LayoutParams).apply {
             height = if (keepSuggestionRail()) suggestionRailHeight() else 0
         }
         bindRail(false)
+        updateClipboardHandle()
         if (editorLayout in numericEditors) {
             body.removeAllViews()
             renderNativePad()
@@ -272,7 +390,7 @@ class KeyboardView(
         val show = layer == KeyboardLayer.LETTERS && editorLayout == EditorLayout.TEXT
         rail.setEmptyTitle(if (show) mode.title else "")
         rail.setClipboardVisible(showClipboardButton())
-        rail.setSuggestions(if (show) candidates else emptyList(), animated && show, if (show) emojiCandidate else null)
+        rail.setSuggestions(if (show) candidates else emptyList(), animated && show, if (show) emojiCandidates else emptyList())
     }
 
     private fun keepSuggestionRail() =
@@ -449,6 +567,7 @@ class KeyboardView(
         val existing = body.getChildAt(0) as? ClipboardBoard
         if (existing != null && body.childCount == 1) {
             existing.configure(clipboardRecent, clipboardPinned)
+            applyClipboardHeight()
             return
         }
         body.removeAllViews()
@@ -457,10 +576,15 @@ class KeyboardView(
             KeyboardColors(key, utility, ink, palette.dark, palette.highContrast),
             onPaste = { clip ->
                 actions.onCharacter(clip)
+                resetClipboardExpansion()
                 layer = KeyboardLayer.LETTERS
                 render()
             },
-            onBack = { layer = KeyboardLayer.LETTERS; render() },
+            onBack = {
+                resetClipboardExpansion()
+                layer = KeyboardLayer.LETTERS
+                render()
+            },
             onClearRecent = {
                 clipboardStore.clearHistory()
                 refreshClipboardFromStore()
@@ -479,7 +603,142 @@ class KeyboardView(
             }
         )
         board.configure(clipboardRecent, clipboardPinned)
-        body.addView(board, LayoutParams(LayoutParams.MATCH_PARENT, auxiliaryHeight() - suggestionRailHeight()))
+        body.addView(board, LayoutParams(LayoutParams.MATCH_PARENT, clipboardBoardHeight()))
+        applyClipboardHeight()
+    }
+
+    private fun leaveClipboardOrToggle() {
+        if (layer == KeyboardLayer.CLIPBOARD) {
+            resetClipboardExpansion()
+            layer = KeyboardLayer.LETTERS
+        } else {
+            layer = KeyboardLayer.CLIPBOARD
+        }
+        render()
+    }
+
+    private fun resetClipboardExpansion() {
+        clipboardExtraPx = 0
+        endClipboardDrag()
+    }
+
+    private fun clipboardBoardHeight() = clipboardBaseHeight() + clipboardExtraPx
+
+    private fun clipboardBaseHeight() = auxiliaryHeight() - suggestionRailHeight()
+
+    private fun clipboardMaxExtra(): Int {
+        val fraction = if (isLandscape()) {
+            KeyboardGeometry.CLIPBOARD_EXPAND_FRACTION_LANDSCAPE
+        } else {
+            KeyboardGeometry.CLIPBOARD_EXPAND_FRACTION_PORTRAIT
+        }
+        val screen = resources.displayMetrics.heightPixels.coerceAtLeast(1)
+        val collapsed = collapsedClipboardKeyboardHeight()
+        val fromFraction = (screen * fraction).roundToInt()
+        val withMinimum = max(fromFraction, collapsed + dp(KeyboardGeometry.CLIPBOARD_MIN_EXTRA_DP))
+        val capped = minOf(withMinimum, (screen * KeyboardGeometry.CLIPBOARD_EXPAND_CAP_FRACTION).roundToInt())
+        return max(0, capped - collapsed)
+    }
+
+    private fun collapsedClipboardKeyboardHeight(): Int {
+        val top = dp(KeyboardGeometry.TOP_PAD_DP)
+        val rail = if (keepSuggestionRail()) suggestionRailHeight() else 0
+        val board = clipboardBaseHeight()
+        val bottom = (homePad.layoutParams as? LayoutParams)?.height ?: dp(KeyboardGeometry.BOTTOM_PAD_DP)
+        return top + rail + board + bottom
+    }
+
+    private fun applyClipboardHeight() {
+        val board = body.getChildAt(0) as? ClipboardBoard ?: return
+        val params = board.layoutParams as LayoutParams
+        val target = clipboardBoardHeight()
+        if (params.height != target) {
+            params.height = target
+            board.layoutParams = params
+        }
+        updateClipboardHandle()
+        requestLayout()
+    }
+
+    private fun setClipboardExtra(extra: Int) {
+        val clamped = extra.coerceIn(0, clipboardMaxExtra())
+        if (clamped == clipboardExtraPx) return
+        clipboardExtraPx = clamped
+        applyClipboardHeight()
+    }
+
+    private fun toggleClipboardExpanded() {
+        if (layer != KeyboardLayer.CLIPBOARD) return
+        setClipboardExtra(if (clipboardExtraPx > clipboardMaxExtra() / 2) 0 else clipboardMaxExtra())
+    }
+
+    private fun snapClipboardExpanded(event: MotionEvent) {
+        val tracker = clipboardVelocity
+        tracker?.computeCurrentVelocity(1000)
+        val velocityY = tracker?.yVelocity ?: 0f
+        val flick = dp(KeyboardGeometry.CLIPBOARD_FLICK_DP_PER_SEC).toFloat()
+        val maxExtra = clipboardMaxExtra()
+        val target = when {
+            velocityY <= -flick -> maxExtra
+            velocityY >= flick -> 0
+            clipboardExtraPx >= maxExtra / 2 -> maxExtra
+            else -> 0
+        }
+        setClipboardExtra(target)
+    }
+
+    private fun endClipboardDrag() {
+        clipboardDragActive = false
+        clipboardDragTracking = false
+        releaseClipboardVelocity()
+    }
+
+    private fun obtainClipboardVelocity(): VelocityTracker {
+        val tracker = clipboardVelocity ?: VelocityTracker.obtain().also { clipboardVelocity = it }
+        return tracker
+    }
+
+    private fun releaseClipboardVelocity() {
+        clipboardVelocity?.recycle()
+        clipboardVelocity = null
+    }
+
+    private fun inClipboardHandleZone(x: Float, y: Float): Boolean {
+        if (y < 0f || y > dp(KeyboardGeometry.CLIPBOARD_HANDLE_HIT_DP)) return false
+        if (y >= paddingTop && x < dp(KeyboardGeometry.CLIPBOARD_HANDLE_EXCLUDE_START_DP)) return false
+        return true
+    }
+
+    private fun layoutClipboardHandle() {
+        if (layer != KeyboardLayer.CLIPBOARD) {
+            clipboardHandle.layout(0, 0, 0, 0)
+            return
+        }
+        val hit = dp(KeyboardGeometry.CLIPBOARD_HANDLE_HIT_DP)
+        val exclude = dp(KeyboardGeometry.CLIPBOARD_HANDLE_EXCLUDE_START_DP)
+        clipboardHandle.layout(exclude, 0, width, hit)
+    }
+
+    private fun updateClipboardHandle() {
+        val show = layer == KeyboardLayer.CLIPBOARD
+        clipboardHandle.visibility = if (show) VISIBLE else GONE
+        clipboardHandle.isClickable = show
+        clipboardHandle.isFocusable = show
+        clipboardHandle.contentDescription = if (clipboardExtraPx > clipboardMaxExtra() / 2) {
+            "Collapse clipboard"
+        } else {
+            "Expand clipboard"
+        }
+        if (show) clipboardHandle.bringToFront()
+    }
+
+    /** Test helper: expanded extra height in pixels while clipboard is open. */
+    internal fun clipboardExpansionPx(): Int = clipboardExtraPx
+
+    /** Test helper: snap clipboard fully open or closed. */
+    internal fun setClipboardExpandedForTest(expanded: Boolean) {
+        if (layer != KeyboardLayer.CLIPBOARD) return
+        setClipboardExtra(if (expanded) clipboardMaxExtra() else 0)
     }
 
     private fun refreshClipboardFromStore() {

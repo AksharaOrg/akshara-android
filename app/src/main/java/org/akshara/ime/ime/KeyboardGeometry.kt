@@ -59,6 +59,20 @@ internal object KeyboardGeometry {
     const val EMOJI_COLUMNS_LANDSCAPE = 10
     const val EMOJI_ROWS_PORTRAIT = 5
     const val EMOJI_ROWS_LANDSCAPE = 3
+    /** Hit height from the top of the IME for clipboard expand/collapse. */
+    const val CLIPBOARD_HANDLE_HIT_DP = 24
+    const val CLIPBOARD_HANDLE_WIDTH_DP = 36
+    const val CLIPBOARD_HANDLE_HEIGHT_DP = 4
+    const val CLIPBOARD_DRAG_SLOP_DP = 8
+    const val CLIPBOARD_FLICK_DP_PER_SEC = 800
+    const val CLIPBOARD_EXPAND_FRACTION_PORTRAIT = 0.55f
+    const val CLIPBOARD_EXPAND_FRACTION_LANDSCAPE = 0.70f
+    /** Always leave some editor visible when clipboard is pulled up. */
+    const val CLIPBOARD_EXPAND_CAP_FRACTION = 0.85f
+    /** Minimum growth when screen fraction would not enlarge a tall keyboard. */
+    const val CLIPBOARD_MIN_EXTRA_DP = 120
+    /** Left inset matching the rail clipboard button so that button keeps receiving taps. */
+    const val CLIPBOARD_HANDLE_EXCLUDE_START_DP = 44
 
     fun keyAreaDp(size: String, landscape: Boolean): Int {
         if (landscape) return when (size) {

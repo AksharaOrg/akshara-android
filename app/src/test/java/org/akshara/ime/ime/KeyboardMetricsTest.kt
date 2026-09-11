@@ -64,9 +64,9 @@ class KeyboardMetricsTest {
     }
 
     @Test fun presentPutsTheBestCandidateInTheCentreSlot() {
-        assertEquals(listOf("give", "good", "go"), SuggestionRail.present(listOf("good", "give", "go")))
-        assertEquals(listOf<String?>(null, "ක", null), SuggestionRail.present(listOf("ක")))
-        assertEquals(listOf(null, null, null), SuggestionRail.present(emptyList()))
+        assertEquals(listOf("give", "good", "go"), SuggestionRail.present(listOf("good", "give", "go")).slots)
+        assertEquals(listOf<String?>(null, "ක", null), SuggestionRail.present(listOf("ක")).slots)
+        assertEquals(listOf(null, null, null), SuggestionRail.present(emptyList()).slots)
     }
 
     @Test fun wijesekaraFollowsGboardFrameWithElevenTopKeys() {

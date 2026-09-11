@@ -10,7 +10,9 @@ local.properties
 .idea/
 *.iml
 
-# Native Android build output
+# Play/App Bundle artifacts
+*.aab
+*.apk
 .externalNativeBuild/
 .cxx/
 captures/

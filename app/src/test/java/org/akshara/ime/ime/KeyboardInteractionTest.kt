@@ -184,6 +184,24 @@ class KeyboardInteractionTest {
         assertNotNull(findButton(view, "Letters"))
     }
 
+    @Test fun suggestionRailShowsTwoEmojiInTheRightColumn() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val view = KeyboardView(context, idleActions(), KeyboardPreferences(context))
+        view.configure(InputMode.SMART_PHONETIC, false, "↵")
+        layoutKeyboard(view)
+        view.setCandidates(listOf("කතාව", "කතා", "ක"), listOf("😀", "😂"))
+        layoutKeyboard(view)
+        assertNotNull(findButton(view, "Suggestion කතාව"))
+        assertNotNull(findButton(view, "Suggestion කතා"))
+        assertNull(findButton(view, "Suggestion ක"))
+        assertNotNull(findButton(view, "Suggestion 😀"))
+        assertNotNull(findButton(view, "Suggestion 😂"))
+        view.setCandidates(listOf("කතාව"), listOf("😀"))
+        layoutKeyboard(view)
+        assertNotNull(findButton(view, "Suggestion 😀"))
+        assertNull(findButton(view, "Suggestion 😂"))
+    }
+
     @Test fun clipboardHistoryOpensFromTheSuggestionRailWhenEnabled() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().clear().commit()
@@ -220,6 +238,74 @@ class KeyboardInteractionTest {
         layoutKeyboard(closed)
         val hidden = findButton(closed, "Clipboard history")
         assertTrue(hidden == null || hidden.visibility != View.VISIBLE)
+    }
+
+    @Test fun clipboardPullExpandsAndCollapsesWhileCollapsedStaysEqualHeight() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().clear().commit()
+        val prefs = KeyboardPreferences(context)
+        prefs.clipboardHistory = true
+        val view = KeyboardView(context, idleActions(), prefs)
+        view.configure(InputMode.PHONETIC, false, "↵")
+        view.setClipboardItems(listOf("one", "two", "three", "four", "five"), emptyList())
+        fun height(): Int {
+            view.measure(
+                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            view.layout(0, 0, 1080, view.measuredHeight)
+            return view.measuredHeight
+        }
+        val typing = height()
+        findButton(view, "Clipboard history")!!.performClick()
+        assertEquals(typing, height())
+        assertEquals(0, view.clipboardExpansionPx())
+        assertNotNull(findButton(view, "Expand clipboard"))
+
+        dragClipboardHandle(view, startY = 12f, endY = -400f)
+        val expanded = height()
+        assertTrue("expanded=$expanded typing=$typing", expanded > typing)
+        assertTrue(view.clipboardExpansionPx() > 0)
+        assertNotNull(findButton(view, "Collapse clipboard"))
+        val board = findClipboardBoard(view)!!
+        assertTrue(board.height > 0)
+
+        findButton(view, "Collapse clipboard")!!.performClick()
+        assertEquals(typing, height())
+        assertEquals(0, view.clipboardExpansionPx())
+
+        view.setClipboardExpandedForTest(true)
+        assertTrue(height() > typing)
+        findButton(view, "Back")!!.performClick()
+        assertEquals(typing, height())
+        assertEquals(0, view.clipboardExpansionPx())
+    }
+
+    @Test fun clipboardRailButtonDoesNotLeaveKeyboardExpanded() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().clear().commit()
+        val prefs = KeyboardPreferences(context)
+        prefs.clipboardHistory = true
+        val view = KeyboardView(context, idleActions(), prefs)
+        view.configure(InputMode.PHONETIC, false, "↵")
+        view.setClipboardItems(listOf("clip"), emptyList())
+        fun height(): Int {
+            view.measure(
+                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            view.layout(0, 0, 1080, view.measuredHeight)
+            return view.measuredHeight
+        }
+        val typing = height()
+        findButton(view, "Clipboard history")!!.performClick()
+        view.setClipboardExpandedForTest(true)
+        assertTrue(height() > typing)
+        findButton(view, "Clipboard history")!!.performClick()
+        assertEquals(typing, height())
+        assertEquals(0, view.clipboardExpansionPx())
+        assertNull(findButton(view, "Expand clipboard"))
+        assertNull(findButton(view, "Back"))
     }
 
     @Test fun spacebarUsesAksharaModeCaption() {
@@ -277,6 +363,31 @@ class KeyboardInteractionTest {
             View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.EXACTLY)
         )
         view.layout(0, 0, width, 900)
+    }
+    private fun dragClipboardHandle(view: KeyboardView, startY: Float, endY: Float) {
+        layoutKeyboard(view)
+        val x = view.width / 2f
+        val downTime = android.os.SystemClock.uptimeMillis()
+        fun send(action: Int, y: Float, time: Long) {
+            val event = android.view.MotionEvent.obtain(downTime, time, action, x, y, 0)
+            view.dispatchTouchEvent(event)
+            event.recycle()
+        }
+        send(android.view.MotionEvent.ACTION_DOWN, startY, downTime)
+        val steps = 6
+        for (i in 1..steps) {
+            val y = startY + (endY - startY) * i / steps
+            send(android.view.MotionEvent.ACTION_MOVE, y, downTime + 16L * i)
+        }
+        send(android.view.MotionEvent.ACTION_UP, endY, downTime + 16L * (steps + 1))
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+    }
+    private fun findClipboardBoard(view: View): View? {
+        if (view is ClipboardBoard) return view
+        if (view is ViewGroup) for (i in 0 until view.childCount) {
+            findClipboardBoard(view.getChildAt(i))?.let { return it }
+        }
+        return null
     }
     private fun findTagged(view: View, tag: String): View? {
         if (view.tag == tag) return view

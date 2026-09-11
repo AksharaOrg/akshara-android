@@ -383,8 +383,8 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             try {
                 val values = prediction.candidates(prefix, context, 3).map { it.text }.toMutableList()
                 if (AksharaEasterEgg.isCompleteTrueName(prefix, source)) values.add(0, AksharaEasterEgg.TRUE_NAME_DISPLAY)
-                val emojiCandidate = if (prefs.emojiSuggestions && prefix.isNotBlank()) emoji.search(prefix, 1, scanNames = false).firstOrNull() else null
-                main.post { if (token == generation) keyboard.setCandidates(values.distinct().take(3), emojiCandidate) }
+                val emojiHits = if (prefs.emojiSuggestions && prefix.isNotBlank()) emoji.search(prefix, 2, scanNames = false) else emptyList()
+                main.post { if (token == generation) keyboard.setCandidates(values.distinct().take(3), emojiHits) }
             } catch (_: Throwable) {
                 main.post { if (token == generation) keyboard.setCandidates(emptyList()) }
             }
