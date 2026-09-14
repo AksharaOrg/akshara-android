@@ -43,6 +43,8 @@ internal class SuggestionRail(
     private val emptyRow = LinearLayout(context)
     private var currentPrefs: KeyboardPreferences? = null
     private var isOtpAvailable = false
+    private var currentOtpCode: String? = null
+    private var isIncognitoActive = false
     private var isClipboardRequested = false
     private var isEnglishLanguage = false
 
@@ -52,7 +54,18 @@ internal class SuggestionRail(
     private val fontStudioBtn = createCircleIconButton(R.drawable.ic_key_font_studio, "Font Studio") { onToolbarAction?.invoke("font_studio") }
     private val translateBtn = createCircleIconButton(R.drawable.ic_key_translate, "Translator") { onToolbarAction?.invoke("translate") }
     private val fontBtn = createCircleIconButton(R.drawable.ic_key_font, "Convert to FM") { onToolbarAction?.invoke("fm") }
+    private val calcBtn = createCircleIconButton(R.drawable.ic_key_calc, "Calculator") { onToolbarAction?.invoke("calculator") }
     private val otpBtn = createCircleIconButton(R.drawable.ic_key_otp, "Paste OTP") { onToolbarAction?.invoke("otp") }
+    private val singlishBtn = createCircleIconButton(R.drawable.ic_key_singlish, "Singlish to Sinhala Bulk Converter") { onToolbarAction?.invoke("singlish_bulk") }
+    private val oneHandedBtn = createCircleIconButton(R.drawable.ic_key_one_handed, "One-Handed Mode") { onToolbarAction?.invoke("one_handed_toggle") }
+    private val incognitoIndicator = ImageView(context).apply {
+        setImageResource(R.drawable.ic_key_incognito)
+        imageTintList = ColorStateList.valueOf(ink)
+        scaleType = ImageView.ScaleType.CENTER_INSIDE
+        setPadding(dp(6), dp(6), dp(6), dp(6))
+        contentDescription = "Incognito Mode Active"
+        visibility = GONE
+    }
     private val clipboard = createCircleIconButton(R.drawable.ic_key_clipboard, "Clipboard History") { onClipboard() }
     private val settings = createCircleIconButton(R.drawable.ic_key_settings, "Settings") { onSettings() }
     private val emojiSwitch = createCircleIconButton(R.drawable.ic_key_emoji, "Emoji") { onEmoji() }
@@ -158,7 +171,25 @@ internal class SuggestionRail(
 
     private fun populateDefaultEmptyRow() {
         emptyRow.removeAllViews()
-        val defaultViews = listOf(langToggle, fontStudioBtn, undoBtn, redoBtn, astrologyBtn, fontBtn, translateBtn, emojiSwitch, clipboard, settings)
+        val defaultViews = mutableListOf<View>()
+        if (isIncognitoActive) {
+            defaultViews.add(incognitoIndicator)
+        }
+        defaultViews.addAll(listOf(
+            langToggle,
+            fontStudioBtn,
+            singlishBtn,
+            calcBtn,
+            undoBtn,
+            redoBtn,
+            astrologyBtn,
+            fontBtn,
+            translateBtn,
+            oneHandedBtn,
+            emojiSwitch,
+            clipboard,
+            settings
+        ))
         for (view in defaultViews) {
             val container = wrapIconSlot(view)
             val lp = LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
@@ -175,9 +206,19 @@ internal class SuggestionRail(
 
         emptyRow.removeAllViews()
 
+        if (isIncognitoActive) {
+            val container = wrapIconSlot(incognitoIndicator)
+            val lp = LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            emptyRow.addView(container, lp)
+        }
+
         val toolViews = mapOf(
             "lang_toggle" to langToggle,
             "font_studio" to fontStudioBtn,
+            "singlish" to singlishBtn,
+            "calculator" to calcBtn,
             "emoji" to emojiSwitch,
             "voice" to voiceBtn,
             "undo" to undoBtn,
@@ -185,6 +226,7 @@ internal class SuggestionRail(
             "astrology" to astrologyBtn,
             "fm" to fontBtn,
             "translate" to translateBtn,
+            "one_handed" to oneHandedBtn,
             "otp" to otpBtn,
             "clipboard" to clipboard,
             "settings" to settings
@@ -221,11 +263,21 @@ internal class SuggestionRail(
         langToggle.text = if (isEnglish) "EN" else "සිං"
     }
 
-    fun setOtpAvailable(available: Boolean) {
+    fun setOtpAvailable(available: Boolean, code: String? = null) {
         this.isOtpAvailable = available
+        this.currentOtpCode = code
         val enabled = currentPrefs?.isToolbarIconEnabled("otp") ?: true
         otpBtn.visibility = if (available && enabled) View.VISIBLE else View.GONE
+        if (!code.isNullOrEmpty()) {
+            otpBtn.contentDescription = "Paste OTP: $code"
+        }
         currentPrefs?.let { configureToolbar(it) }
+    }
+
+    fun setIncognito(active: Boolean) {
+        this.isIncognitoActive = active
+        incognitoIndicator.visibility = if (active) View.VISIBLE else View.GONE
+        currentPrefs?.let { configureToolbar(it) } ?: populateDefaultEmptyRow()
     }
 
     fun updateInk(newInk: Int) {
@@ -236,6 +288,9 @@ internal class SuggestionRail(
         translateBtn.imageTintList = ColorStateList.valueOf(newInk)
         fontBtn.imageTintList = ColorStateList.valueOf(newInk)
         otpBtn.imageTintList = ColorStateList.valueOf(newInk)
+        singlishBtn.imageTintList = ColorStateList.valueOf(newInk)
+        oneHandedBtn.imageTintList = ColorStateList.valueOf(newInk)
+        incognitoIndicator.imageTintList = ColorStateList.valueOf(newInk)
         clipboard.imageTintList = ColorStateList.valueOf(newInk)
         settings.imageTintList = ColorStateList.valueOf(newInk)
         emojiSwitch.imageTintList = ColorStateList.valueOf(newInk)
@@ -247,6 +302,8 @@ internal class SuggestionRail(
         translateBtn.background = circularRippleBackground(newInk)
         fontBtn.background = circularRippleBackground(newInk)
         otpBtn.background = circularRippleBackground(newInk)
+        singlishBtn.background = circularRippleBackground(newInk)
+        oneHandedBtn.background = circularRippleBackground(newInk)
         clipboard.background = circularRippleBackground(newInk)
         settings.background = circularRippleBackground(newInk)
         emojiSwitch.background = circularRippleBackground(newInk)
@@ -262,7 +319,12 @@ internal class SuggestionRail(
         this.isClipboardRequested = visible
         val enabled = currentPrefs?.isToolbarIconEnabled("clipboard") ?: true
         val reallyVisible = visible && enabled && (currentPrefs?.clipboardHistory ?: true)
-        clipboard.visibility = if (reallyVisible) VISIBLE else GONE
+        val container = clipboard.parent as? View
+        if (container != null && container != emptyRow) {
+            container.visibility = if (reallyVisible) VISIBLE else GONE
+        } else {
+            clipboard.visibility = if (reallyVisible) VISIBLE else GONE
+        }
     }
 
     fun setSuggestions(ranked: List<String>, animated: Boolean, corrections: Set<String> = emptySet()) {

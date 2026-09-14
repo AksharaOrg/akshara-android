@@ -43,7 +43,11 @@ import org.slashboard.ime.data.ClipboardHistoryStore
 import org.slashboard.ime.data.EmojiRepository
 import org.slashboard.ime.data.LocalLearningStore
 import org.slashboard.ime.data.PredictionRepository
+import org.slashboard.ime.data.SnippetManager
 import org.slashboard.ime.engine.EnglishPredictionEngine
+import org.slashboard.ime.engine.LiveUnitConverter
+import org.slashboard.ime.engine.SinglishParagraphConverter
+import org.slashboard.ime.engine.SinhalaNumberToWords
 import org.slashboard.ime.engine.SlashboardEasterEgg
 import org.slashboard.ime.data.SlashboardSyncWorker
 import org.slashboard.ime.engine.CompositionSession
@@ -61,6 +65,7 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var prefs: KeyboardPreferences
     private lateinit var keyboard: KeyboardView
+    private lateinit var snippetManager: SnippetManager
     private var learning: LocalLearningStore? = null
     private var prediction: PredictionRepository? = null
     private var englishPrediction: EnglishPredictionEngine? = null
@@ -86,6 +91,14 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     private var deleteLength = 0
     private val undoRedoManager = UndoRedoManager()
     private var activeCorrection: String? = null
+    private var activeMathResult: String? = null
+    private var activeUnitResult: String? = null
+    private var activeUnitQuery: String? = null
+    private var activeNumberWords: String? = null
+    private var activeNumberDigits: String? = null
+    private var activeSnippetPhrase: String? = null
+    private var activeSnippetShortcut: String? = null
+    private var detectedOtpCode: String? = null
 
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
         captureClipboard()
@@ -111,6 +124,7 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
 
         prefs = KeyboardPreferences(this)
         prefs.store.registerOnSharedPreferenceChangeListener(prefChangeListener)
+        snippetManager = SnippetManager(this)
         recentEmoji = prefs.recentEmojis.toMutableList()
         org.slashboard.ime.sound.KeySoundPlayer.getInstance(this)
         
@@ -159,6 +173,8 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+
+        clipboardHistory = ClipboardHistoryStore(this)
 
         serviceScope.launch(Dispatchers.IO) {
             val localLearning = LocalLearningStore(this@SlashboardInputMethodService)
@@ -233,11 +249,17 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             win.findViewById<View>(android.R.id.inputArea)?.setBackgroundColor(Color.TRANSPARENT)
         }
         keyboard.configure(prefs.mode, offerSystemSwitch(), enterLabel(info), editorLayout)
-        keyboard.learningEnabled = !restricted && !isPasswordOrSensitive(info) && editorLayout == EditorLayout.TEXT
+        val incognito = isPasswordOrSensitive(info)
+        keyboard.setIncognito(incognito)
+        keyboard.learningEnabled = !restricted && !incognito && editorLayout == EditorLayout.TEXT
         checkOtp()
-        if (prefs.clipboardHistory) captureClipboard()
+        if (prefs.clipboardHistory && !incognito) captureClipboard()
         clipboardHistory?.let { keyboard.setClipboardItems(it.items(), it.pinnedItems()) }
-        listenForClipboard()
+        if (incognito) {
+            stopClipboardListener()
+        } else {
+            listenForClipboard()
+        }
         keyboard.setRecentEmoji(recentEmoji)
         updateSuggestions()
     }
@@ -291,7 +313,11 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
                 } else {
                     value
                 }
-                currentInputConnection?.commitText(fontTransformed, 1)
+                if (!isPassword && value == "=") {
+                    commitEqualOrCalculated("=")
+                } else {
+                    currentInputConnection?.commitText(fontTransformed, 1)
+                }
                 if (value.codePoints().anyMatch { it > 0x1F000 }) {
                     rememberEmoji(value)
                 }
@@ -307,6 +333,8 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
                     commitComposition()
                     ic.deleteSurroundingText(pillamCorrection.deleteCount, 0)
                     ic.commitText(pillamCorrection.replacement, 1)
+                } else if (!isPassword && value == "=") {
+                    commitEqualOrCalculated("=")
                 } else {
                     commitComposition()
                     ic?.commitText(value, 1)
@@ -315,6 +343,32 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
                     rememberEmoji(value)
                 }
             }
+            precedingDirty = true
+            updateSuggestions()
+        }
+    }
+
+    private fun commitEqualOrCalculated(value: String) {
+        val ic = currentInputConnection ?: return
+        commitComposition()
+        val beforeForMath = ic.getTextBeforeCursor(64, 0)?.toString().orEmpty()
+        val mathEval = MathEvaluator.evaluateTrailingExpression(beforeForMath)
+        if (mathEval != null) {
+            if (beforeForMath.endsWith("=")) {
+                ic.commitText(mathEval.formattedResult, 1)
+            } else {
+                ic.commitText("=${mathEval.formattedResult}", 1)
+            }
+        } else {
+            ic.commitText(value, 1)
+        }
+    }
+
+    override fun onPasteText(text: String) {
+        runCatching {
+            val ic = currentInputConnection ?: return
+            commitComposition()
+            ic.commitText(text, 1)
             precedingDirty = true
             updateSuggestions()
         }
@@ -409,7 +463,9 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             clearLocalCompositionState()
             val info = currentInputEditorInfo
             val action = (info?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
-            if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
+            val isMultiLine = (info?.inputType ?: 0) and EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE != 0
+            val noEnterAction = (info?.imeOptions ?: 0) and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
+            if (!isMultiLine && !noEnterAction && action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
                 currentInputConnection?.performEditorAction(action)
                 if (action == EditorInfo.IME_ACTION_DONE) {
                     requestHideSelf(0)
@@ -426,6 +482,67 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     override fun onCandidate(value: String) {
         runCatching {
             feedback()
+            if (value.startsWith("= ") || (activeMathResult != null && value == activeMathResult)) {
+                val ic = currentInputConnection
+                val before = ic?.getTextBeforeCursor(64, 0)?.toString().orEmpty()
+                val ans = if (value.startsWith("= ")) value.removePrefix("= ").trim() else value
+                if (before.endsWith("=")) {
+                    ic?.commitText(ans + " ", 1)
+                } else {
+                    ic?.commitText("=$ans ", 1)
+                }
+                activeMathResult = null
+                precedingDirty = true
+                updateSuggestions()
+                return@runCatching
+            }
+
+            if (activeUnitResult != null && (value == activeUnitResult || value == "= $activeUnitResult")) {
+                val ic = currentInputConnection
+                val ans = activeUnitResult!!
+                val before = ic?.getTextBeforeCursor(64, 0)?.toString().orEmpty()
+                val q = activeUnitQuery
+                if (q != null && before.endsWith(q)) {
+                    ic?.deleteSurroundingText(q.length, 0)
+                }
+                ic?.commitText("$ans ", 1)
+                activeUnitResult = null
+                activeUnitQuery = null
+                precedingDirty = true
+                updateSuggestions()
+                return@runCatching
+            }
+
+            if (activeNumberWords != null && value == activeNumberWords) {
+                val ic = currentInputConnection
+                val digits = activeNumberDigits
+                val before = ic?.getTextBeforeCursor(64, 0)?.toString().orEmpty()
+                if (digits != null && before.endsWith(digits)) {
+                    ic?.deleteSurroundingText(digits.length, 0)
+                }
+                ic?.commitText("$value ", 1)
+                activeNumberWords = null
+                activeNumberDigits = null
+                precedingDirty = true
+                updateSuggestions()
+                return@runCatching
+            }
+
+            if (activeSnippetPhrase != null && value == activeSnippetPhrase) {
+                val ic = currentInputConnection
+                val sc = activeSnippetShortcut
+                val before = ic?.getTextBeforeCursor(64, 0)?.toString().orEmpty()
+                if (sc != null && before.endsWith(sc)) {
+                    ic?.deleteSurroundingText(sc.length, 0)
+                }
+                ic?.commitText("$value ", 1)
+                activeSnippetPhrase = null
+                activeSnippetShortcut = null
+                precedingDirty = true
+                updateSuggestions()
+                return@runCatching
+            }
+
             if (value == SlashboardEasterEgg.TRUE_NAME_DISPLAY) {
                 currentInputConnection?.setComposingText(SlashboardEasterEgg.TRUE_NAME_INSERT, 1)
                 currentInputConnection?.finishComposingText()
@@ -582,22 +699,62 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
                 feedback()
                 keyboard.openTranslator()
             }
+            "calculator" -> {
+                feedback()
+                keyboard.openCalculator()
+            }
             "font" -> {
                 runCatching {
                     android.widget.Toast.makeText(this, "Font styling is not available.", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
             "otp" -> {
-                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = cm.primaryClip
-                if (clip != null && clip.itemCount > 0) {
-                    val text = clip.getItemAt(0).text?.toString()
-                    if (text != null && Regex(".*\\b\\d{4,8}\\b.*").matches(text)) {
-                        val otp = Regex("\\b\\d{4,8}\\b").find(text)?.value
-                        if (otp != null) {
-                            ic.commitText(otp, 1)
+                feedback()
+                val otp = detectedOtpCode ?: run {
+                    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    val clip = cm?.primaryClip
+                    if (clip != null && clip.itemCount > 0) {
+                        val text = clip.getItemAt(0).text?.toString().orEmpty()
+                        Regex("\\b\\d{4,8}\\b").find(text)?.value
+                    } else null
+                }
+                if (otp != null) {
+                    ic.commitText(otp, 1)
+                    runCatching { Toast.makeText(this, "OTP Pasted: $otp", Toast.LENGTH_SHORT).show() }
+                } else {
+                    runCatching { Toast.makeText(this, "No OTP detected in clipboard", Toast.LENGTH_SHORT).show() }
+                }
+            }
+            "singlish_bulk" -> {
+                feedback()
+                val sel = ic.getSelectedText(0)?.toString()
+                if (!sel.isNullOrEmpty()) {
+                    val converted = SinglishParagraphConverter.convert(sel)
+                    ic.commitText(converted, 1)
+                    runCatching { Toast.makeText(this, "Singlish Converted!", Toast.LENGTH_SHORT).show() }
+                } else {
+                    commitComposition()
+                    val before = ic.getTextBeforeCursor(512, 0)?.toString().orEmpty()
+                    if (before.isNotEmpty()) {
+                        val converted = SinglishParagraphConverter.convert(before)
+                        if (converted != before) {
+                            ic.deleteSurroundingText(before.length, 0)
+                            ic.commitText(converted, 1)
+                            runCatching { Toast.makeText(this, "Singlish Converted!", Toast.LENGTH_SHORT).show() }
+                        } else {
+                            runCatching { Toast.makeText(this, "Select text or type Singlish words first", Toast.LENGTH_SHORT).show() }
                         }
+                    } else {
+                        runCatching { Toast.makeText(this, "Select Singlish text to convert", Toast.LENGTH_SHORT).show() }
                     }
+                }
+                precedingDirty = true
+                updateSuggestions()
+            }
+            "one_handed_toggle" -> {
+                feedback()
+                if (::keyboard.isInitialized) {
+                    keyboard.toggleOneHanded()
                 }
             }
         }
@@ -664,9 +821,18 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             if (delta == 0) return@runCatching
             commitComposition()
             val ic = currentInputConnection ?: return@runCatching
-            val extracted = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return@runCatching
-            val next = (extracted.selectionEnd + delta).coerceIn(0, extracted.text.length)
-            ic.setSelection(next, next)
+            val extracted = ic.getExtractedText(ExtractedTextRequest(), 0)
+            if (extracted != null) {
+                val next = (extracted.selectionEnd + delta).coerceIn(0, extracted.text.length)
+                ic.setSelection(next, next)
+            } else {
+                val keyCode = if (delta > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+                val steps = kotlin.math.abs(delta)
+                repeat(steps) {
+                    ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+                    ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+                }
+            }
         }
     }
 
@@ -718,7 +884,8 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             if (deleted.isNotEmpty() && !isSensitive) {
                 undoRedoManager.recordDeletedText(deleted)
             }
-            ic.commitText("", 1)
+            ic.deleteSurroundingText(deleteLength, 0)
+            feedback()
         }
         deleteAnchor = -1
         deleteLength = 0
@@ -858,21 +1025,49 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             currentInputConnection?.getTextBeforeCursor(128, 0)?.toString()
         }.getOrNull() ?: ""
 
-        val mathMatch = Regex("([0-9]+(?:\\.[0-9]+)?)([\\+\\-\\*\\/])([0-9]+(?:\\.[0-9]+)?)=$").find(beforeString)
-        if (mathMatch != null && !composition.active) {
-            val a = mathMatch.groupValues[1].toDoubleOrNull() ?: 0.0
-            val op = mathMatch.groupValues[2]
-            val b = mathMatch.groupValues[3].toDoubleOrNull() ?: 0.0
-            val res = when (op) {
-                "+" -> a + b
-                "-" -> a - b
-                "*" -> a * b
-                "/" -> if (b != 0.0) a / b else 0.0
-                else -> 0.0
-            }
-            val formatted = if (res == res.toLong().toDouble()) res.toLong().toString() else res.toString()
-            keyboard.setCandidates(listOf(formatted))
+        val mathEval = if (!composition.active) MathEvaluator.evaluateTrailingExpression(beforeString) else null
+        if (mathEval != null) {
+            activeMathResult = mathEval.formattedResult
+            keyboard.setCandidates(listOf("= ${mathEval.formattedResult}", mathEval.formattedResult))
             return
+        } else {
+            activeMathResult = null
+        }
+
+        val unitEval = if (!composition.active) LiveUnitConverter.findConversion(beforeString) else null
+        if (unitEval != null) {
+            activeUnitResult = unitEval.result
+            activeUnitQuery = unitEval.query
+            keyboard.setCandidates(listOf("= ${unitEval.result}", unitEval.result))
+            return
+        } else {
+            activeUnitResult = null
+            activeUnitQuery = null
+        }
+
+        val lastWordForSnippet = Regex("""([a-zA-Z0-9_\p{L}\p{M}]+)$""").find(beforeString)?.value
+        val snippetPhrase = if (!composition.active && !lastWordForSnippet.isNullOrEmpty()) snippetManager.find(lastWordForSnippet) else null
+        if (snippetPhrase != null && !lastWordForSnippet.isNullOrEmpty()) {
+            val sc = lastWordForSnippet
+            activeSnippetShortcut = sc
+            activeSnippetPhrase = snippetPhrase
+            keyboard.setCandidates(listOf(snippetPhrase, sc), setOf(snippetPhrase))
+            return
+        } else {
+            activeSnippetShortcut = null
+            activeSnippetPhrase = null
+        }
+
+        val trailingDigits = if (!composition.active) Regex("""\b(\d{1,12})\b$""").find(beforeString)?.value else null
+        val numWords = trailingDigits?.let { SinhalaNumberToWords.convert(it) }
+        if (numWords != null) {
+            activeNumberDigits = trailingDigits
+            activeNumberWords = numWords
+            keyboard.setCandidates(listOf(numWords, trailingDigits), setOf(numWords))
+            return
+        } else {
+            activeNumberDigits = null
+            activeNumberWords = null
         }
 
         generation++
@@ -1039,14 +1234,17 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     private fun captureClipboard() {
         runCatching {
             checkOtp()
-            if (!prefs.clipboardHistory || restricted || isPasswordOrSensitive(currentInputEditorInfo) || editorLayout != EditorLayout.TEXT) return
+            if (!prefs.clipboardHistory || isPasswordOrSensitive(currentInputEditorInfo)) return
             val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
             val clip = manager.primaryClip ?: return
             if (clip.itemCount == 0) return
             val store = clipboardHistory ?: return
             val text = clip.getItemAt(0).coerceToText(this)?.toString()
-            if (text != null) {
+            if (!text.isNullOrBlank()) {
                 store.add(text)
+                if (::keyboard.isInitialized) {
+                    keyboard.setClipboardItems(store.items(), store.pinnedItems())
+                }
             }
         }
     }
@@ -1056,20 +1254,26 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
         val clip = manager.primaryClip
         var hasOtp = false
+        var otpCode: String? = null
         if (clip != null && clip.itemCount > 0) {
             val text = clip.getItemAt(0).text?.toString()
-            if (text != null && Regex(".*\\b\\d{4,8}\\b.*").matches(text)) {
-                hasOtp = true
+            if (text != null) {
+                val match = Regex("\\b\\d{4,8}\\b").find(text)
+                if (match != null) {
+                    hasOtp = true
+                    otpCode = match.value
+                }
             }
         }
-        keyboard.setOtpAvailable(hasOtp)
+        detectedOtpCode = otpCode
+        keyboard.setOtpAvailable(hasOtp, otpCode)
     }
 
     private fun listenForClipboard() {
         runCatching {
             val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
             manager.removePrimaryClipChangedListener(clipListener)
-            if (prefs.clipboardHistory && !restricted && !isPasswordOrSensitive(currentInputEditorInfo) && editorLayout == EditorLayout.TEXT) {
+            if (prefs.clipboardHistory && !isPasswordOrSensitive(currentInputEditorInfo)) {
                 manager.addPrimaryClipChangedListener(clipListener)
             }
         }
@@ -1156,6 +1360,13 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
                 return true
             }
 
+            // Browser private/incognito tabs detection
+            val isBrowser = pkg.contains("chrome") || pkg.contains("browser") || pkg.contains("firefox") ||
+                    pkg.contains("brave") || pkg.contains("opera") || pkg.contains("edge") || pkg.contains("duckduckgo")
+            if (isBrowser && (inputType and EditorInfo.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0) {
+                return true
+            }
+
             if (cls == EditorInfo.TYPE_CLASS_TEXT) {
                 if (variation == EditorInfo.TYPE_TEXT_VARIATION_PASSWORD ||
                     variation == EditorInfo.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
@@ -1181,12 +1392,10 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         }
 
         fun enterLabel(info: EditorInfo?): String {
+            val isMultiLine = (info?.inputType ?: 0) and EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE != 0
+            if (isMultiLine) return "↵"
             return when (info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)) {
-                EditorInfo.IME_ACTION_GO -> "Go"
                 EditorInfo.IME_ACTION_SEARCH -> "⌕"
-                EditorInfo.IME_ACTION_SEND -> "Send"
-                EditorInfo.IME_ACTION_NEXT -> "Next"
-                EditorInfo.IME_ACTION_DONE -> "Done"
                 else -> "↵"
             }
         }

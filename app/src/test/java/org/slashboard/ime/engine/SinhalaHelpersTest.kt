@@ -95,4 +95,39 @@ class SinhalaHelpersTest {
         assertEquals("ක්න්", SinhalaEngine.transliterate("kn", InputMode.SMART_PHONETIC))
         assertEquals("ග්න්", SinhalaEngine.transliterate("gn", InputMode.SMART_PHONETIC))
     }
+
+    @Test
+    fun testSinhalaNumberToWords() {
+        assertEquals("දෙදහස් පන්සියයයි", SinhalaNumberToWords.convert("2500"))
+        assertEquals("පනහයි", SinhalaNumberToWords.convert("50"))
+        assertEquals("සියයයි", SinhalaNumberToWords.convert("100"))
+        assertEquals("එක්දහසයි", SinhalaNumberToWords.convert("1000"))
+        assertEquals("දෙදහස් පන්සියයයි ශත පනහයි", SinhalaNumberToWords.convert("2500.50"))
+        assertEquals("දසදහසයි", SinhalaNumberToWords.convert("10000"))
+        assertEquals("ලක්ෂයයි", SinhalaNumberToWords.convert("100000"))
+    }
+
+    @Test
+    fun testSinglishParagraphConverter() {
+        val singlish = "api heta ennam. karunawen balanna."
+        val converted = SinglishParagraphConverter.convert(singlish)
+        assertTrue(converted.contains("අපි"))
+        assertTrue(converted.contains("හෙට"))
+        assertTrue(converted.contains("කරුණාවෙන්"))
+    }
+
+    @Test
+    fun testLiveUnitConverter() {
+        val r1 = LiveUnitConverter.findConversion("50 USD to LKR")
+        assertNotNull(r1)
+        assertEquals("15,000 LKR", r1?.result)
+
+        val r2 = LiveUnitConverter.findConversion("5 km to m")
+        assertNotNull(r2)
+        assertEquals("5,000 M", r2?.result)
+
+        val r3 = LiveUnitConverter.findConversion("100 c to f")
+        assertNotNull(r3)
+        assertEquals("212 F", r3?.result)
+    }
 }

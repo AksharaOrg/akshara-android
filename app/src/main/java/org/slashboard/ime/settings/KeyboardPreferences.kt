@@ -53,7 +53,7 @@ class KeyboardPreferences(context: Context) {
         }
 
     var highContrast: Boolean by cachedBool(HIGH_CONTRAST, false)
-    var clipboardHistory: Boolean by cachedBool(CLIPBOARD, false)
+    var clipboardHistory: Boolean by cachedBool(CLIPBOARD, true)
 
     var topRow: String
         get() = (memCache[TOP_ROW] as? String) ?: run {
@@ -306,6 +306,6 @@ class KeyboardPreferences(context: Context) {
         private const val KEYBOARD_FONT = "keyboard_font"
         private const val CONFIRM_EXIT = "confirm_exit"
         private const val FIRST_LAUNCH_PERMS = "first_launch_perms"
-        const val DEFAULT_TOOLBAR_ICONS = "lang_toggle,font_studio,undo,redo,astrology,fm,translate,emoji,clipboard,settings"
+        const val DEFAULT_TOOLBAR_ICONS = "lang_toggle,font_studio,singlish,calculator,undo,redo,astrology,fm,translate,one_handed,emoji,clipboard,settings"
     }
 }

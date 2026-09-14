@@ -210,6 +210,45 @@ object CustomThemeManager {
         return newId
     }
 
+    fun createPhotoWallpaperTheme(context: Context, uri: Uri, themeName: String = "Photo Wallpaper"): String? {
+        return try {
+            val wallpapersDir = File(context.filesDir, "wallpapers")
+            if (!wallpapersDir.exists()) wallpapersDir.mkdirs()
+            val destFile = File(wallpapersDir, "wp_${System.currentTimeMillis()}.jpg")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                destFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            val newId = "custom_wp_" + System.currentTimeMillis()
+            val theme = CustomThemeData(
+                id = newId,
+                name = themeName,
+                background = "#0B0F17",
+                key = "#1E293B",
+                utility = "#0F172A",
+                ink = "#FFFFFF",
+                action = "#2563EB",
+                actionText = "#FFFFFF",
+                selected = "#334155",
+                dark = true,
+                highContrast = false,
+                keyOpacity = 0.72f,
+                keyRadiusDp = 8f,
+                backgroundImagePath = destFile.absolutePath,
+                borderWidthDp = 1f,
+                borderColor = "#38BDF8",
+                keyStyle = "rounded"
+            )
+            val file = File(getThemesDir(context), "$newId.slashtheme")
+            file.writeText(toJson(theme).toString(2))
+            newId
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     fun getTheme(context: Context, id: String): CustomThemeData? {
         val cleanId = id.removeSuffix(".slashtheme").removeSuffix(".json")
         val file = File(getThemesDir(context), "$cleanId.slashtheme")

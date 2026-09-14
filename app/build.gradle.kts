@@ -33,8 +33,8 @@ android {
         applicationId = "com.slashbord"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "2.0.4"
+        versionCode = 14
+        versionName = "2.0.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

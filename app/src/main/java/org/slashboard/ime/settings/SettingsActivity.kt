@@ -17,6 +17,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -2131,9 +2132,19 @@ fun ThemeLayoutsScreen(
     var localRefresh by remember { mutableStateOf(0) }
     val refresh = externalRefresh + localRefresh
     var searchQuery by remember { mutableStateOf("") }
-    var selectedCategoryIndex by remember { mutableStateOf(0) } // 0: All, 1: Dark, 2: Light, 3: Vibrant, 4: Custom
+    var selectedCategoryIndex by remember { mutableStateOf(0) }
     var themeToDelete by remember { mutableStateOf<String?>(null) }
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    var showPreview by remember { mutableStateOf(false) }
+
+    LaunchedEffect(snackbarMessage) {
+        val msg = snackbarMessage
+        if (!msg.isNullOrEmpty()) {
+            snackbarHostState.showSnackbar(msg)
+            snackbarMessage = null
+        }
+    }
 
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -2147,6 +2158,22 @@ fun ThemeLayoutsScreen(
                 snackbarMessage = "Theme imported successfully!"
             } else {
                 snackbarMessage = "Could not import theme. Invalid file."
+            }
+        }
+    }
+
+    val photoWallpaperLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            val newThemeId = org.slashboard.ime.settings.theme.CustomThemeManager.createPhotoWallpaperTheme(context, uri, "Photo Wallpaper")
+            if (newThemeId != null) {
+                prefs.theme = newThemeId
+                onThemeChanged(newThemeId)
+                localRefresh++
+                snackbarMessage = "Photo wallpaper applied to keyboard! / ඡායාරූපය පසුබිමට යෙදුවා"
+            } else {
+                snackbarMessage = "Failed to apply photo wallpaper."
             }
         }
     }
@@ -2200,6 +2227,10 @@ fun ThemeLayoutsScreen(
         )
     }
 
+    val popularIds = remember {
+        setOf("dark", "light", "system", "amoled_black", "transparent_glass", "ios_style", "neon_cyberpunk", "sunset", "monokai", "pastel_dream", "nordic_clean", "pure_dark")
+    }
+
     val allThemeEntries = remember(customThemes, preInstalledThemes) {
         val customEntries = customThemes.map { 
             ThemeEntry(
@@ -2216,11 +2247,12 @@ fun ThemeLayoutsScreen(
         allThemeEntries.filter { item ->
             val matchesCategory = when (selectedCategoryIndex) {
                 0 -> true // All
-                1 -> item.category == "dark"
-                2 -> item.category == "light"
-                3 -> item.category == "transparent" || item.id.contains("transparent")
-                4 -> item.category == "vibrant"
-                5 -> item.isCustom
+                1 -> popularIds.contains(item.id)
+                2 -> item.category == "dark"
+                3 -> item.category == "light"
+                4 -> item.category == "transparent" || item.id.contains("transparent")
+                5 -> item.category == "vibrant"
+                6 -> item.isCustom
                 else -> true
             }
             val matchesSearch = if (searchQuery.isBlank()) true else {
@@ -2230,17 +2262,36 @@ fun ThemeLayoutsScreen(
         }
     }
 
+    val activePalette = remember(prefs.theme, prefs.highContrast, refresh) {
+        KeyboardPaletteResolver.resolve(context, prefs.theme, prefs.highContrast)
+    }
+    val activeThemeName = remember(prefs.theme, allThemeEntries) {
+        allThemeEntries.find { it.id == prefs.theme }?.name ?: prefs.theme.replace("_", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+    }
+    val hasActiveWallpaper = remember(activePalette.backgroundImagePath) {
+        !activePalette.backgroundImagePath.isNullOrEmpty() && java.io.File(activePalette.backgroundImagePath!!).exists()
+    }
+
     BackHandler {
         onBack()
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Theme Store & Layouts", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text("Themes & Wallpaper", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("තේමා සහ පසුබිම් මෝස්තර", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
                 actions = {
+                    IconButton(onClick = { photoWallpaperLauncher.launch("image/*") }) {
+                        Icon(Icons.Default.Image, contentDescription = "Add Photo Wallpaper", tint = MaterialTheme.colorScheme.primary)
+                    }
                     IconButton(onClick = onCreateTheme) {
                         Icon(Icons.Default.AddCircle, contentDescription = "Create Custom Theme", tint = MaterialTheme.colorScheme.primary)
                     }
@@ -2262,7 +2313,7 @@ fun ThemeLayoutsScreen(
             ExtendedFloatingActionButton(
                 onClick = onCreateTheme,
                 icon = { Icon(Icons.Default.Palette, contentDescription = null) },
-                text = { Text("Create Theme (තීම් එකක් හදන්න)", fontWeight = FontWeight.Bold) },
+                text = { Text("Create Theme (තේමාවක් හදන්න)", fontWeight = FontWeight.Bold) },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             )
@@ -2273,50 +2324,193 @@ fun ThemeLayoutsScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Live Interactive Preview Header at top
-            InteractiveKeyboardPreview(prefs = prefs, refresh = refresh)
-
-            // Transparent Background Toggle & Stats
+            // 1. Current Active Theme Hero Banner & Quick Actions
             Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 2.dp)
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(Icons.Default.Opacity, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Text(
-                            text = "Transparent Background",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    Switch(
-                        checked = prefs.transparentBackground,
-                        onCheckedChange = {
-                            prefs.transparentBackground = it
-                            localRefresh++
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Text(
+                                        text = "ACTIVE",
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "Current Keyboard Theme",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Text(
+                                text = activeThemeName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
-                    )
+
+                        // Color swatches preview
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clip(CircleShape)
+                                    .background(intColor(activePalette.background))
+                                    .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clip(CircleShape)
+                                    .background(intColor(activePalette.key))
+                                    .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clip(CircleShape)
+                                    .background(intColor(activePalette.action))
+                                    .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                            )
+                        }
+                    }
+
+                    // Quick Action Pills
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Photo Wallpaper Action
+                        AssistChip(
+                            onClick = { photoWallpaperLauncher.launch("image/*") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+                            },
+                            label = {
+                                Text(if (hasActiveWallpaper) "Change Photo (ඡායාරූපය)" else "Set Photo Wallpaper (ඡායාරූපයක්)")
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        )
+
+                        // Glass Transparency toggle
+                        FilterChip(
+                            selected = prefs.transparentBackground,
+                            onClick = {
+                                prefs.transparentBackground = !prefs.transparentBackground
+                                localRefresh++
+                                snackbarMessage = if (prefs.transparentBackground) "Glass Mode Enabled (වීදුරු මෝස්තරය සක්‍රීයයි)" else "Glass Mode Disabled"
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Opacity, contentDescription = null, modifier = Modifier.size(16.dp))
+                            },
+                            label = {
+                                Text(if (prefs.transparentBackground) "Glass: ON" else "Glass Mode (වීදුරු)")
+                            }
+                        )
+
+                        // High Contrast toggle
+                        FilterChip(
+                            selected = prefs.highContrast,
+                            onClick = {
+                                prefs.highContrast = !prefs.highContrast
+                                localRefresh++
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Contrast, contentDescription = null, modifier = Modifier.size(16.dp))
+                            },
+                            label = {
+                                Text("High Contrast")
+                            }
+                        )
+
+                        // Toggle Live Typing Preview
+                        AssistChip(
+                            onClick = { showPreview = !showPreview },
+                            leadingIcon = {
+                                Icon(
+                                    if (showPreview) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            label = {
+                                Text(if (showPreview) "Hide Preview" else "Test Typing (පෙරදසුන)")
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = if (showPreview) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+                            )
+                        )
+
+                        if (hasActiveWallpaper) {
+                            AssistChip(
+                                onClick = {
+                                    prefs.theme = "dark"
+                                    onThemeChanged("dark")
+                                    localRefresh++
+                                    snackbarMessage = "Photo wallpaper removed / ඡායාරූපය ඉවත් කළා"
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                },
+                                label = {
+                                    Text("Remove Photo (ඉවත් කරන්න)", color = MaterialTheme.colorScheme.error)
+                                }
+                            )
+                        }
+                    }
                 }
             }
 
-            // Search Bar
+            // 2. Expandable Live Interactive Preview
+            AnimatedVisibility(
+                visible = showPreview,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                InteractiveKeyboardPreview(prefs = prefs, refresh = refresh)
+            }
+
+            // 3. Search Bar
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search themes (තීම් සොයන්න)...") },
+                placeholder = { Text("Search 40+ themes (තේමා සොයන්න)...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = if (searchQuery.isNotEmpty()) {
                     {
@@ -2329,16 +2523,17 @@ fun ThemeLayoutsScreen(
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .padding(horizontal = 14.dp, vertical = 4.dp)
             )
 
-            // Category Filter Tabs
+            // 4. Category Filter Tabs
             val categories = listOf(
                 "All (${allThemeEntries.size})" to Icons.Default.AllInclusive,
-                "Dark" to Icons.Default.DarkMode,
-                "Light" to Icons.Default.LightMode,
-                "Glass" to Icons.Default.Opacity,
-                "Vibrant" to Icons.Default.FlashOn,
+                "Popular ⭐" to Icons.Default.Star,
+                "Dark 🌙" to Icons.Default.DarkMode,
+                "Light ☀️" to Icons.Default.LightMode,
+                "Glass 🪟" to Icons.Default.Opacity,
+                "Vibrant 🎨" to Icons.Default.FlashOn,
                 "Custom (${customThemes.size})" to Icons.Default.Person
             )
 
@@ -2374,15 +2569,15 @@ fun ThemeLayoutsScreen(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(24.dp)
                     ) {
-                        Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                        Text("No themes found", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (selectedCategoryIndex == 4) {
-                            Button(onClick = onCreateTheme, modifier = Modifier.padding(top = 8.dp)) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                                Text("Create Your First Theme")
-                            }
+                        Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                        Text("No themes found", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Try searching for another color or style", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                        Button(onClick = onCreateTheme, modifier = Modifier.padding(top = 8.dp)) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
+                            Text("Create Custom Theme (තේමාවක් හදන්න)")
                         }
                     }
                 }
@@ -2393,7 +2588,7 @@ fun ThemeLayoutsScreen(
                         start = 14.dp,
                         end = 14.dp,
                         top = 10.dp,
-                        bottom = 80.dp
+                        bottom = 88.dp
                     ),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -2415,13 +2610,15 @@ fun ThemeLayoutsScreen(
                                 prefs.theme = themeValue
                                 onThemeChanged(themeValue)
                                 localRefresh++
+                                snackbarMessage = "'${themeEntry.name}' applied! / තේමාව යෙදුවා"
                             },
-                            onEdit = { onEditTheme(themeValue) },
+                            onEdit = if (themeEntry.isCustom) {
+                                { onEditTheme(themeValue) }
+                            } else null,
                             onShare = {
                                 if (themeEntry.isCustom) {
                                     org.slashboard.ime.settings.theme.CustomThemeManager.shareThemeText(context, themeValue)
                                 } else {
-                                    // Duplicate into custom and share
                                     val newId = org.slashboard.ime.settings.theme.CustomThemeManager.duplicateTheme(context, themeValue)
                                     if (newId != null) {
                                         org.slashboard.ime.settings.theme.CustomThemeManager.shareThemeText(context, newId)
@@ -2658,31 +2855,42 @@ fun MiniKeyboardPreview(
                 // Selection indicator badge
                 if (isSelected) {
                     Surface(
-                        shape = CircleShape,
+                        shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.primary,
-                        shadowElevation = 3.dp,
+                        shadowElevation = 4.dp,
                         modifier = Modifier
-                            .size(22.dp)
                             .align(Alignment.TopEnd)
-                            .padding(2.dp)
+                            .padding(6.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Check,
-                                contentDescription = "Selected",
+                                contentDescription = "Active",
                                 tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = "ACTIVE",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                     }
                 }
             }
 
-            // Theme Footer (Name & Action Buttons)
+            // Theme Footer (Name & Options Dropdown Menu)
             Surface(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
                 modifier = Modifier.fillMaxWidth()
             ) {
+                var menuExpanded by remember { mutableStateOf(false) }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2695,38 +2903,99 @@ fun MiniKeyboardPreview(
                             text = themeName,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        val categoryLabel = when {
+                            isCustom -> "Custom (මගේ) 👤"
+                            !palette.backgroundImagePath.isNullOrEmpty() -> "Wallpaper 🖼️"
+                            palette.background == android.graphics.Color.TRANSPARENT -> "Glass 🪟"
+                            palette.dark -> "Dark 🌙"
+                            else -> "Light ☀️"
+                        }
                         Text(
-                            text = if (isCustom) "Custom Theme" else if (palette.dark) "Dark Theme" else "Light Theme",
+                            text = categoryLabel,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 10.sp
                         )
                     }
 
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (onEdit != null) {
-                            IconButton(onClick = onEdit, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(14.dp))
-                            }
+                    Box {
+                        IconButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Theme Options",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                        if (onShare != null) {
-                            IconButton(onClick = onShare, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.Share, contentDescription = "Share", modifier = Modifier.size(14.dp))
+
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Apply Theme (යොදන්න)") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onClick()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                }
+                            )
+                            if (onEdit != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Edit Theme (වෙනස් කරන්න)") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onEdit()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Edit, contentDescription = null)
+                                    }
+                                )
                             }
-                        }
-                        if (onDuplicate != null) {
-                            IconButton(onClick = onDuplicate, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = "Duplicate", modifier = Modifier.size(14.dp))
+                            if (onDuplicate != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Duplicate & Edit (පිටපත් කර වෙනස් කරන්න)") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onDuplicate()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                    }
+                                )
                             }
-                        }
-                        if (onDelete != null) {
-                            IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp))
+                            if (onShare != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Share Theme (බෙදාගන්න)") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onShare()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Share, contentDescription = null)
+                                    }
+                                )
+                            }
+                            if (onDelete != null) {
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Delete (මකන්න)", color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onDelete()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                    }
+                                )
                             }
                         }
                     }
@@ -2762,6 +3031,7 @@ fun TopBarCustomizationScreen(
         listOf(
             ToolbarItemConfig("lang_toggle", "භාෂා ස්විචය (සිං / EN)", "Language Switcher", "සිංහල හා ඉංග්‍රීසි අතර මාරු වන ලාංඡනය", R.drawable.ic_language, "Language & Input"),
             ToolbarItemConfig("font_studio", "ෆොන්ට් ස්ටූඩියෝ (Font Studio)", "Font Studio", "කීබෝඩ් එක තුලින්ම Font Styles තේරීම", R.drawable.ic_key_font_studio, "Actions Toolbar"),
+            ToolbarItemConfig("calculator", "කැල්කියුලේටරය (Calculator)", "Calculator", "යතුරුපුවරුව තුලින්ම ගණනය කිරීම් සිදු කිරීම", R.drawable.ic_key_calc, "Actions Toolbar"),
             ToolbarItemConfig("emoji", "ඉමෝජි කෙටිමග (Emoji)", "Quick Emoji", "ඉහළ තීරුවේ ඉමෝජි පුවරු කෙටිමග පෙන්වීම", R.drawable.ic_key_emoji, "Quick Access"),
             ToolbarItemConfig("voice", "හඬ ආදානය (Voice)", "Voice Input", "හඬින් ටයිප් කිරීමේ කෙටිමග", R.drawable.ic_key_mic, "Quick Access"),
             ToolbarItemConfig("undo", "ආපසු ලබා ගැනීම (Undo)", "Undo", "වැරදීමකින් මැකී ගිය හෝ වෙනස් කළ පාඨ ආපසු ලබාගැනීම", R.drawable.ic_key_undo, "Actions Toolbar"),
@@ -2877,7 +3147,7 @@ fun TopBarCustomizationScreen(
                         PresetChip(
                             label = "Left-to-Right",
                             onClick = {
-                                prefs.toolbarIcons = "lang_toggle,font_studio,emoji,voice,undo,redo,astrology,translate,fm,otp,clipboard,settings"
+                                prefs.toolbarIcons = "lang_toggle,font_studio,calculator,undo,redo,astrology,fm,translate,emoji,clipboard,settings"
                                 rawIcons = prefs.toolbarIcons
                                 refresh++
                             }
@@ -2885,7 +3155,7 @@ fun TopBarCustomizationScreen(
                         PresetChip(
                             label = "Right-Handed",
                             onClick = {
-                                prefs.toolbarIcons = "settings,clipboard,otp,fm,translate,astrology,redo,undo,voice,emoji,font_studio,lang_toggle"
+                                prefs.toolbarIcons = "settings,clipboard,otp,calculator,fm,translate,astrology,redo,undo,voice,emoji,font_studio,lang_toggle"
                                 rawIcons = prefs.toolbarIcons
                                 refresh++
                             }
@@ -2893,7 +3163,7 @@ fun TopBarCustomizationScreen(
                         PresetChip(
                             label = "Minimal (4)",
                             onClick = {
-                                prefs.toolbarIcons = "lang_toggle,font_studio,emoji,clipboard,settings"
+                                prefs.toolbarIcons = "lang_toggle,font_studio,calculator,emoji,clipboard,settings"
                                 rawIcons = prefs.toolbarIcons
                                 refresh++
                             }
@@ -2901,7 +3171,7 @@ fun TopBarCustomizationScreen(
                         PresetChip(
                             label = "All Icons",
                             onClick = {
-                                prefs.toolbarIcons = "lang_toggle,font_studio,emoji,voice,undo,redo,astrology,translate,fm,otp,clipboard,settings"
+                                prefs.toolbarIcons = "lang_toggle,font_studio,calculator,emoji,voice,undo,redo,astrology,translate,fm,otp,clipboard,settings"
                                 rawIcons = prefs.toolbarIcons
                                 refresh++
                             }

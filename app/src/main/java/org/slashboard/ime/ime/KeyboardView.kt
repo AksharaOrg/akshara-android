@@ -31,11 +31,12 @@ import org.slashboard.ime.engine.SinhalaEngine
 import org.slashboard.ime.settings.KeyboardPreferences
 import kotlin.math.abs
 
-enum class KeyboardLayer { LETTERS, NUMBERS, SYMBOLS, SINHALA_GLYPHS, EMOJI, CLIPBOARD, VOICE, TRANSLATE, FONT_STUDIO }
+enum class KeyboardLayer { LETTERS, NUMBERS, SYMBOLS, SINHALA_GLYPHS, EMOJI, CLIPBOARD, VOICE, TRANSLATE, FONT_STUDIO, CALCULATOR }
 enum class EditorLayout { TEXT, ASCII, EMAIL, URI, NUMBER, SIGNED_NUMBER, DECIMAL, SIGNED_DECIMAL, PHONE, DATETIME }
 
 interface KeyboardActions {
     fun onCharacter(value: String)
+    fun onPasteText(text: String) { onCharacter(text) }
     fun onBackspace(word: Boolean = false)
     fun onSpace()
     fun onEnter()
@@ -93,7 +94,7 @@ class KeyboardView(
     private val rail = SuggestionRail(
         context, ink, 
         onCandidate = { actions.onCandidate(it) }, 
-        onClipboard = { layer = KeyboardLayer.CLIPBOARD; render() },
+        onClipboard = { openClipboard() },
         onSettings = { 
             val intent = android.content.Intent(context, org.slashboard.ime.settings.SettingsActivity::class.java).apply {
                 flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -240,6 +241,10 @@ class KeyboardView(
         }
         rail.onToolbarAction = {
             when (it) {
+                "calculator" -> {
+                    layer = KeyboardLayer.CALCULATOR
+                    render()
+                }
                 "astrology" -> {
                     layer = KeyboardLayer.SINHALA_GLYPHS
                     render()
@@ -249,6 +254,9 @@ class KeyboardView(
                 }
                 "translate" -> {
                     openTranslator()
+                }
+                "one_handed_toggle" -> {
+                    toggleOneHanded()
                 }
                 else -> {
                     actions.onToolbarAction(it)
@@ -294,7 +302,7 @@ class KeyboardView(
         action = palette.action
         actionText = palette.actionText
         ink = palette.ink
-        val hasBgImage = !palette.backgroundImagePath.isNullOrEmpty() && java.io.File(palette.backgroundImagePath).exists()
+        val hasBgImage = !palette.backgroundImagePath.isNullOrEmpty() && java.io.File(palette.backgroundImagePath!!).exists()
         val isTransparent = (prefs.transparentBackground || bg == Color.TRANSPARENT || prefs.theme.contains("transparent")) && !hasBgImage
         if (isTransparent) {
             setBackgroundColor(Color.TRANSPARENT)
@@ -442,8 +450,35 @@ class KeyboardView(
         correctionItems = corrections
         bindRail(true)
     }
-    fun setOtpAvailable(available: Boolean) {
-        rail.setOtpAvailable(available)
+    fun setOtpAvailable(available: Boolean, code: String? = null) {
+        rail.setOtpAvailable(available, code)
+    }
+    fun setIncognito(active: Boolean) {
+        rail.setIncognito(active)
+    }
+    fun toggleOneHanded() {
+        val next = when (prefs.oneHanded) {
+            "center" -> "right"
+            "right" -> "left"
+            else -> "center"
+        }
+        prefs.oneHanded = next
+        val width = if (prefs.oneHanded == "center") LayoutParams.MATCH_PARENT else (resources.displayMetrics.widthPixels * .82f).toInt()
+        (body.layoutParams as LayoutParams).apply {
+            this.width = width
+            gravity = when (prefs.oneHanded) {
+                "left" -> Gravity.START
+                "right" -> Gravity.END
+                else -> Gravity.CENTER
+            }
+        }
+        render()
+        val label = when (next) {
+            "right" -> "One-handed: Right"
+            "left" -> "One-handed: Left"
+            else -> "Standard Keyboard"
+        }
+        android.widget.Toast.makeText(context, label, android.widget.Toast.LENGTH_SHORT).show()
     }
     fun setClipboardItems(recent: List<String>, pinned: List<String> = emptyList()) {
         clipboardRecent = recent
@@ -581,6 +616,7 @@ class KeyboardView(
             KeyboardLayer.VOICE -> bindVoice()
             KeyboardLayer.TRANSLATE -> bindTranslate()
             KeyboardLayer.FONT_STUDIO -> bindFontStudio()
+            KeyboardLayer.CALCULATOR -> { body.removeAllViews(); renderCalculator() }
         }
     }
 
@@ -619,7 +655,7 @@ class KeyboardView(
     }
 
     private fun keepSuggestionRail() =
-        layer != KeyboardLayer.TRANSLATE
+        layer != KeyboardLayer.TRANSLATE && layer != KeyboardLayer.EMOJI && layer != KeyboardLayer.CALCULATOR
     private fun spaceCaption(): String {
         val custom = prefs.customSpacebarText.trim().take(14)
         if (custom.isNotEmpty()) return custom
@@ -682,23 +718,53 @@ class KeyboardView(
             showEmojiSearch()
             return
         }
-        val values = when (emojiCategoryIndex) {
-            0 -> recentEmoji.ifEmpty { prefs.recentEmojis }
-            else -> emojiRepo.categories.getOrNull(emojiCategoryIndex - 1)?.emoji.orEmpty()
-        }
-        body.addView(emojiCategoryBar(), LayoutParams(LayoutParams.MATCH_PARENT, dp(KeyboardGeometry.EMOJI_TAB_DP)))
-        body.addView(emojiSectionTitle(), LayoutParams(LayoutParams.MATCH_PARENT, dp(28)))
-        val typingHeight = standardContentHeight()
-        
-        // Calculate remaining height for the grid by subtracting tabs and bottom bar
-        val gridHeight = (typingHeight - dp(KeyboardGeometry.EMOJI_TAB_DP) - dp(28) - dp(KeyboardGeometry.EMOJI_BOTTOM_DP)).coerceAtLeast(dp(120))
-        val grid = if (values.isEmpty()) {
-            textView("Recently used emoji appear here", 14f)
-        } else {
-            emojiScroller(values)
-        }
-        body.addView(grid, LayoutParams(LayoutParams.MATCH_PARENT, gridHeight))
-        body.addView(emojiBottomBar())
+        val fullHeight = standardContentHeight() + suggestionRailHeight()
+        val emojiBoardView = EmojiBoardView(
+            context = context,
+            kbColors = KeyboardColors(key, utility, ink, palette.action, palette.actionText, palette.dark, palette.highContrast, palette.keyRadiusDp, palette.keyOpacity),
+            emojiRepo = emojiRepo,
+            recentEmojis = recentEmoji.ifEmpty { prefs.recentEmojis },
+            onPick = { emoji ->
+                actions.onCharacter(emoji)
+            },
+            onSearchClick = {
+                emojiSearch = true
+                render()
+            },
+            onBackspace = {
+                actions.onBackspace()
+            },
+            onClose = {
+                layer = KeyboardLayer.LETTERS
+                render()
+            }
+        )
+        body.addView(emojiBoardView, LayoutParams(LayoutParams.MATCH_PARENT, fullHeight))
+    }
+
+    private fun renderCalculator() {
+        body.clipChildren = true
+        body.clipToPadding = true
+        val fullHeight = standardContentHeight() + suggestionRailHeight()
+        val calcView = CalculatorBoard(
+            context = context,
+            kbColors = KeyboardColors(key, utility, ink, palette.action, palette.actionText, palette.dark, palette.highContrast, palette.keyRadiusDp, palette.keyOpacity),
+            onInsert = { textToInsert ->
+                actions.onPasteText(textToInsert)
+                layer = KeyboardLayer.LETTERS
+                render()
+            },
+            onClose = {
+                layer = KeyboardLayer.LETTERS
+                render()
+            }
+        )
+        body.addView(calcView, LayoutParams(LayoutParams.MATCH_PARENT, fullHeight))
+    }
+
+    fun openCalculator() {
+        layer = KeyboardLayer.CALCULATOR
+        render()
     }
 
     private fun emojiCategoryBar() = HorizontalScrollView(context).apply {
@@ -793,7 +859,23 @@ class KeyboardView(
     private fun emojiScroller(values: List<String>) =
         EmojiBoard.scroller(context, values, ink, prefs.skinTone) { actions.onCharacter(it) }
     private fun showClipboardButton() =
-        prefs.clipboardHistory && layer == KeyboardLayer.LETTERS && (editorLayout == EditorLayout.TEXT || editorLayout == EditorLayout.EMAIL || editorLayout == EditorLayout.URI)
+        prefs.clipboardHistory && layer == KeyboardLayer.LETTERS
+
+    fun openClipboard() {
+        runCatching {
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            val clip = cm?.primaryClip
+            if (clip != null && clip.itemCount > 0) {
+                val text = clip.getItemAt(0).coerceToText(context)?.toString()
+                if (!text.isNullOrBlank()) {
+                    clipboardStore.add(text)
+                }
+            }
+        }
+        refreshClipboardFromStore()
+        layer = KeyboardLayer.CLIPBOARD
+        render()
+    }
 
     private fun bindClipboard() {
         body.clipChildren = true
@@ -808,7 +890,7 @@ class KeyboardView(
             context,
             KeyboardColors(key, utility, ink, palette.action, palette.actionText, palette.dark, palette.highContrast, palette.keyRadiusDp, palette.keyOpacity),
             onPaste = { clip ->
-                actions.onCharacter(clip)
+                actions.onPasteText(clip)
                 layer = KeyboardLayer.LETTERS
                 render()
             },
@@ -952,7 +1034,12 @@ class KeyboardView(
     private fun refreshClipboardFromStore() {
         clipboardRecent = clipboardStore.items()
         clipboardPinned = clipboardStore.pinnedItems()
-        if (layer == KeyboardLayer.CLIPBOARD) render()
+        val existing = body.getChildAt(0) as? ClipboardBoard
+        if (existing != null && layer == KeyboardLayer.CLIPBOARD) {
+            existing.configure(clipboardRecent, clipboardPinned)
+        } else if (layer == KeyboardLayer.CLIPBOARD) {
+            render()
+        }
     }
 
     private fun updateShift() {
@@ -1011,7 +1098,7 @@ class KeyboardView(
         val vertical = KeyboardMetrics.marginPx(prefs.keySpacing, resources.displayMetrics.density, true)
         setMargins(horizontal, vertical, horizontal, vertical)
     }
-    private fun usesTypingPanel() = (forceNormalKeyboard || editorLayout !in numericEditors) && layer != KeyboardLayer.EMOJI && layer != KeyboardLayer.CLIPBOARD && layer != KeyboardLayer.VOICE && layer != KeyboardLayer.TRANSLATE && layer != KeyboardLayer.FONT_STUDIO
+    private fun usesTypingPanel() = (forceNormalKeyboard || editorLayout !in numericEditors) && layer != KeyboardLayer.EMOJI && layer != KeyboardLayer.CLIPBOARD && layer != KeyboardLayer.VOICE && layer != KeyboardLayer.TRANSLATE && layer != KeyboardLayer.FONT_STUDIO && layer != KeyboardLayer.CALCULATOR
     private fun suggestionKeySliver() = (KeyboardGeometry.SLIVER_DP * resources.displayMetrics.density).toInt()
     private fun isLandscape() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     private fun inSuggestionSliver(y: Float): Boolean {
