@@ -1,6 +1,7 @@
 package org.slashboard.ime.engine
 
 import android.content.Context
+import org.slashboard.ime.R
 import org.slashboard.ime.data.Candidate
 import org.slashboard.ime.data.LocalLearningStore
 import java.util.Locale
@@ -12,55 +13,123 @@ class EnglishPredictionEngine(
     private val context: Context,
     private val learning: LocalLearningStore
 ) {
-    private val unigramIndex = HashMap<String, Int>(4096)
-    private val wordList = ArrayList<Pair<String, Int>>(4096)
+    @Volatile private var loaded = false
+    private var entries: List<Pair<String, Int>> = emptyList()
+    private val unigramIndex = HashMap<String, Int>(65_536)
+    private val topWordsByChar = HashMap<Char, List<Pair<String, Int>>>(32)
     private val wordsByFirstChar = HashMap<Char, ArrayList<Pair<String, Int>>>(32)
     private val phraseBigrams = HashMap<String, MutableList<Pair<String, Int>>>(1024)
     private val phraseTrigrams = HashMap<String, MutableList<Pair<String, Int>>>(512)
     private val typoCorrections = HashMap<String, String>(256)
 
-    private class TrieNode {
-        val children = HashMap<Char, TrieNode>(4)
-        var word: String? = null
-        var freq: Int = 0
-    }
-    private val trieRoot = TrieNode()
-
     init {
-        loadVocabulary()
         loadPhrases()
         loadTypoCorrections()
+        ensureLoaded()
     }
 
-    private fun insertToTrie(word: String, freq: Int) {
-        var curr = trieRoot
-        for (i in 0 until word.length) {
-            val ch = word[i]
-            curr = curr.children.getOrPut(ch) { TrieNode() }
-        }
-        curr.word = word
-        curr.freq = maxOf(curr.freq, freq)
+    fun warmup() {
+        ensureLoaded()
     }
 
-    private fun searchPrefixInTrie(prefix: String, limit: Int = 50): List<Pair<String, Int>> {
-        var curr = trieRoot
-        for (i in 0 until prefix.length) {
-            curr = curr.children[prefix[i]] ?: return emptyList()
-        }
-        val results = ArrayList<Pair<String, Int>>(limit)
-        collectFromTrie(curr, results, limit)
-        return results
+    @Synchronized
+    private fun ensureLoaded() {
+        if (loaded) return
+        loadVocabulary()
     }
 
-    private fun collectFromTrie(node: TrieNode, results: MutableList<Pair<String, Int>>, limit: Int) {
-        if (node.word != null) {
-            results.add(node.word!! to node.freq)
-            if (results.size >= limit) return
+    private fun loadVocabulary() {
+        runCatching {
+            context.resources.openRawResource(R.raw.english_frequency_model).bufferedReader().useLines { lines ->
+                val list = ArrayList<Pair<String, Int>>(55_000)
+                val byChar = HashMap<Char, ArrayList<Pair<String, Int>>>(32)
+                lines.forEach { line ->
+                    if (line.isNotEmpty()) {
+                        val tab = line.indexOf('\t')
+                        if (tab > 0) {
+                            val word = line.substring(0, tab)
+                            val freq = line.substring(tab + 1).toIntOrNull() ?: 1
+                            val pair = word to freq
+                            list.add(pair)
+                            unigramIndex[word] = freq
+                            val firstChar = word[0]
+                            val charList = byChar.getOrPut(firstChar) { ArrayList(2048) }
+                            charList.add(pair)
+                        }
+                    }
+                }
+                entries = list
+                for ((ch, words) in byChar) {
+                    val sorted = words.sortedByDescending { it.second }
+                    topWordsByChar[ch] = sorted.take(50)
+                    wordsByFirstChar[ch] = ArrayList(sorted.take(200))
+                }
+                loaded = true
+            }
+        }.onFailure {
+            loadFallbackVocabulary()
         }
-        for (child in node.children.values) {
-            collectFromTrie(child, results, limit)
-            if (results.size >= limit) return
+    }
+
+    private fun loadFallbackVocabulary() {
+        val fallback = listOf(
+            "the" to 1000, "be" to 950, "to" to 940, "of" to 930, "and" to 920, "a" to 910, "in" to 900,
+            "that" to 890, "have" to 880, "i" to 870, "it" to 860, "for" to 850, "not" to 840, "on" to 830,
+            "with" to 820, "he" to 810, "as" to 800, "you" to 790, "do" to 780, "at" to 770, "this" to 760,
+            "but" to 750, "his" to 740, "by" to 730, "from" to 720, "they" to 710, "we" to 700, "say" to 690,
+            "her" to 680, "she" to 670, "or" to 660, "an" to 650, "will" to 640, "my" to 630, "one" to 620,
+            "all" to 610, "would" to 600, "there" to 590, "their" to 580, "what" to 570, "so" to 560, "up" to 550,
+            "out" to 540, "if" to 530, "about" to 520, "who" to 510, "get" to 500, "which" to 490, "go" to 480,
+            "me" to 470, "when" to 460, "make" to 450, "can" to 440, "like" to 430, "time" to 420, "no" to 410,
+            "just" to 400, "him" to 390, "know" to 380, "take" to 370, "people" to 360, "into" to 350, "year" to 340,
+            "your" to 330, "good" to 320, "some" to 310, "could" to 300, "them" to 290, "see" to 280, "other" to 270,
+            "than" to 260, "then" to 250, "now" to 240, "look" to 230, "only" to 220, "come" to 210, "its" to 200,
+            "over" to 190, "think" to 180, "also" to 170, "back" to 160, "after" to 150, "use" to 140, "two" to 130,
+            "how" to 120, "our" to 110, "work" to 100, "first" to 95, "well" to 90, "way" to 85, "even" to 80,
+            "new" to 75, "want" to 70, "because" to 65, "any" to 60, "these" to 55, "give" to 50, "day" to 45,
+            "suggest" to 500, "suggestion" to 450, "suggested" to 420, "suggesting" to 400, "suggestions" to 380,
+            "hello" to 600, "thanks" to 650, "please" to 630, "sorry" to 600, "welcome" to 550, "okay" to 580
+        )
+        entries = fallback.sortedBy { it.first }
+        fallback.forEach { (w, f) ->
+            unigramIndex[w] = f
+            val ch = w[0]
+            wordsByFirstChar.getOrPut(ch) { ArrayList() }.add(w to f)
+            topWordsByChar[ch] = (topWordsByChar[ch].orEmpty() + (w to f)).sortedByDescending { it.second }
         }
+        loaded = true
+    }
+
+    private fun firstIndexAtOrAfter(prefix: String): Int {
+        var lo = 0
+        var hi = entries.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (entries[mid].first < prefix) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    private fun searchPrefixInDictionary(prefix: String, limit: Int = 40): List<Pair<String, Int>> {
+        if (!loaded) ensureLoaded()
+        if (prefix.isEmpty() || entries.isEmpty()) return emptyList()
+        if (prefix.length == 1) {
+            return topWordsByChar[prefix[0]] ?: emptyList()
+        }
+        val first = firstIndexAtOrAfter(prefix)
+        if (first >= entries.size) return emptyList()
+        val matches = ArrayList<Pair<String, Int>>(64)
+        val maxScan = 2000
+        var count = 0
+        for (i in first until entries.size) {
+            val entry = entries[i]
+            if (!entry.first.startsWith(prefix)) break
+            matches.add(entry)
+            count++
+            if (count >= maxScan) break
+        }
+        matches.sortByDescending { it.second }
+        return if (matches.size > limit) matches.subList(0, limit) else matches
     }
 
     fun candidates(
@@ -68,6 +137,7 @@ class EnglishPredictionEngine(
         preceding: List<String>,
         max: Int = 3
     ): List<Candidate> {
+        if (!loaded) ensureLoaded()
         if (max <= 0) return emptyList()
 
         val prefix = rawPrefix.trim()
@@ -92,6 +162,11 @@ class EnglishPredictionEngine(
             return when {
                 isAllUpper -> word.uppercase(Locale.ENGLISH)
                 isTitle -> word.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ENGLISH) else it.toString() }
+                word == "i" -> "I"
+                word == "i'm" -> "I'm"
+                word == "i'll" -> "I'll"
+                word == "i've" -> "I've"
+                word == "i'd" -> "I'd"
                 else -> word
             }
         }
@@ -107,13 +182,16 @@ class EnglishPredictionEngine(
             val staticNextCount = staticNext.firstOrNull { it.first.equals(lowerWord, ignoreCase = true) }?.second ?: 0
             val staticTriCount = staticTri.firstOrNull { it.first.equals(lowerWord, ignoreCase = true) }?.second ?: 0
 
+            val lengthBonus = if (lowerWord == lowerPrefix) 25.0 else 0.0
+
             val score = unigramWeight * ln(frequency.coerceAtLeast(1) + 1.0) +
-                    (if (learnedCount > 0) learnedCount * 25.0 + 50.0 else 0.0) +
-                    (if (learnedNextCount > 0) learnedNextCount * 30.0 + 60.0 else 0.0) +
-                    (if (learnedTriCount > 0) learnedTriCount * 40.0 + 80.0 else 0.0) +
-                    ln(staticNextCount + 1.0) * 2.8 +
-                    ln(staticTriCount + 1.0) * 3.8 +
-                    if (isCorrection) 8.0 else 0.0
+                    lengthBonus +
+                    (if (learnedCount > 0) learnedCount * 30.0 + 60.0 else 0.0) +
+                    (if (learnedNextCount > 0) learnedNextCount * 35.0 + 70.0 else 0.0) +
+                    (if (learnedTriCount > 0) learnedTriCount * 45.0 + 90.0 else 0.0) +
+                    ln(staticNextCount + 1.0) * 3.0 +
+                    ln(staticTriCount + 1.0) * 4.0 +
+                    if (isCorrection) 15.0 else 0.0
 
             val finalWord = applyCase(candidateWord)
             val cand = Candidate(finalWord, score, isCorrection)
@@ -130,23 +208,13 @@ class EnglishPredictionEngine(
         // 1. If prefix is empty -> Predict next words based on phrase context / bigrams / sentence starters
         if (prefix.isEmpty()) {
             if (previous != null) {
-                // Learned trigrams & bigrams
-                learnedTri.forEach { (word, count) ->
-                    consider(word, count * 20, 1.5)
-                }
-                staticTri.forEach { (word, count) ->
-                    consider(word, count, 1.4)
-                }
-                learnedNext.forEach { (word, count) ->
-                    consider(word, count * 15, 1.2)
-                }
-                staticNext.forEach { (word, count) ->
-                    consider(word, count, 1.0)
-                }
+                learnedTri.forEach { (word, count) -> consider(word, count * 20, 1.5) }
+                staticTri.forEach { (word, count) -> consider(word, count, 1.4) }
+                learnedNext.forEach { (word, count) -> consider(word, count * 15, 1.2) }
+                staticNext.forEach { (word, count) -> consider(word, count, 1.0) }
             }
 
             if (ranked.isEmpty()) {
-                // Default high frequency conversational words / sentence starters
                 val starters = if (previous == null) {
                     listOf("I", "The", "How", "What", "Hello", "Thanks", "Good", "Can", "Please", "Are", "We", "You", "Where", "Let", "Have")
                 } else {
@@ -160,14 +228,10 @@ class EnglishPredictionEngine(
             return ranked.take(max)
         }
 
-        // 2. Exact typo / contraction correction match (e.g., "teh" -> "the", "dont" -> "don't", "im" -> "I'm")
+        // 2. Exact typo / contraction correction match (e.g., "teh" -> "the", "sugest" -> "suggest", "dont" -> "don't")
         val directCorrection = typoCorrections[lowerPrefix]
         if (directCorrection != null) {
-            val formatted = if (directCorrection == "i" || directCorrection.startsWith("i'") || directCorrection == "i'm" || directCorrection == "i'll" || directCorrection == "i'd" || directCorrection == "i've") {
-                directCorrection.replaceFirstChar { it.uppercase(Locale.ENGLISH) }
-            } else {
-                applyCase(directCorrection)
-            }
+            val formatted = applyCase(directCorrection)
             ranked.add(0, Candidate(formatted, 9999.0, isCorrection = true))
             considered.add(directCorrection.lowercase(Locale.ENGLISH))
         }
@@ -193,9 +257,9 @@ class EnglishPredictionEngine(
             if (word.startsWith(prefix, ignoreCase = true)) consider(word, count, 1.8)
         }
 
-        // 5. Dictionary prefix matches (fast Trie query)
-        val trieMatches = searchPrefixInTrie(lowerPrefix, limit = 50)
-        for ((word, freq) in trieMatches) {
+        // 5. Dictionary prefix matches (55,000+ words fast lookup)
+        val dictMatches = searchPrefixInDictionary(lowerPrefix, limit = 40)
+        for ((word, freq) in dictMatches) {
             consider(word, freq, 2.5)
         }
 
@@ -225,7 +289,6 @@ class EnglishPredictionEngine(
         val inputLen = input.length
         val firstChar = input[0]
 
-        // Candidate pool: only words starting with firstChar or adjacent keyboard keys
         val candidatesPool = ArrayList<Pair<String, Int>>(128)
         wordsByFirstChar[firstChar]?.let { candidatesPool.addAll(it) }
         val adjacent = getAdjacentChars(firstChar)
@@ -302,157 +365,21 @@ class EnglishPredictionEngine(
         return prev[len2]
     }
 
-    private fun loadVocabulary() {
-        // High-frequency curated English dictionary with frequency ranks (100 = most frequent, 10 = common)
-        val rawVocab = listOf(
-            // Top 100 English words
-            "the" to 1000, "be" to 950, "to" to 940, "of" to 930, "and" to 920, "a" to 910, "in" to 900,
-            "that" to 890, "have" to 880, "i" to 870, "it" to 860, "for" to 850, "not" to 840, "on" to 830,
-            "with" to 820, "he" to 810, "as" to 800, "you" to 790, "do" to 780, "at" to 770, "this" to 760,
-            "but" to 750, "his" to 740, "by" to 730, "from" to 720, "they" to 710, "we" to 700, "say" to 690,
-            "her" to 680, "she" to 670, "or" to 660, "an" to 650, "will" to 640, "my" to 630, "one" to 620,
-            "all" to 610, "would" to 600, "there" to 590, "their" to 580, "what" to 570, "so" to 560, "up" to 550,
-            "out" to 540, "if" to 530, "about" to 520, "who" to 510, "get" to 500, "which" to 490, "go" to 480,
-            "me" to 470, "when" to 460, "make" to 450, "can" to 440, "like" to 430, "time" to 420, "no" to 410,
-            "just" to 400, "him" to 390, "know" to 380, "take" to 370, "people" to 360, "into" to 350, "year" to 340,
-            "your" to 330, "good" to 320, "some" to 310, "could" to 300, "them" to 290, "see" to 280, "other" to 270,
-            "than" to 260, "then" to 250, "now" to 240, "look" to 230, "only" to 220, "come" to 210, "its" to 200,
-            "over" to 190, "think" to 180, "also" to 170, "back" to 160, "after" to 150, "use" to 140, "two" to 130,
-            "how" to 120, "our" to 110, "work" to 100, "first" to 95, "well" to 90, "way" to 85, "even" to 80,
-            "new" to 75, "want" to 70, "because" to 65, "any" to 60, "these" to 55, "give" to 50, "day" to 45,
-            "most" to 40, "us" to 35,
-
-            // Common Contractions & Pronouns
-            "i'm" to 700, "i'll" to 650, "i've" to 600, "i'd" to 550, "don't" to 680, "can't" to 650, "won't" to 600,
-            "didn't" to 580, "doesn't" to 540, "isn't" to 520, "aren't" to 500, "wasn't" to 480, "weren't" to 460,
-            "haven't" to 450, "hasn't" to 440, "hadn't" to 430, "couldn't" to 450, "shouldn't" to 440, "wouldn't" to 450,
-            "that's" to 620, "what's" to 600, "it's" to 650, "there's" to 550, "here's" to 500, "let's" to 560,
-            "you're" to 620, "they're" to 580, "we're" to 590, "you've" to 500, "we've" to 500, "they've" to 480,
-            "you'll" to 520, "we'll" to 530, "they'll" to 490, "how's" to 480, "who's" to 450, "where's" to 470,
-
-            // Conversational, Greetings & Polite Phrases
-            "hello" to 600, "hi" to 620, "hey" to 610, "thanks" to 650, "thank" to 640, "please" to 630,
-            "sorry" to 600, "welcome" to 550, "sure" to 540, "okay" to 580, "ok" to 620, "yeah" to 560,
-            "yes" to 590, "fine" to 500, "cool" to 480, "great" to 540, "awesome" to 500, "amazing" to 480,
-            "morning" to 520, "night" to 520, "afternoon" to 450, "evening" to 450, "bye" to 480, "tomorrow" to 510,
-            "yesterday" to 480, "today" to 550, "tonight" to 490, "soon" to 500, "later" to 520, "always" to 480,
-            "never" to 470, "already" to 460, "again" to 480, "together" to 440, "everyone" to 460, "anyone" to 450,
-            "everything" to 480, "nothing" to 460, "something" to 490, "someone" to 450, "somewhere" to 420,
-
-            // Communication, Work & Tech
-            "message" to 460, "call" to 520, "send" to 510, "text" to 480, "email" to 490, "link" to 470,
-            "code" to 450, "file" to 460, "image" to 440, "photo" to 450, "video" to 460, "app" to 480,
-            "phone" to 490, "number" to 480, "meeting" to 470, "office" to 460, "home" to 520, "work" to 530,
-            "school" to 450, "class" to 440, "job" to 460, "money" to 450, "bank" to 430, "card" to 440,
-            "order" to 450, "check" to 480, "help" to 500, "start" to 470, "stop" to 450, "wait" to 480,
-            "ready" to 490, "free" to 480, "busy" to 470, "done" to 510, "open" to 460, "close" to 440,
-            "update" to 450, "online" to 460, "offline" to 420, "account" to 450, "password" to 430,
-
-            // Sri Lankan English / Local Slang & Culture
-            "machan" to 500, "macho" to 400, "ado" to 450, "ela" to 480, "kiri" to 420, "patta" to 450,
-            "bro" to 550, "dude" to 450, "man" to 500, "buddy" to 420, "sir" to 480, "madam" to 420,
-            "aiyya" to 400, "akka" to 400, "mallie" to 400, "nangi" to 400, "aunty" to 420, "uncle" to 420,
-            "colombo" to 420, "kandy" to 400, "galle" to 380, "lanka" to 450, "sri" to 450, "ceylon" to 360,
-            "kohomada" to 450, "mokada" to 420, "waren" to 400, "yako" to 400, "shape" to 450, "scene" to 440,
-            "pissuda" to 420, "hari" to 460, "ow" to 440, "naa" to 420, "ah" to 450, "ane" to 440,
-            "ammatasiri" to 350, "ammo" to 400, "appata" to 350, "maru" to 450, "maxxa" to 400, "niyamai" to 450,
-            "supiri" to 450, "sira" to 420, "sirawatama" to 400, "wada" to 450, "pissu" to 420, "gindara" to 350,
-            "ammata" to 400, "hudu" to 350, "ayyoo" to 400, "paw" to 450, "ithim" to 400, "ithin" to 420,
-
-            // Modern Slang & Texting
-            "lol" to 500, "lmao" to 450, "omg" to 480, "wtf" to 400, "idk" to 480, "idc" to 450,
-            "tbh" to 450, "rn" to 480, "brb" to 420, "btw" to 450, "fr" to 450, "smh" to 400,
-            "imo" to 420, "af" to 400, "sus" to 400, "ngl" to 430, "wbu" to 450, "hbu" to 450,
-            "gm" to 480, "gn" to 480, "ty" to 480, "np" to 460, "yw" to 440, "pls" to 500, "plz" to 480,
-
-            // Action Verbs
-            "know" to 500, "think" to 490, "tell" to 480, "ask" to 470, "need" to 520, "feel" to 460,
-            "find" to 480, "give" to 490, "leave" to 460, "put" to 470, "mean" to 460, "keep" to 470,
-            "let" to 500, "begin" to 440, "seem" to 450, "help" to 500, "talk" to 510, "turn" to 450,
-            "start" to 480, "show" to 470, "hear" to 460, "play" to 450, "run" to 460, "move" to 450,
-            "live" to 460, "believe" to 480, "bring" to 460, "happen" to 470, "write" to 470, "provide" to 440,
-            "sit" to 440, "stand" to 440, "lose" to 440, "pay" to 460, "meet" to 490, "include" to 430,
-            "continue" to 440, "set" to 460, "learn" to 450, "change" to 470, "lead" to 430, "understand" to 480,
-            "watch" to 460, "follow" to 450, "stop" to 470, "create" to 450, "speak" to 470, "read" to 470,
-            "allow" to 440, "add" to 460, "spend" to 450, "grow" to 430, "open" to 460, "walk" to 450,
-            "win" to 450, "offer" to 430, "remember" to 480, "love" to 540, "consider" to 430, "appear" to 420,
-            "buy" to 470, "wait" to 490, "serve" to 420, "die" to 420, "send" to 510, "expect" to 440,
-            "build" to 440, "stay" to 470, "fall" to 430, "cut" to 440, "reach" to 430, "kill" to 400,
-            "remain" to 420, "suggest" to 440, "raise" to 420, "pass" to 440, "sell" to 440, "require" to 430,
-            "report" to 430, "decide" to 450, "pull" to 420, "drive" to 460, "break" to 440, "wear" to 430,
-            "receive" to 470, "agree" to 450, "support" to 440, "hit" to 430, "produce" to 420, "eat" to 470,
-            "cover" to 430, "catch" to 440, "draw" to 430, "choose" to 450, "listen" to 470, "hope" to 490,
-            "wish" to 480, "try" to 500, "enjoy" to 470, "care" to 480, "join" to 460, "reach" to 440,
-
-            // Adjectives & Adverbs
-            "happy" to 520, "sad" to 430, "glad" to 460, "excited" to 470, "tired" to 480, "hungry" to 440,
-            "busy" to 490, "free" to 500, "late" to 490, "early" to 470, "fast" to 470, "slow" to 440,
-            "easy" to 480, "hard" to 470, "simple" to 460, "difficult" to 440, "important" to 470, "possible" to 460,
-            "beautiful" to 480, "nice" to 520, "pretty" to 460, "cute" to 470, "sweet" to 460, "funny" to 460,
-            "serious" to 440, "special" to 460, "perfect" to 480, "best" to 530, "better" to 500, "worst" to 430,
-            "big" to 480, "small" to 480, "huge" to 450, "tiny" to 430, "long" to 470, "short" to 460,
-            "high" to 460, "low" to 450, "deep" to 430, "hot" to 460, "cold" to 460, "warm" to 450,
-            "cool" to 480, "clean" to 450, "dirty" to 430, "fresh" to 450, "safe" to 480, "dangerous" to 430,
-            "really" to 540, "very" to 530, "too" to 520, "quite" to 470, "pretty" to 480, "almost" to 470,
-            "maybe" to 500, "probably" to 480, "definitely" to 490, "absolutely" to 470, "certainly" to 460,
-            "actually" to 510, "basically" to 470, "totally" to 470, "obviously" to 460, "seriously" to 470,
-            "currently" to 460, "recently" to 460, "finally" to 470, "immediately" to 460, "directly" to 450,
-            "quickly" to 470, "slowly" to 440, "carefully" to 450, "easily" to 460, "perfectlys" to 420,
-
-            // Time & Quantities
-            "minute" to 460, "hour" to 470, "day" to 520, "week" to 500, "month" to 480, "year" to 500,
-            "moment" to 460, "second" to 460, "morning" to 520, "noon" to 430, "evening" to 460, "midnight" to 430,
-            "monday" to 470, "tuesday" to 460, "wednesday" to 460, "thursday" to 460, "friday" to 480, "saturday" to 480, "sunday" to 480,
-            "january" to 420, "february" to 420, "march" to 420, "april" to 420, "may" to 450, "june" to 420,
-            "july" to 420, "august" to 420, "september" to 420, "october" to 420, "november" to 420, "december" to 430,
-            "much" to 500, "many" to 490, "few" to 460, "little" to 470, "lot" to 500, "lots" to 470,
-            "more" to 520, "less" to 470, "least" to 440, "enough" to 470, "half" to 460, "quarter" to 440,
-            "full" to 460, "empty" to 440, "zero" to 430, "first" to 500, "second" to 480, "third" to 460,
-
-            // Questions & Conjunctions
-            "who" to 520, "whom" to 420, "whose" to 440, "what" to 580, "which" to 510, "where" to 540,
-            "when" to 540, "why" to 530, "how" to 560, "whether" to 450, "while" to 470, "although" to 450,
-            "though" to 460, "unless" to 450, "since" to 470, "until" to 470, "till" to 460, "before" to 480,
-            "after" to 490, "during" to 460, "without" to 480, "within" to 460, "between" to 470, "among" to 440,
-            "through" to 470, "against" to 460, "towards" to 450, "upon" to 440, "behind" to 450, "beyond" to 440
-        )
-
-        for ((word, freq) in rawVocab) {
-            val lower = word.lowercase(Locale.ENGLISH)
-            unigramIndex[lower] = freq
-            val entry = lower to freq
-            wordList.add(entry)
-            insertToTrie(lower, freq)
-            if (lower.isNotEmpty()) {
-                wordsByFirstChar.getOrPut(lower[0]) { ArrayList(64) }.add(entry)
-            }
-        }
-    }
-
     private fun loadPhrases() {
-        fun addBigram(from: String, to: String, score: Int = 10) {
-            phraseBigrams.getOrPut(from.lowercase(Locale.ENGLISH)) { mutableListOf() }
-                .add(to to score)
+        fun addBigram(w1: String, w2: String, weight: Int) {
+            phraseBigrams.getOrPut(w1.lowercase(Locale.ENGLISH)) { ArrayList() }.add(w2 to weight)
+        }
+        fun addTrigram(w1: String, w2: String, w3: String, weight: Int) {
+            phraseTrigrams.getOrPut("${w1.lowercase(Locale.ENGLISH)}\t${w2.lowercase(Locale.ENGLISH)}") { ArrayList() }.add(w3 to weight)
         }
 
-        fun addTrigram(w1: String, w2: String, to: String, score: Int = 15) {
-            val key = "${w1.lowercase(Locale.ENGLISH)}\t${w2.lowercase(Locale.ENGLISH)}"
-            phraseTrigrams.getOrPut(key) { mutableListOf() }
-                .add(to to score)
-        }
-
-        // Common phrase bigrams
-        addBigram("how", "are", 50); addBigram("how", "is", 45); addBigram("how", "to", 40); addBigram("how", "about", 35); addBigram("how", "was", 35)
-        addBigram("how", "much", 35); addBigram("how", "many", 35); addBigram("how", "do", 35); addBigram("how", "can", 30)
-
-        addBigram("good", "morning", 50); addBigram("good", "night", 50); addBigram("good", "evening", 45); addBigram("good", "afternoon", 45)
-        addBigram("good", "luck", 40); addBigram("good", "job", 40); addBigram("good", "one", 35); addBigram("good", "idea", 35); addBigram("good", "to", 35)
-
+        // Common conversational bigrams
+        addBigram("how", "are", 60); addBigram("how", "is", 50); addBigram("how", "about", 45); addBigram("how", "was", 40)
         addBigram("thank", "you", 60); addBigram("thank", "god", 35)
         addBigram("thanks", "for", 50); addBigram("thanks", "a", 45); addBigram("thanks", "bro", 45); addBigram("thanks", "so", 40); addBigram("thanks", "machan", 40); addBigram("thanks", "again", 35)
 
         addBigram("see", "you", 55); addBigram("see", "later", 40); addBigram("see", "soon", 40); addBigram("see", "tomorrow", 35)
-        addBigram("let", "me", 55); addBigram("let", "us", 45); addBigram("let", "you", 40)
+        addBigram("let", "me", 55); addBigram("let", "us", 45); addBigram("let", "you", 40); addBigram("let", "know", 45)
         addBigram("let's", "go", 50); addBigram("let's", "do", 45); addBigram("let's", "meet", 45); addBigram("let's", "see", 40)
 
         addBigram("i", "am", 60); addBigram("i", "will", 55); addBigram("i", "have", 55); addBigram("i", "can", 50); addBigram("i", "want", 50); addBigram("i", "know", 50)
@@ -482,6 +409,14 @@ class EnglishPredictionEngine(
         addBigram("talk", "to", 50); addBigram("talk", "later", 45); addBigram("talk", "soon", 40)
         addBigram("sounds", "good", 50); addBigram("sounds", "great", 45); addBigram("sounds", "like", 40)
         addBigram("looking", "forward", 50); addBigram("looking", "for", 45); addBigram("looking", "good", 40)
+        addBigram("welcome", "back", 45); addBigram("welcome", "to", 45)
+        addBigram("good", "afternoon", 45); addBigram("good", "evening", 45); addBigram("good", "morning", 50); addBigram("good", "night", 50)
+        addBigram("all", "the", 50); addBigram("all", "good", 45); addBigram("all", "right", 50); addBigram("all", "set", 45)
+        addBigram("give", "me", 50); addBigram("give", "a", 45); addBigram("give", "you", 45)
+        addBigram("send", "me", 50); addBigram("send", "the", 50); addBigram("send", "it", 45); addBigram("send", "you", 45)
+        addBigram("tell", "me", 50); addBigram("tell", "you", 45); addBigram("tell", "them", 40)
+        addBigram("need", "to", 55); addBigram("need", "help", 45); addBigram("need", "more", 40)
+        addBigram("ready", "to", 50); addBigram("ready", "for", 45); addBigram("ready", "now", 45)
 
         // Sri Lankan collocations
         addBigram("machan", "kohomada", 50); addBigram("machan", "mokada", 45); addBigram("machan", "waren", 40); addBigram("machan", "ado", 40); addBigram("machan", "call", 40)
@@ -513,16 +448,21 @@ class EnglishPredictionEngine(
         addTrigram("as", "soon", "as", 60)
         addTrigram("by", "the", "way", 60)
         addTrigram("thank", "you", "so", 55); addTrigram("thank", "you", "very", 50); addTrigram("thank", "you", "bro", 50)
+        addTrigram("give", "me", "a", 50); addTrigram("send", "me", "the", 50); addTrigram("all", "the", "best", 55)
     }
 
     private fun loadTypoCorrections() {
         val map = listOf(
+            // Suggest related misspellings
+            "sugest" to "suggest", "sugestion" to "suggestion", "sugestions" to "suggestions",
+            "sugested" to "suggested", "sugesting" to "suggesting", "sugestive" to "suggestive",
+
             // Contractions without apostrophes
             "im" to "I'm", "dont" to "don't", "cant" to "can't", "wont" to "won't", "didnt" to "didn't",
             "doesnt" to "doesn't", "isnt" to "isn't", "arent" to "aren't", "wasnt" to "wasn't", "werent" to "weren't",
             "havent" to "haven't", "hasnt" to "hasn't", "hadnt" to "hadn't", "couldnt" to "couldn't", "shouldnt" to "shouldn't",
             "wouldnt" to "wouldn't", "thats" to "that's", "whats" to "what's", "hows" to "how's", "wheres" to "where's",
-            "theres" to "there's", "lets" to "let's", "youre" to "you're", "theyre" to "they're", "weve" to "we've",
+            "theres" to "there's", "lets" to "let's", "youre" to "youre", "theyre" to "they're", "weve" to "we've",
             "youve" to "you've", "theyve" to "they've", "ill" to "I'll", "youll" to "you'll", "theyll" to "they'll",
             "id" to "I'd", "ive" to "I've",
 

@@ -35,6 +35,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.slashboard.ime.CrashLogger
@@ -128,8 +130,21 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         recentEmoji = prefs.recentEmojis.toMutableList()
         org.slashboard.ime.sound.KeySoundPlayer.getInstance(this)
         
-        // Schedule daily update checks
-        org.slashboard.ime.update.UpdateCheckWorker.scheduleDaily8AMCheck(this)
+        // Schedule update checks every 30 minutes
+        org.slashboard.ime.update.UpdateCheckWorker.schedulePeriodicCheck(this)
+        org.slashboard.ime.update.UpdateCheckWorker.checkNow(this)
+
+        // In addition, periodically check every 30 minutes while keyboard service is alive
+        serviceScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(30L * 60L * 1000L) // 30 minutes
+                try {
+                    org.slashboard.ime.update.UpdateCheckWorker.performCheck(applicationContext)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
         
         org.slashboard.ime.translator.TranslatorEngine.init(this)
 
@@ -183,6 +198,7 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             val emojiRepo = EmojiRepository(this@SlashboardInputMethodService)
             val clipboardStore = ClipboardHistoryStore(this@SlashboardInputMethodService)
             predictionRepo.warmup()
+            englishEngine.warmup()
             learning = localLearning
             prediction = predictionRepo
             englishPrediction = englishEngine
@@ -216,7 +232,9 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         clearLocalCompositionState()
-        restricted = attribute?.let { isRestrictedEditor(it) || isPasswordOrSensitive(it) } ?: true
+        val isStrictPwd = isStrictPassword(attribute)
+        val isSensitive = prefs.securePasswordMode && isPasswordOrSensitive(attribute, true)
+        restricted = isRestrictedEditor(attribute) || isStrictPwd || isSensitive
         lastSelectionEnd = attribute?.initialSelEnd ?: -1
         precedingDirty = true
     }
@@ -229,7 +247,10 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         if (::keyboard.isInitialized) {
             keyboard.reloadPreferences(prefs)
         }
-        restricted = info?.let { isRestrictedEditor(it) || isPasswordOrSensitive(it) } ?: true
+        val isStrictPwd = isStrictPassword(info)
+        val isSensitive = prefs.securePasswordMode && isPasswordOrSensitive(info, true)
+        val isRestricted = isRestrictedEditor(info)
+        restricted = isRestricted || isStrictPwd || isSensitive
         editorLayout = editorLayout(info)
 
         // Layout and editor preparation (preserves user-chosen language across sessions)
@@ -249,9 +270,9 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             win.findViewById<View>(android.R.id.inputArea)?.setBackgroundColor(Color.TRANSPARENT)
         }
         keyboard.configure(prefs.mode, offerSystemSwitch(), enterLabel(info), editorLayout)
-        val incognito = isPasswordOrSensitive(info)
+        val incognito = isStrictPwd || isSensitive
         keyboard.setIncognito(incognito)
-        keyboard.learningEnabled = !restricted && !incognito && editorLayout == EditorLayout.TEXT
+        keyboard.learningEnabled = !isRestricted && !incognito && editorLayout == EditorLayout.TEXT
         checkOtp()
         if (prefs.clipboardHistory && !incognito) captureClipboard()
         clipboardHistory?.let { keyboard.setClipboardItems(it.items(), it.pinnedItems()) }
@@ -305,7 +326,7 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
 
     override fun onCharacter(value: String) {
         runCatching {
-            val isPassword = restricted && (currentInputEditorInfo?.let { isRestrictedEditor(it) } ?: false)
+            val isPassword = isStrictPassword(currentInputEditorInfo) || (prefs.securePasswordMode && isPasswordOrSensitive(currentInputEditorInfo, true))
             if (isPassword || prefs.useEnglish) {
                 commitComposition()
                 val fontTransformed = if (prefs.useEnglish && prefs.keyboardFont != "default") {
@@ -378,7 +399,7 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         runCatching {
             val ic = currentInputConnection
             val selected = ic?.getSelectedText(0)?.toString()
-            val isSensitive = restricted || isPasswordOrSensitive(currentInputEditorInfo)
+            val isSensitive = isStrictPassword(currentInputEditorInfo) || (prefs.securePasswordMode && isPasswordOrSensitive(currentInputEditorInfo, true))
             if (!selected.isNullOrEmpty()) {
                 commitComposition()
                 if (!isSensitive) {
@@ -409,11 +430,9 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         runCatching {
             val ic = currentInputConnection
             val before = ic?.getTextBeforeCursor(64, 0)?.toString().orEmpty()
-            if (prefs.useEnglish) {
-                val prefix = activeEnglishPrefix ?: Regex("([A-Za-z0-9'’]+)$").find(before)?.value.orEmpty()
-                if (prefix.isNotEmpty()) {
-                    learnEnglish(prefix)
-                }
+            val engCandidate = activeEnglishPrefix ?: if (prefs.useEnglish) Regex("([A-Za-z0-9'’]+)$").find(before)?.value.orEmpty() else null
+            if (!engCandidate.isNullOrEmpty()) {
+                learnEnglish(engCandidate)
                 ic?.commitText(" ", 1)
                 activeCorrection = null
                 activeEnglishPrefix = null
@@ -442,11 +461,9 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         runCatching {
             val ic = currentInputConnection
             val before = ic?.getTextBeforeCursor(64, 0)?.toString().orEmpty()
-            if (prefs.useEnglish) {
-                val prefix = activeEnglishPrefix ?: Regex("([A-Za-z0-9'’]+)$").find(before)?.value.orEmpty()
-                if (prefix.isNotEmpty()) {
-                    learnEnglish(prefix)
-                }
+            val engCandidate = activeEnglishPrefix ?: if (prefs.useEnglish) Regex("([A-Za-z0-9'’]+)$").find(before)?.value.orEmpty() else null
+            if (!engCandidate.isNullOrEmpty()) {
+                learnEnglish(engCandidate)
                 activeCorrection = null
                 activeEnglishPrefix = null
             } else {
@@ -552,7 +569,8 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
                 return@runCatching
             }
 
-            if (prefs.useEnglish) {
+            val isEngCandidate = prefs.useEnglish || activeEnglishPrefix != null || (value.isNotEmpty() && value.all { (it in 'a'..'z') || (it in 'A'..'Z') || it == '\'' || it == '’' || it == '-' })
+            if (isEngCandidate) {
                 val ic = currentInputConnection
                 if (value.codePoints().anyMatch { it > 0x1F000 }) {
                     ic?.commitText(value + " ", 1)
@@ -878,7 +896,7 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
 
     override fun onCommitPreviewDelete() {
         val ic = currentInputConnection
-        val isSensitive = restricted || isPasswordOrSensitive(currentInputEditorInfo)
+        val isSensitive = isStrictPassword(currentInputEditorInfo) || (prefs.securePasswordMode && isPasswordOrSensitive(currentInputEditorInfo, true))
         if (ic != null && deleteLength > 0) {
             val deleted = ic.getTextBeforeCursor(deleteLength, 0)?.toString().orEmpty()
             if (deleted.isNotEmpty() && !isSensitive) {
@@ -968,7 +986,7 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     private fun deleteFromHost(word: Boolean) {
         val ic = currentInputConnection ?: return
         runCatching {
-            val isSensitive = restricted || isPasswordOrSensitive(currentInputEditorInfo)
+            val isSensitive = isStrictPassword(currentInputEditorInfo) || (prefs.securePasswordMode && isPasswordOrSensitive(currentInputEditorInfo, true))
             val selected = ic.getSelectedText(0)?.toString()
             if (!selected.isNullOrEmpty()) {
                 if (!isSensitive) {
@@ -1014,7 +1032,9 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     private fun updateSuggestions() {
-        if (!::keyboard.isInitialized || restricted || isPasswordOrSensitive(currentInputEditorInfo) || !prefs.suggestions) {
+        val isSensitive = isStrictPassword(currentInputEditorInfo) || (prefs.securePasswordMode && isPasswordOrSensitive(currentInputEditorInfo, true))
+        val isRestricted = isRestrictedEditor(currentInputEditorInfo)
+        if (!::keyboard.isInitialized || isSensitive || isRestricted || !prefs.suggestions) {
             if (::keyboard.isInitialized) {
                 keyboard.setCandidates(emptyList())
             }
@@ -1074,11 +1094,12 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         val token = generation
         predictionTask?.cancel(true)
 
-        if (prefs.useEnglish) {
-            val currentEngPrediction = englishPrediction
-            val engMatch = Regex("([A-Za-z0-9'’]+)$").find(beforeString)
-            val engPrefix = engMatch?.value.orEmpty()
+        val engMatch = Regex("([A-Za-z0-9'’]+)$").find(beforeString)
+        val engPrefix = engMatch?.value.orEmpty()
+        val isTypingEnglish = prefs.useEnglish || (!composition.active && engPrefix.isNotEmpty() && engPrefix.any { (it in 'a'..'z') || (it in 'A'..'Z') })
 
+        if (isTypingEnglish) {
+            val currentEngPrediction = englishPrediction
             if (currentEngPrediction == null || engPrefix.isBlank()) {
                 activeCorrection = null
                 activeEnglishPrefix = null
@@ -1204,7 +1225,8 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     private fun learn(word: String?) {
-        if (word.isNullOrBlank() || restricted || isPasswordOrSensitive(currentInputEditorInfo)) return
+        val isSensitive = isStrictPassword(currentInputEditorInfo) || (prefs.securePasswordMode && isPasswordOrSensitive(currentInputEditorInfo, true))
+        if (word.isNullOrBlank() || isSensitive || !keyboard.learningEnabled) return
         val clean = word.trim()
         val earlier = previousEarlierCommittedWord
         val previous = previousCommittedWord
@@ -1217,7 +1239,8 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     private fun learnEnglish(word: String?) {
-        if (word.isNullOrBlank() || restricted || isPasswordOrSensitive(currentInputEditorInfo)) return
+        val isSensitive = isStrictPassword(currentInputEditorInfo) || (prefs.securePasswordMode && isPasswordOrSensitive(currentInputEditorInfo, true))
+        if (word.isNullOrBlank() || isSensitive || !keyboard.learningEnabled) return
         val clean = word.trim()
         val earlier = previousEarlierCommittedWord
         val previous = previousCommittedWord
@@ -1234,7 +1257,8 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     private fun captureClipboard() {
         runCatching {
             checkOtp()
-            if (!prefs.clipboardHistory || isPasswordOrSensitive(currentInputEditorInfo)) return
+            val isSensitive = isStrictPassword(currentInputEditorInfo) || (prefs.securePasswordMode && isPasswordOrSensitive(currentInputEditorInfo, true))
+            if (!prefs.clipboardHistory || isSensitive) return
             val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
             val clip = manager.primaryClip ?: return
             if (clip.itemCount == 0) return
@@ -1273,7 +1297,8 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         runCatching {
             val manager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
             manager.removePrimaryClipChangedListener(clipListener)
-            if (prefs.clipboardHistory && !isPasswordOrSensitive(currentInputEditorInfo)) {
+            val isSensitive = isStrictPassword(currentInputEditorInfo) || (prefs.securePasswordMode && isPasswordOrSensitive(currentInputEditorInfo, true))
+            if (prefs.clipboardHistory && !isSensitive) {
                 manager.addPrimaryClipChangedListener(clipListener)
             }
         }
@@ -1344,28 +1369,11 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
                    pkg.contains("dashlane") || pkg.contains("nordpass")
         }
 
-        fun isPasswordOrSensitive(info: EditorInfo?): Boolean {
+        fun isStrictPassword(info: EditorInfo?): Boolean {
             if (info == null) return false
             val inputType = info.inputType
             val cls = inputType and EditorInfo.TYPE_MASK_CLASS
             val variation = inputType and EditorInfo.TYPE_MASK_VARIATION
-
-            // IME Flag No Personalized Learning
-            if ((info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0) {
-                return true
-            }
-
-            val pkg = info.packageName?.lowercase().orEmpty()
-            if (isBankingOrFinanceApp(pkg)) {
-                return true
-            }
-
-            // Browser private/incognito tabs detection
-            val isBrowser = pkg.contains("chrome") || pkg.contains("browser") || pkg.contains("firefox") ||
-                    pkg.contains("brave") || pkg.contains("opera") || pkg.contains("edge") || pkg.contains("duckduckgo")
-            if (isBrowser && (inputType and EditorInfo.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0) {
-                return true
-            }
 
             if (cls == EditorInfo.TYPE_CLASS_TEXT) {
                 if (variation == EditorInfo.TYPE_TEXT_VARIATION_PASSWORD ||
@@ -1385,8 +1393,22 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             return false
         }
 
-        fun isRestrictedEditor(info: EditorInfo): Boolean {
-            if (isPasswordOrSensitive(info)) return true
+        fun isPasswordOrSensitive(info: EditorInfo?, securePasswordModeEnabled: Boolean = false): Boolean {
+            if (info == null) return false
+            if (isStrictPassword(info)) return true
+
+            if (!securePasswordModeEnabled) return false
+
+            val pkg = info.packageName?.lowercase().orEmpty()
+            if (isBankingOrFinanceApp(pkg)) {
+                return true
+            }
+
+            return false
+        }
+
+        fun isRestrictedEditor(info: EditorInfo?): Boolean {
+            if (info == null) return false
             val cls = info.inputType and EditorInfo.TYPE_MASK_CLASS
             return cls == EditorInfo.TYPE_CLASS_NUMBER || cls == EditorInfo.TYPE_CLASS_PHONE || cls == EditorInfo.TYPE_CLASS_DATETIME
         }

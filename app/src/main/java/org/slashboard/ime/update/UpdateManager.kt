@@ -34,6 +34,7 @@ class UpdateManager(private val context: Context) {
             val connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("Accept", "application/vnd.github.v3+json")
+                setRequestProperty("User-Agent", "Slashboard-IME-Android")
                 connectTimeout = 10000
                 readTimeout = 10000
             }
@@ -56,8 +57,8 @@ class UpdateManager(private val context: Context) {
                     }
                 }
 
-                val remoteVer = tagName.removePrefix("v").trim()
-                val currentVer = currentVersion.removePrefix("v").trim()
+                val remoteVer = tagName.removePrefix("v").removePrefix("V").trim()
+                val currentVer = currentVersion.removePrefix("v").removePrefix("V").trim()
 
                 val isNewer = isNewerVersion(remoteVer, currentVer)
                 Log.d("UpdateCheck", "Remote Tag: $tagName | Download URL: $downloadUrl")
@@ -71,9 +72,9 @@ class UpdateManager(private val context: Context) {
         return@withContext UpdateInfo(false, "", "", "")
     }
 
-    private fun isNewerVersion(remote: String, current: String): Boolean {
-        val rParts = remote.split(".").mapNotNull { it.toIntOrNull() }
-        val cParts = current.split(".").mapNotNull { it.toIntOrNull() }
+    fun isNewerVersion(remote: String, current: String): Boolean {
+        val rParts = remote.split(".", "-", "_").mapNotNull { it.filter { ch -> ch.isDigit() }.toIntOrNull() }
+        val cParts = current.split(".", "-", "_").mapNotNull { it.filter { ch -> ch.isDigit() }.toIntOrNull() }
         val length = maxOf(rParts.size, cParts.size)
 
         for (i in 0 until length) {

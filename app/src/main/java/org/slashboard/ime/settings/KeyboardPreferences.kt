@@ -54,6 +54,7 @@ class KeyboardPreferences(context: Context) {
 
     var highContrast: Boolean by cachedBool(HIGH_CONTRAST, false)
     var clipboardHistory: Boolean by cachedBool(CLIPBOARD, true)
+    var securePasswordMode: Boolean by cachedBool(SECURE_PASSWORD_MODE, false)
 
     var topRow: String
         get() = (memCache[TOP_ROW] as? String) ?: run {
@@ -291,6 +292,7 @@ class KeyboardPreferences(context: Context) {
         private const val HAPTICS = "haptics"; private const val KEY_SOUNDS = "key_sounds"
         private const val SOUND_PACK = "sound_pack"
         private const val HIGH_CONTRAST = "high_contrast"; private const val CLIPBOARD = "clipboard"
+        private const val SECURE_PASSWORD_MODE = "secure_password_mode"
         const val TOP_ROW = "top_row"
         private const val ONE_HANDED = "one_handed"
         private const val KEY_SPACING = "key_spacing"; private const val KEYBOARD_SIZE = "keyboard_size"

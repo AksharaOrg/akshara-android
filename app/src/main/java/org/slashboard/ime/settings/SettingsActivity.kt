@@ -113,8 +113,12 @@ import org.slashboard.ime.settings.KeyboardPreferences
 import org.slashboard.ime.settings.theme.CustomThemeManager
 
 class SettingsActivity : ComponentActivity() {
+    private var pendingUpdateInfo by mutableStateOf<org.slashboard.ime.update.UpdateInfo?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        parseUpdateIntent(intent)
+        org.slashboard.ime.update.UpdateCheckWorker.schedulePeriodicCheck(this)
         runCatching {
             com.vanniktech.emoji.EmojiManager.install(com.vanniktech.emoji.ios.IosEmojiProvider())
         }
@@ -151,8 +155,35 @@ class SettingsActivity : ComponentActivity() {
                             )
                         )
                 ) {
-                    SettingsScreen(prefs, onThemeChanged = { themeState = it })
+                    SettingsScreen(
+                        prefs = prefs,
+                        onThemeChanged = { themeState = it },
+                        incomingUpdateInfo = pendingUpdateInfo,
+                        onClearIncomingUpdateInfo = { pendingUpdateInfo = null }
+                    )
                 }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        parseUpdateIntent(intent)
+    }
+
+    private fun parseUpdateIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("show_update_dialog", false) == true) {
+            val ver = intent.getStringExtra("update_version").orEmpty()
+            val url = intent.getStringExtra("update_url").orEmpty()
+            val notes = intent.getStringExtra("update_notes").orEmpty()
+            if (ver.isNotEmpty() && url.isNotEmpty()) {
+                pendingUpdateInfo = org.slashboard.ime.update.UpdateInfo(
+                    hasUpdate = true,
+                    latestVersion = ver,
+                    downloadUrl = url,
+                    releaseNotes = notes
+                )
             }
         }
     }
@@ -160,7 +191,12 @@ class SettingsActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(prefs: KeyboardPreferences, onThemeChanged: (String) -> Unit = {}) {
+fun SettingsScreen(
+    prefs: KeyboardPreferences,
+    onThemeChanged: (String) -> Unit = {},
+    incomingUpdateInfo: org.slashboard.ime.update.UpdateInfo? = null,
+    onClearIncomingUpdateInfo: () -> Unit = {}
+) {
     val context = LocalContext.current
     var refresh by remember { mutableStateOf(0) }
     var showThemesPage by remember { mutableStateOf(false) }
@@ -369,7 +405,13 @@ fun SettingsScreen(prefs: KeyboardPreferences, onThemeChanged: (String) -> Unit 
     var expandedSection by remember { mutableStateOf<String?>("Setup") }
     var showExitConfirmDialog by remember { mutableStateOf(false) }
     var isCheckingForUpdates by remember { mutableStateOf(false) }
-    var manualUpdateInfo by remember { mutableStateOf<org.slashboard.ime.update.UpdateInfo?>(null) }
+    var manualUpdateInfo by remember { mutableStateOf<org.slashboard.ime.update.UpdateInfo?>(incomingUpdateInfo) }
+
+    LaunchedEffect(incomingUpdateInfo) {
+        if (incomingUpdateInfo != null) {
+            manualUpdateInfo = incomingUpdateInfo
+        }
+    }
 
     // Intercept back button to show exit confirmation when on the root screen
     BackHandler(enabled = !showThemesPage && !showThemeCreator && !showToolbarCustomization && !showTranslatorScreen && !showFontStudio) {
@@ -519,7 +561,10 @@ fun SettingsScreen(prefs: KeyboardPreferences, onThemeChanged: (String) -> Unit 
     manualUpdateInfo?.let { info ->
         InAppUpdateDialog(
             updateInfo = info,
-            onDismiss = { manualUpdateInfo = null }
+            onDismiss = {
+                manualUpdateInfo = null
+                onClearIncomingUpdateInfo()
+            }
         )
     }
 
@@ -1079,6 +1124,14 @@ fun SettingsScreen(prefs: KeyboardPreferences, onThemeChanged: (String) -> Unit 
                             }
                         )
                     }
+
+                    SettingsToggleRow(
+                        title = "Secure Mode for Passwords",
+                        summary = "Enable Safe Keyboard (Incognito) strictly on password & PIN entry fields (Default: Off)",
+                        icon = Icons.Default.Lock,
+                        checked = prefs.securePasswordMode,
+                        onCheckedChange = { prefs.securePasswordMode = it }
+                    )
 
                     SettingsActionRow(
                         title = stringResource(R.string.clear_learning_title),

@@ -79,4 +79,31 @@ class EnglishPredictionEngineTest {
         val nextAfterTwoWords = engine.candidates("", listOf("slashboard", "awesome"), 3)
         assertTrue(nextAfterTwoWords.any { it.text.equals("keyboard", ignoreCase = true) })
     }
+
+    @Test
+    fun testSuggestWordSuggestion() {
+        val candidates = engine.candidates("sug", emptyList(), 3)
+        assertTrue("Expected suggestions for 'sug'", candidates.isNotEmpty())
+        val words = candidates.map { it.text.lowercase() }
+        assertTrue("Expected 'suggest' in candidates for 'sug', got: $words", words.contains("suggest"))
+    }
+
+    @Test
+    fun testSuggestTypoCorrection() {
+        val candidates = engine.candidates("sugest", emptyList(), 3)
+        assertTrue("Expected suggestions for 'sugest'", candidates.isNotEmpty())
+        val top = candidates.first()
+        assertEquals("suggest", top.text.lowercase())
+    }
+
+    @Test
+    fun testLargeVocabularyCoverage() {
+        val testWords = listOf("keyboard", "language", "message", "computer", "application", "android", "beautiful", "tomorrow", "friend")
+        for (w in testWords) {
+            val prefix = w.take(4)
+            val candidates = engine.candidates(prefix, emptyList(), 5)
+            val words = candidates.map { it.text.lowercase() }
+            assertTrue("Expected candidates for prefix '$prefix' to contain '$w', got: $words", words.contains(w))
+        }
+    }
 }
