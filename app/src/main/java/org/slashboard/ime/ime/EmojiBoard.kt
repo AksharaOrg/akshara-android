@@ -160,6 +160,7 @@ internal class EmojiBoardView(
     private val kbColors: KeyboardColors,
     private val emojiRepo: EmojiRepository,
     private val recentEmojis: List<String>,
+    private val skinTone: String = "",
     private val onPick: (String) -> Unit,
     private val onSearchClick: () -> Unit,
     private val onBackspace: () -> Unit,
@@ -299,7 +300,7 @@ internal class EmojiBoardView(
         // 2. RECYCLER VIEW (Continuous vertical scroll of all categories)
         recyclerView = RecyclerView(context).apply {
             this.layoutManager = this@EmojiBoardView.layoutManager
-            adapter = EmojiGroupAdapter(flatItems, kbColors.ink, "default", onPick)
+            adapter = EmojiGroupAdapter(flatItems, kbColors.ink, skinTone, onPick)
             itemAnimator = null
             overScrollMode = OVER_SCROLL_NEVER
             setHasFixedSize(true)

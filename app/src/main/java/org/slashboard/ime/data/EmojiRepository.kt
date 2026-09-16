@@ -172,10 +172,19 @@ class EmojiRepository(context: Context) {
 
     companion object {
         fun withTone(emoji: String, tone: String): String {
-            if (tone.isEmpty() || emoji.codePoints().anyMatch { it in 0x1F3FB..0x1F3FF }) return emoji
-            val toneable = setOf(0x1F44D,0x1F44E,0x1F44F,0x1F64F,0x1F4AA,0x1F44B,0x1F91D,0x1FAF6)
-            val cps = emoji.codePoints().toArray(); if (cps.none { it in toneable }) return emoji
-            val out = StringBuilder(); cps.forEach { cp -> out.appendCodePoint(cp); if (cp in toneable) out.append(tone) }; return out.toString()
+            if (tone.isEmpty() || tone.isBlank() || tone.equals("default", ignoreCase = true)) return emoji
+            val validTone = tone.codePoints().toArray().firstOrNull { it in 0x1F3FB..0x1F3FF } ?: return emoji
+            if (emoji.codePoints().anyMatch { it in 0x1F3FB..0x1F3FF }) return emoji
+            val toneable = setOf(0x1F44D, 0x1F44E, 0x1F44F, 0x1F64F, 0x1F4AA, 0x1F44B, 0x1F91D, 0x1FAF6)
+            val cps = emoji.codePoints().toArray()
+            if (cps.none { it in toneable }) return emoji
+            val out = StringBuilder()
+            val toneStr = String(Character.toChars(validTone))
+            cps.forEach { cp ->
+                out.appendCodePoint(cp)
+                if (cp in toneable) out.append(toneStr)
+            }
+            return out.toString()
         }
     }
 }

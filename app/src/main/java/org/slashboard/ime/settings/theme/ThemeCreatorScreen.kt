@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.slashboard.ime.settings.KeyboardPreferences
 import java.io.File
@@ -380,10 +381,11 @@ fun ThemeCreatorScreen(
             }
 
             // 2. CATEGORY TABS
-            PrimaryTabRow(
+            androidx.compose.material3.ScrollableTabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.surface,
-                divider = { HorizontalDivider() }
+                divider = { HorizontalDivider() },
+                edgePadding = 8.dp
             ) {
                 Tab(
                     selected = selectedTab == 0,
@@ -418,6 +420,16 @@ fun ThemeCreatorScreen(
                 Tab(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text("Stock Images", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                )
+                Tab(
+                    selected = selectedTab == 4,
+                    onClick = { selectedTab = 4 },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -736,7 +748,72 @@ fun ThemeCreatorScreen(
                     }
 
                     3 -> {
-                        // TAB 3: STARTER PRESETS
+                        // TAB 3: STOCK IMAGES
+                        Text(
+                            "High-Quality Stock Backgrounds",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "Tap an image to download and apply it as the keyboard background.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val context = LocalContext.current
+                        val coroutineScope = rememberCoroutineScope()
+                        val stockImages = remember { (0..19).map { "stock_$it.jpg" } }
+                        
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp)
+                        ) {
+                            items(stockImages) { assetName ->
+                                Card(
+                                    modifier = Modifier
+                                        .aspectRatio(0.7f)
+                                        .clickable {
+                                            coroutineScope.launch {
+                                                try {
+                                                    val inputStream = context.assets.open("stock_images/$assetName")
+                                                    val destDir = java.io.File(context.filesDir, "theme_bg").apply { mkdirs() }
+                                                    val destFile = java.io.File(destDir, "bg_${System.currentTimeMillis()}.jpg")
+                                                    val outputStream = java.io.FileOutputStream(destFile)
+                                                    inputStream.copyTo(outputStream)
+                                                    inputStream.close()
+                                                    outputStream.close()
+                                                    bgImagePath = destFile.absolutePath
+                                                    android.widget.Toast.makeText(context, "Applied stock background", android.widget.Toast.LENGTH_SHORT).show()
+                                                } catch (e: Exception) {
+                                                    e.printStackTrace()
+                                                    android.widget.Toast.makeText(context, "Error applying background", android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        },
+                                    shape = RoundedCornerShape(8.dp),
+                                    elevation = CardDefaults.cardElevation(2.dp)
+                                ) {
+                                    // We load the asset using Coil or Bitmap
+                                    androidx.compose.foundation.Image(
+                                        painter = coil.compose.rememberAsyncImagePainter(
+                                            model = coil.request.ImageRequest.Builder(context)
+                                                .data("file:///android_asset/stock_images/$assetName")
+                                                .crossfade(true)
+                                                .build()
+                                        ),
+                                        contentDescription = "Stock background",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    4 -> {
+                        // TAB 4: STARTER PRESETS
                         Text(
                             "One-Tap Starter Theme Palettes",
                             style = MaterialTheme.typography.titleSmall,

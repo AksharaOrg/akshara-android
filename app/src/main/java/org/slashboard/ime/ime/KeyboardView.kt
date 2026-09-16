@@ -724,6 +724,7 @@ class KeyboardView(
             kbColors = KeyboardColors(key, utility, ink, palette.action, palette.actionText, palette.dark, palette.highContrast, palette.keyRadiusDp, palette.keyOpacity),
             emojiRepo = emojiRepo,
             recentEmojis = recentEmoji.ifEmpty { prefs.recentEmojis },
+            skinTone = prefs.skinTone,
             onPick = { emoji ->
                 actions.onCharacter(emoji)
             },

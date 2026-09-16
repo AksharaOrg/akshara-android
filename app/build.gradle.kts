@@ -33,8 +33,8 @@ android {
         applicationId = "com.slashbord"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "2.0.6"
+        versionCode = 18
+        versionName = "2.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -67,6 +67,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("com.vanniktech:emoji-ios:0.21.0")
     implementation("com.vanniktech:android-image-cropper:4.6.0")
+    implementation("io.coil-kt:coil-compose:2.7.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation("androidx.test:core:1.6.1")

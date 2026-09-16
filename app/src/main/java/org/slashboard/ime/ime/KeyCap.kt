@@ -222,7 +222,7 @@ internal class KeyCap(context: Context) : View(context) {
         }
         if (key.icon != null) {
             val drawable = iconFor(key.icon, drawInk)
-            val iconDp = if (key.id == "globe") 16f else KeyboardGeometry.ICON_DP
+            val iconDp = if (key.id == "globe") 22f else KeyboardGeometry.ICON_DP
             val size = dp(iconDp).toInt().coerceAtMost(minOf(width, height) - dp(6).toInt())
             val left = (width - size) / 2
             val top = (height - size) / 2

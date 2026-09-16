@@ -347,17 +347,16 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
                 val corrected = SinhalaPillamCorrector.correctText(rendered)
                 currentInputConnection?.setComposingText(corrected, 1)
             } else {
+                commitComposition()
                 val ic = currentInputConnection
                 val preceding = ic?.getTextBeforeCursor(4, 0)?.toString().orEmpty()
                 val pillamCorrection = SinhalaPillamCorrector.handleCharacterInput(preceding, value)
                 if (pillamCorrection != null && ic != null) {
-                    commitComposition()
                     ic.deleteSurroundingText(pillamCorrection.deleteCount, 0)
                     ic.commitText(pillamCorrection.replacement, 1)
                 } else if (!isPassword && value == "=") {
                     commitEqualOrCalculated("=")
                 } else {
-                    commitComposition()
                     ic?.commitText(value, 1)
                 }
                 if (value.codePoints().anyMatch { it > 0x1F000 }) {
@@ -1115,7 +1114,9 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
 
             predictionTask = executor.submit {
                 try {
+                    if (token != generation || Thread.currentThread().isInterrupted) return@submit
                     val candidates = currentEngPrediction.candidates(engPrefix, engPreceding, 3)
+                    if (token != generation || Thread.currentThread().isInterrupted) return@submit
                     val corrections = candidates.filter { it.isCorrection }.map { it.text }.toSet()
                     val topCorrection = candidates.firstOrNull { it.isCorrection }?.text
                     val values = candidates.map { it.text }.toMutableList()
@@ -1168,7 +1169,9 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         }
         predictionTask = executor.submit {
             try {
+                if (token != generation || Thread.currentThread().isInterrupted) return@submit
                 val candidates = currentPrediction.candidates(prefix, context, 3)
+                if (token != generation || Thread.currentThread().isInterrupted) return@submit
                 val corrections = candidates.filter { it.isCorrection }.map { it.text }.toSet()
                 val topCorrection = candidates.firstOrNull { it.isCorrection }?.text
                 val values = candidates.map { it.text }.toMutableList()

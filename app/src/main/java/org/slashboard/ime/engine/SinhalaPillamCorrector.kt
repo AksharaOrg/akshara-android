@@ -43,9 +43,12 @@ object SinhalaPillamCorrector {
 
         // 1. Kombuwa typed before consonant: "ෙ" followed by "ක" -> replace "ෙ" with "කෙ"
         if (precedingText.endsWith(KOMBUWA)) {
+            val beforeKombuwa = precedingText.dropLast(KOMBUWA.length)
+            val prevCp = beforeKombuwa.codePoints().toArray().lastOrNull() ?: -1
+            val isAttached = prevCp != -1 && (isSinhalaConsonant(prevCp) || prevCp == 0x0DCA || prevCp == 0x200D || prevCp == 0x200C)
             val incomingCp = incoming.codePoints().findFirst().orElse(-1)
-            if (isSinhalaConsonant(incomingCp)) {
-                // If preceding is just kombuwa "ෙ", user typed kombuwa before consonant!
+            if (!isAttached && isSinhalaConsonant(incomingCp)) {
+                // If preceding is an isolated/unattached kombuwa "ෙ", user typed kombuwa before consonant!
                 return PillamCorrection(KOMBUWA.length, incoming + KOMBUWA)
             }
             // "ෙ" + "ෙ" -> "ෛ"

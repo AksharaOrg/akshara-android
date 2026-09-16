@@ -119,7 +119,11 @@ class KeyboardPreferences(context: Context) {
 
     var skinTone: String
         get() = (memCache[SKIN_TONE] as? String) ?: run {
-            val v = store.getString(SKIN_TONE, "") ?: ""
+            var v = store.getString(SKIN_TONE, "") ?: ""
+            if (v.equals("default", ignoreCase = true)) {
+                v = ""
+                store.edit().putString(SKIN_TONE, v).apply()
+            }
             memCache[SKIN_TONE] = v
             v
         }
