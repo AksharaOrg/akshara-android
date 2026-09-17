@@ -8,7 +8,7 @@ internal object KeyboardGeometry {
     const val DELETE = 0.14f
     const val SYMBOLS = 0.13f
     const val PUNCT = 0.075f
-    const val GLOBE = 0.10f
+    const val GLOBE = 0.12f
     const val COMMA = 0.10f
     const val PERIOD = 0.10f
     const val ENTER = 0.135f

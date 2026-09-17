@@ -55,8 +55,14 @@ internal class SuggestionRail(
     private val translateBtn = createCircleIconButton(R.drawable.ic_key_translate, "Translator") { onToolbarAction?.invoke("translate") }
     private val fontBtn = createCircleIconButton(R.drawable.ic_key_font, "Convert to FM") { onToolbarAction?.invoke("fm") }
     private val calcBtn = createCircleIconButton(R.drawable.ic_key_calc, "Calculator") { onToolbarAction?.invoke("calculator") }
+    private val templatesBtn = createCircleIconButton(R.drawable.ic_key_template, "Email & Message Templates") { onToolbarAction?.invoke("templates") }
+    private val notesBtn = createCircleIconButton(R.drawable.ic_key_notes, "Encrypted Vault") { onToolbarAction?.invoke("notes") }
     private val otpBtn = createCircleIconButton(R.drawable.ic_key_otp, "Paste OTP") { onToolbarAction?.invoke("otp") }
     private val singlishBtn = createCircleIconButton(R.drawable.ic_key_singlish, "Singlish to Sinhala Bulk Converter") { onToolbarAction?.invoke("singlish_bulk") }
+    private val whatsappBtn = createCircleIconButton(R.drawable.ic_key_whatsapp, "WhatsApp Quick Chat") { onToolbarAction?.invoke("whatsapp_quick") }
+    private val caseConvertBtn = createCircleIconButton(R.drawable.ic_key_case, "Case Converter") { onToolbarAction?.invoke("case_convert") }
+    private val formatBtn = createCircleIconButton(R.drawable.ic_key_format, "Markdown Bold/Italic") { onToolbarAction?.invoke("format") }
+    private val devModeBtn = createCircleIconButton(R.drawable.ic_key_terminal, "Developer Keys") { onToolbarAction?.invoke("dev_mode") }
     private val oneHandedBtn = createCircleIconButton(R.drawable.ic_key_one_handed, "One-Handed Mode") { onToolbarAction?.invoke("one_handed_toggle") }
     private val incognitoIndicator = ImageView(context).apply {
         setImageResource(R.drawable.ic_key_incognito)
@@ -179,6 +185,7 @@ internal class SuggestionRail(
             langToggle,
             fontStudioBtn,
             singlishBtn,
+            whatsappBtn,
             calcBtn,
             undoBtn,
             redoBtn,
@@ -218,7 +225,13 @@ internal class SuggestionRail(
             "lang_toggle" to langToggle,
             "font_studio" to fontStudioBtn,
             "singlish" to singlishBtn,
+            "whatsapp" to whatsappBtn,
+            "case_convert" to caseConvertBtn,
+            "format" to formatBtn,
+            "dev_mode" to devModeBtn,
             "calculator" to calcBtn,
+            "templates" to templatesBtn,
+            "notes" to notesBtn,
             "emoji" to emojiSwitch,
             "voice" to voiceBtn,
             "undo" to undoBtn,

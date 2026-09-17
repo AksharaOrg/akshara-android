@@ -941,12 +941,45 @@ fun SettingsScreen(
                         currentValue = prefs.keyboardSize,
                         onValueChange = { prefs.keyboardSize = it; refresh++ }
                     )
+                    SettingsSliderRow(
+                        title = "Keyboard Font Scale",
+                        summary = "Adjust the size of the letters on the keyboard (independent of system font)",
+                        value = prefs.keyboardFontScale,
+                        valueRange = 0.5f..2.0f,
+                        steps = 14,
+                        icon = Icons.Default.FormatSize,
+                        valueLabel = "${(prefs.keyboardFontScale * 100).toInt()}%",
+                        onValueChange = { prefs.keyboardFontScale = it; refresh++ },
+                        presets = listOf(
+                            "Small" to 0.8f,
+                            "Normal" to 1.0f,
+                            "Large" to 1.2f,
+                            "Huge" to 1.5f
+                        )
+                    )
+                    SettingsSliderRow(
+                        title = "Background Image Blur",
+                        summary = "Adjust the blur intensity of custom background images",
+                        value = prefs.backgroundBlurRadius,
+                        valueRange = 0f..1f,
+                        steps = 10,
+                        icon = Icons.Default.BlurOn,
+                        valueLabel = "${(prefs.backgroundBlurRadius * 100).toInt()}%",
+                        onValueChange = { prefs.backgroundBlurRadius = it; refresh++ }
+                    )
                     SettingsToggleRow(
                         title = stringResource(R.string.spatial_decoder),
                         summary = stringResource(R.string.spatial_decoder_summary),
                         icon = Icons.Default.TouchApp,
                         checked = prefs.spatialDecoder,
                         onCheckedChange = { prefs.spatialDecoder = it; refresh++ }
+                    )
+                    SettingsToggleRow(
+                        title = "Per-App Accent Adaptation",
+                        summary = "Automatically match the keyboard accent color to the open app (e.g. Green for WhatsApp)",
+                        icon = Icons.Default.ColorLens,
+                        checked = prefs.perAppAccent,
+                        onCheckedChange = { prefs.perAppAccent = it; refresh++ }
                     )
                     SettingsToggleRow(
                         title = "High Contrast Mode",

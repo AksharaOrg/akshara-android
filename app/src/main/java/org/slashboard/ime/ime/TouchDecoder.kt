@@ -59,7 +59,7 @@ internal class SpatialTouchDecoder(
         val inside = containing.singleOrNull()
         val sigmaX = layout.letterWidth * KeyboardGeometry.SIGMA_X
         val sigmaY = layout.rowHeight * KeyboardGeometry.SIGMA_Y
-        if (inside != null && inside.action == KeyCode.SPACE) {
+        if (inside != null && (inside.action == KeyCode.SPACE || inside.action == KeyCode.GLOBE || inside.action == KeyCode.EMOJI)) {
             val visualOther = layout.keys.firstOrNull { it.id != inside.id && it.visual.contains(x, y) }
             return locked(visualOther ?: inside, x, y, centers, sigmaX, sigmaY, inside, visualOther == null)
         }

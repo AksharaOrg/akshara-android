@@ -31,7 +31,7 @@ import org.slashboard.ime.engine.SinhalaEngine
 import org.slashboard.ime.settings.KeyboardPreferences
 import kotlin.math.abs
 
-enum class KeyboardLayer { LETTERS, NUMBERS, SYMBOLS, SINHALA_GLYPHS, EMOJI, CLIPBOARD, VOICE, TRANSLATE, FONT_STUDIO, CALCULATOR }
+enum class KeyboardLayer { LETTERS, NUMBERS, SYMBOLS, SINHALA_GLYPHS, EMOJI, CLIPBOARD, VOICE, TRANSLATE, FONT_STUDIO, CALCULATOR, TEMPLATES, NOTES }
 enum class EditorLayout { TEXT, ASCII, EMAIL, URI, NUMBER, SIGNED_NUMBER, DECIMAL, SIGNED_DECIMAL, PHONE, DATETIME }
 
 interface KeyboardActions {
@@ -83,6 +83,7 @@ class KeyboardView(
     private var emojiQuery = ""
     private var emojiCategoryIndex = 0
     private val handler = Handler(Looper.getMainLooper())
+    var appPackageName: String? = null
     private var palette = KeyboardPaletteResolver.resolve(context, prefs.theme, prefs.highContrast)
     private var bg = palette.background
     private var key = palette.key
@@ -191,7 +192,8 @@ class KeyboardView(
             borderWidthDp = palette.borderWidthDp,
             borderColor = palette.borderColor,
             glowColor = palette.glowColor,
-            typeface = org.slashboard.ime.settings.font.CustomFontManager.getTypeface(context, prefs.keyboardFont)
+            typeface = org.slashboard.ime.settings.font.CustomFontManager.getTypeface(context, prefs.keyboardFont),
+            fontScale = prefs.keyboardFontScale
         ),
         onLayer = { next ->
             if (editorLayout in numericEditors && forceNormalKeyboard) {
@@ -295,7 +297,7 @@ class KeyboardView(
     }
 
     fun applyTheme() {
-        palette = KeyboardPaletteResolver.resolve(context, prefs.theme, prefs.highContrast)
+        palette = KeyboardPaletteResolver.resolve(context, prefs.theme, prefs.highContrast, if (prefs.perAppAccent) appPackageName else null)
         bg = palette.background
         key = palette.key
         utility = palette.utility
@@ -335,7 +337,12 @@ class KeyboardView(
                     val scrimColor = if (palette.dark) Color.argb(125, 0, 0, 0) else Color.argb(55, 255, 255, 255)
                     val bgDrawable = object : android.graphics.drawable.Drawable() {
                         private val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
-                            if (palette.blurEffect && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                            if (prefs.backgroundBlurRadius > 0f && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                val radius = prefs.backgroundBlurRadius * 50f // 0 to 50
+                                if (radius > 0f) {
+                                    setRenderEffect(android.graphics.RenderEffect.createBlurEffect(radius, radius, android.graphics.Shader.TileMode.CLAMP))
+                                }
+                            } else if (palette.blurEffect && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                                 setRenderEffect(android.graphics.RenderEffect.createBlurEffect(35f, 35f, android.graphics.Shader.TileMode.CLAMP))
                             }
                         }
@@ -407,7 +414,7 @@ class KeyboardView(
             dark = palette.dark,
             highContrast = palette.highContrast,
             keyRadiusDp = palette.keyRadiusDp,
-            keyOpacity = effectiveOpacity,
+            keyOpacity = effectiveOpacity, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects, particleEffects = prefs.particleEffects,
             spaceBarKey = palette.spaceKey,
             spaceBarBorder = palette.spaceBorder,
             keyStyle = palette.keyStyle,
@@ -415,7 +422,8 @@ class KeyboardView(
             borderWidthDp = effectiveBorderWidth,
             borderColor = effectiveBorderColor,
             glowColor = palette.glowColor,
-            typeface = org.slashboard.ime.settings.font.CustomFontManager.getTypeface(context, prefs.keyboardFont)
+            typeface = org.slashboard.ime.settings.font.CustomFontManager.getTypeface(context, prefs.keyboardFont),
+            fontScale = prefs.keyboardFontScale
         )
         panel.updateColors(colors)
         rail.updateInk(ink)
@@ -617,6 +625,8 @@ class KeyboardView(
             KeyboardLayer.TRANSLATE -> bindTranslate()
             KeyboardLayer.FONT_STUDIO -> bindFontStudio()
             KeyboardLayer.CALCULATOR -> { body.removeAllViews(); renderCalculator() }
+            KeyboardLayer.TEMPLATES -> bindTemplates()
+            KeyboardLayer.NOTES -> bindNotes()
         }
     }
 
@@ -984,168 +994,22 @@ class KeyboardView(
         board.alpha = 0f
         board.animate().alpha(1f).setDuration(160).start()
     }
-
-    fun openTranslator() {
-        layer = KeyboardLayer.TRANSLATE
-        render()
-    }
-
-    private fun bindTranslate() {
+    private fun bindNotes() {
         body.removeAllViews()
-        val board = TranslateBoard(
-            context = context,
-            colors = KeyboardColors(key, utility, ink, palette.action, palette.actionText, palette.dark, palette.highContrast, palette.keyRadiusDp, palette.keyOpacity),
-            actions = actions,
-            onDismiss = {
-                activeTranslateBoard?.release()
-                activeTranslateBoard = null
-                layer = KeyboardLayer.LETTERS
-                render()
-            },
-            onLanguageSwapped = { useEnglish ->
-                prefs.useEnglish = useEnglish
-                val spaceLabel = spaceCaption()
-                val rows = KeyboardLayoutFactory.typingRows(
-                    mode, KeyboardLayer.LETTERS, shifted, capsLock, editorLayout, prefs.topRow, prefs.emojiPicker, enterLabel, spaceLabel, false, prefs.useEnglish, prefs.smartKeyModifiers,
-                    recentEmoji.ifEmpty { prefs.recentEmojis }
-                )
-                val rowHeight = KeyboardGeometry.rowHeightPx(prefs.keyboardSize, isLandscape(), resources.displayMetrics.density, rows.size)
-                panel.bindContext(mode.name, KeyboardLayer.LETTERS.name, prefs.topRow, prefs.useEnglish, shifted, capsLock)
-                panel.bind(rows, rowHeight)
-            }
-        )
-        activeTranslateBoard = board
-        body.addView(board, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        val notesLayout = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+            setBackgroundColor(if (palette.dark) Color.parseColor("#121212") else Color.parseColor("#FAFAFA"))
 
-        // Also add keyboard panel below the translate bar
-        body.addView(panel, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-
-        val spaceLabel = spaceCaption()
-        val rows = KeyboardLayoutFactory.typingRows(
-            mode, KeyboardLayer.LETTERS, shifted, capsLock, editorLayout, prefs.topRow, prefs.emojiPicker, enterLabel, spaceLabel, false, prefs.useEnglish, prefs.smartKeyModifiers,
-            recentEmoji.ifEmpty { prefs.recentEmojis }
-        )
-        val rowHeight = KeyboardGeometry.rowHeightPx(prefs.keyboardSize, isLandscape(), resources.displayMetrics.density, rows.size)
-        panel.bindContext(mode.name, KeyboardLayer.LETTERS.name, prefs.topRow, prefs.useEnglish, shifted, capsLock)
-        panel.debug = BuildConfig.DEBUG && prefs.debugOverlay
-        panel.playSpaceIntro = false
-        panel.bind(rows, rowHeight)
-    }
-
-    private fun refreshClipboardFromStore() {
-        clipboardRecent = clipboardStore.items()
-        clipboardPinned = clipboardStore.pinnedItems()
-        val existing = body.getChildAt(0) as? ClipboardBoard
-        if (existing != null && layer == KeyboardLayer.CLIPBOARD) {
-            existing.configure(clipboardRecent, clipboardPinned)
-        } else if (layer == KeyboardLayer.CLIPBOARD) {
-            render()
-        }
-    }
-
-    private fun updateShift() {
-        shiftLatch.tap(android.os.SystemClock.elapsedRealtime())
-        bindTyping()
-    }
-    private fun backspaceButton(): ImageButton {
-        val b = iconButton(org.slashboard.ime.R.drawable.ic_key_backspace, utility, "Delete") { }
-        var repeats = 0
-        b.setOnClickListener { actions.onBackspace() }
-        val repeat = object : Runnable { override fun run() { repeats++; actions.onBackspace(repeats > 20); handler.postDelayed(this, if (repeats > 20) 45 else 80) } }
-        b.setOnTouchListener { _, event -> when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { repeats = 0; handler.postDelayed(repeat, 420); true }
-            MotionEvent.ACTION_UP -> { handler.removeCallbacks(repeat); if (repeats == 0) b.performClick(); true }
-            MotionEvent.ACTION_CANCEL -> { handler.removeCallbacks(repeat); true }
-            else -> true
-        } }; return b
-    }
-    private fun spaceButton(): Button {
-        val label = spaceCaption()
-        val b = button(label, key, "Space") { }
-        b.textSize = KeyboardGeometry.SPACE_COLLAPSE_SP
-        b.gravity = Gravity.BOTTOM or Gravity.END
-        b.setPadding(dp(8), 0, dp(10), dp(7))
-        b.setTextColor(ColorUtils.setAlphaComponent(ink, (255 * KeyboardGeometry.SPACE_COLLAPSE_ALPHA).toInt()))
-        b.setOnClickListener { actions.onSpace() }
-        var startX = 0f; var lastSteps = 0
-        b.setOnTouchListener { _, e -> when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { startX = e.x; lastSteps = 0; true }
-            MotionEvent.ACTION_MOVE -> { val steps = ((e.x - startX) / dp(24)).toInt(); if (steps != lastSteps) { actions.onCursorDelta(steps - lastSteps); lastSteps = steps }; true }
-            MotionEvent.ACTION_UP -> { if (abs(e.x - startX) < dp(12)) b.performClick(); true }
-            else -> true
-        } }; return b
-    }
-    private fun enterButton(): View = when (enterLabel) {
-        "↵" -> iconButton(org.slashboard.ime.R.drawable.ic_key_enter, utility, "Enter") { actions.onEnter() }
-        "⌕" -> iconButton(org.slashboard.ime.R.drawable.ic_key_search, utility, "Enter") { actions.onEnter() }
-        else -> button(enterLabel, utility, "Enter") { actions.onEnter() }
-    }
-    private fun button(label: String, color: Int, description: String, click: () -> Unit) = Button(context).apply {
-        text = label; textSize = if (label.length > 10) 13f else 20f; isAllCaps = false; gravity = Gravity.CENTER
-        setTextColor(ink); contentDescription = description; minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
-        background = keyBackground(color)
-        stateListAnimator = null; setOnClickListener { click() }
-        accessibilityDelegate = object : AccessibilityDelegate() { override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) { super.onInitializeAccessibilityNodeInfo(host, info); info.className = Button::class.java.name } }
-    }
-    private fun iconButton(icon: Int, color: Int, description: String, click: () -> Unit) = ImageButton(context).apply {
-        setImageResource(icon); setColorFilter(ink); scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
-        setPadding(dp(10), dp(10), dp(10), dp(10)); contentDescription = description; background = keyBackground(color)
-        stateListAnimator = null; setOnClickListener { click() }
-    }
-    private fun textView(value: String, size: Float) = TextView(context).apply { text = value; textSize = size; gravity = Gravity.CENTER; setTextColor(ink) }
-    private fun LayoutParams.margins() = keyMargins()
-    private fun LayoutParams.keyMargins() = apply {
-        val horizontal = KeyboardMetrics.marginPx(prefs.keySpacing, resources.displayMetrics.density, false)
-        val vertical = KeyboardMetrics.marginPx(prefs.keySpacing, resources.displayMetrics.density, true)
-        setMargins(horizontal, vertical, horizontal, vertical)
-    }
-    private fun usesTypingPanel() = (forceNormalKeyboard || editorLayout !in numericEditors) && layer != KeyboardLayer.EMOJI && layer != KeyboardLayer.CLIPBOARD && layer != KeyboardLayer.VOICE && layer != KeyboardLayer.TRANSLATE && layer != KeyboardLayer.FONT_STUDIO && layer != KeyboardLayer.CALCULATOR
-    private fun suggestionKeySliver() = (KeyboardGeometry.SLIVER_DP * resources.displayMetrics.density).toInt()
-    private fun isLandscape() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    private fun inSuggestionSliver(y: Float): Boolean {
-        val sliver = suggestionKeySliver()
-        return y >= rail.bottom - sliver && y < rail.bottom + sliver
-    }
-    private fun dispatchToPanel(event: MotionEvent): Boolean {
-        val transformed = MotionEvent.obtain(event)
-        transformed.offsetLocation(-(body.left + panel.left).toFloat(), -(body.top + panel.top).toFloat())
-        val handled = panel.dispatchTouchEvent(transformed)
-        transformed.recycle()
-        return handled
-    }
-    private fun keyBackground(base: Int): StateListDrawable {
-        fun shape(color: Int) = GradientDrawable().apply {
-            cornerRadius = dp(8).toFloat(); setColor(color)
-            setStroke(if (prefs.highContrast) dp(2) else 0, ink)
-        }
-        val pressed = ColorUtils.blendARGB(base, if (isDark()) Color.WHITE else Color.BLACK, .18f)
-        return StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_pressed), shape(pressed))
-            addState(intArrayOf(), shape(base))
-        }
-    }
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-    private fun suggestionRailHeight() = KeyboardGeometry.railHeightPx(isLandscape(), resources.displayMetrics.density).toInt()
-    private fun keyHeight() = if (isLandscape()) dp(42) else dp(48)
-    private fun rowHeight() = if (isLandscape()) dp(48) else dp(56)
-
-    private fun emojiGridHeight(rows: Int) = EmojiBoard.gridHeight(context, rows, isLandscape())
-
-    private fun navigationBarFallback(): Int {
-        val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
-        return if (id != 0) resources.getDimensionPixelSize(id) else 0
-    }
-    private fun isDark() = palette.dark
-
-    companion object {
-        val qwertyRows = listOf("qwertyuiop".map(Char::toString), "asdfghjkl".map(Char::toString), "zxcvbnm".map(Char::toString))
-        val numbers = listOf("1234567890".map(Char::toString), listOf("@","#","₨","_","&","-","+","(",")","/"), listOf("*","\"","'",":",";","!","?"))
-        val symbols = listOf(listOf("~","`","|","•","√","π","÷","×","¶","∆"), listOf("£","€","$","¢","^","°","=","{","}","\\"), listOf("%","©","®","™","✓","[","]"))
-        val sinhalaGlyphs = listOf(
-            listOf("𑇡", "𑇢", "𑇣", "𑇤", "𑇥", "𑇦", "𑇧", "𑇨", "𑇩", "𑇪"),
-            listOf("𑇫", "𑇬", "𑇭", "𑇮", "𑇯", "𑇰", "𑇳", "𑇴", "෦", "෴"),
-            listOf("♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓")
-        )
-        val numericEditors = setOf(EditorLayout.NUMBER, EditorLayout.SIGNED_NUMBER, EditorLayout.DECIMAL, EditorLayout.SIGNED_DECIMAL, EditorLayout.PHONE, EditorLayout.DATETIME)
-    }
-}
+            val header = android.widget.RelativeLayout(context).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(48))
+                val title = android.widget.TextView(context).apply {
+                    text = "Encrypted Vault"
+                    setTextColor(if (palette.dark) Color.WHITE else Color.BLACK)
+                    textSize = 16f
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                }
+                val closeBtn = android.widget.ImageButton(context).apply {
+                    setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+                    setBackgroundResource(android.R.color.transparent)
+                    imageTintList = android.content.res.ColorStateList.valueOf(if (

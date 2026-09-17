@@ -53,14 +53,23 @@ internal class EmojiCell(context: Context, ink: Int) : EmojiTextView(context) {
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val size = MeasureSpec.getSize(widthMeasureSpec)
-        setMeasuredDimension(size, size)
+        val width = MeasureSpec.getSize(widthMeasureSpec)
+        val heightSize = MeasureSpec.getSize(heightMeasureSpec)
+        
+        if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) {
+            setMeasuredDimension(width, heightSize)
+        } else {
+            // For standard emoji, force square. For wide kaomoji, limit height to a standard emoji row height.
+            val standardHeight = (context.resources.displayMetrics.widthPixels / EmojiBoardView.columns(context))
+            val height = standardHeight.coerceAtMost(width)
+            setMeasuredDimension(width, height)
+        }
     }
 }
 
 internal sealed class EmojiListItem {
     data class Header(val title: String, val categoryIndex: Int) : EmojiListItem()
-    data class Item(val unicode: String) : EmojiListItem()
+    data class Item(val unicode: String, val isWide: Boolean = false) : EmojiListItem()
     data class EmptyPlaceholder(val message: String) : EmojiListItem()
 }
 
@@ -141,10 +150,18 @@ internal class EmojiGroupAdapter(
                 (holder as EmptyHolder).message.text = item.message
             }
             is EmojiListItem.Item -> {
-                val drawn = EmojiRepository.withTone(item.unicode, tone)
+                val cleanedUnicode = item.unicode.replace("default", "", ignoreCase = true).trim()
+                val drawn = if (item.isWide) cleanedUnicode else EmojiRepository.withTone(cleanedUnicode, tone)
                 val cell = (holder as EmojiHolder).cell
                 cell.text = drawn
-                cell.contentDescription = "Emoji ${item.unicode}"
+                cell.contentDescription = "Emoji $cleanedUnicode"
+                val density = cell.context.resources.displayMetrics.density
+                val baseSize = (KeyboardGeometry.EMOJI_TEXT_SP * density).toInt()
+                if (item.isWide) {
+                    cell.setEmojiSize((baseSize * 0.5f).toInt())
+                } else {
+                    cell.setEmojiSize(baseSize)
+                }
                 cell.setOnClickListener { onPick(drawn) }
             }
         }
@@ -199,7 +216,8 @@ internal class EmojiBoardView(
             val tabIndex = catIdx + 1
             categoryHeaderPositions[tabIndex] = flatItems.size
             flatItems.add(EmojiListItem.Header(category.name.uppercase(), tabIndex))
-            category.emoji.forEach { flatItems.add(EmojiListItem.Item(it)) }
+            val isKaomoji = category.name == "Kaomoji & ASCII"
+            category.emoji.forEach { flatItems.add(EmojiListItem.Item(it, isKaomoji)) }
         }
 
         // Columns: 8 in portrait, 12 in landscape
@@ -207,8 +225,9 @@ internal class EmojiBoardView(
         layoutManager = GridLayoutManager(context, columns).apply {
             spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                 override fun getSpanSize(position: Int): Int {
-                    return when (flatItems.getOrNull(position)) {
+                    return when (val item = flatItems.getOrNull(position)) {
                         is EmojiListItem.Header, is EmojiListItem.EmptyPlaceholder -> columns
+                        is EmojiListItem.Item -> if (item.isWide) (columns / 3).coerceAtLeast(2) else 1
                         else -> 1
                     }
                 }
