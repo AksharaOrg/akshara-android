@@ -558,10 +558,7 @@ fun ThemeCreatorScreen(
                             "minimal" to "Minimal Flat",
                             "material" to "Material 3",
                             "ios" to "iOS Bevel",
-                            "neumorphic" to "Neumorphic",
-                            "hexagonal" to "Hexagonal (ෂඩාස්‍ර)",
-                            "squircle" to "Squircle",
-                            "flat" to "Flat Minimalist"
+                            "neumorphic" to "Neumorphic"
                         )
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -595,10 +592,7 @@ fun ThemeCreatorScreen(
                             listOf(
                                 "scale" to "Scale / Shrink",
                                 "ripple" to "Material Ripple",
-                                "glow" to "Border Glow Pulse",
-                                "neon" to "Neon Pop",
-                                "water" to "Water Ripple",
-                                "pixel" to "Retro Pixel"
+                                "glow" to "Border Glow Pulse"
                             ).forEach { (animKey, animTitle) ->
                                 FilterChip(
                                     selected = (animationType == animKey),

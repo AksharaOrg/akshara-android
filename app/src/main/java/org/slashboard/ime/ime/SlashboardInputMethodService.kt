@@ -101,7 +101,6 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     private var activeSnippetPhrase: String? = null
     private var activeSnippetShortcut: String? = null
     private var detectedOtpCode: String? = null
-    private var lastSpaceTime = 0L
 
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
         captureClipboard()
@@ -111,7 +110,7 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     private val prefChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == null || key == KeyboardPreferences.TOP_ROW || key == "theme" || key == "one_handed" || key == "key_spacing" || key == "keyboard_size" || key == "high_contrast" || key == "keyboard_font" || key == "keyboard_font_scale" || key == "mode") {
+        if (key == null || key == KeyboardPreferences.TOP_ROW || key == "theme" || key == "one_handed" || key == "key_spacing" || key == "keyboard_size" || key == "high_contrast" || key == "keyboard_font" || key == "mode") {
             if (::keyboard.isInitialized) {
                 keyboard.reloadPreferences(prefs)
             }
@@ -245,9 +244,7 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         clearLocalCompositionState()
         prefs = KeyboardPreferences(this)
         prefs.reload()
-        
         if (::keyboard.isInitialized) {
-            keyboard.appPackageName = info?.packageName
             keyboard.reloadPreferences(prefs)
         }
         val isStrictPwd = isStrictPassword(info)
@@ -329,26 +326,6 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
 
     override fun onCharacter(value: String) {
         runCatching {
-            val ic = currentInputConnection
-            val selectedText = ic?.getSelectedText(0)?.toString()
-            
-            // Smart Bracket & Quote Wrapping
-            if (!selectedText.isNullOrEmpty()) {
-                val pair = when (value) {
-                    "(" -> ")"
-                    "[" -> "]"
-                    "{" -> "}"
-                    "<" -> ">"
-                    "\"" -> "\""
-                    "'" -> "'"
-                    else -> null
-                }
-                if (pair != null) {
-                    ic.commitText("$value$selectedText$pair", 1)
-                    return
-                }
-            }
-            
             val isPassword = isStrictPassword(currentInputEditorInfo) || (prefs.securePasswordMode && isPasswordOrSensitive(currentInputEditorInfo, true))
             if (isPassword || prefs.useEnglish) {
                 commitComposition()
@@ -451,20 +428,6 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     override fun onSpace() {
         runCatching {
             val ic = currentInputConnection
-            val now = System.currentTimeMillis()
-            
-            // Dual-Language Auto-Punctuation (Double space -> Period)
-            if (now - lastSpaceTime < 500 && !composition.active) {
-                val beforeSpace = ic?.getTextBeforeCursor(2, 0)?.toString()
-                if (beforeSpace?.endsWith(" ") == true && !beforeSpace.startsWith(" ") && !beforeSpace.startsWith(".")) {
-                    ic.deleteSurroundingText(1, 0)
-                    ic.commitText(". ", 1)
-                    lastSpaceTime = 0L // reset
-                    return@runCatching
-                }
-            }
-            lastSpaceTime = now
-
             val before = ic?.getTextBeforeCursor(64, 0)?.toString().orEmpty()
             val engCandidate = activeEnglishPrefix ?: if (prefs.useEnglish) Regex("([A-Za-z0-9'’]+)$").find(before)?.value.orEmpty() else null
             if (!engCandidate.isNullOrEmpty()) {
@@ -484,17 +447,6 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
                 Regex("([\\p{L}\\p{M}\u200D\u200C]+)$").find(before)?.value
             }
             activeCorrection = null
-            
-            // Basic Redundancy Checker
-            val checkText = ic?.getTextBeforeCursor(20, 0)?.toString()
-            if (checkText != null && checkText.endsWith("නැවත නැවතත්")) {
-                ic.deleteSurroundingText(11, 0)
-                ic.commitText("නැවතත්", 1)
-            } else if (checkText != null && checkText.endsWith("නැවත වරක්")) {
-                ic.deleteSurroundingText(10, 0)
-                ic.commitText("නැවතත්", 1)
-            }
-            
             ic?.commitText(" ", 1)
             if (!word.isNullOrBlank()) {
                 learn(word)
@@ -535,28 +487,8 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
                     requestHideSelf(0)
                 }
             } else {
-                val fullBefore = currentInputConnection?.getTextBeforeCursor(500, 0)?.toString().orEmpty()
-                val currentLine = fullBefore.substringAfterLast('\n')
-                
-                val numMatch = Regex("^(\\s*)(\\d+)\\.\\s+").find(currentLine)
-                val dashMatch = Regex("^(\\s*)[\\-•]\\s+").find(currentLine)
-                
                 currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
                 currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
-                
-                if (numMatch != null && numMatch.value == currentLine) {
-                    // Empty list item: delete it (undo bullet)
-                    currentInputConnection?.deleteSurroundingText(currentLine.length + 1, 0) // +1 for the newline just added
-                } else if (dashMatch != null && dashMatch.value == currentLine) {
-                    currentInputConnection?.deleteSurroundingText(currentLine.length + 1, 0)
-                } else if (numMatch != null) {
-                    val indent = numMatch.groupValues[1]
-                    val nextNum = numMatch.groupValues[2].toIntOrNull()?.plus(1) ?: 2
-                    currentInputConnection?.commitText("$indent$nextNum. ", 1)
-                } else if (dashMatch != null) {
-                    val prefix = dashMatch.value
-                    currentInputConnection?.commitText(prefix, 1)
-                }
             }
             clearLocalCompositionState()
             updateSuggestions()
@@ -693,19 +625,6 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     override fun onGlobe() {
         runCatching {
             commitComposition()
-            
-            val ic = currentInputConnection
-            if (ic != null) {
-                val before = ic.getTextBeforeCursor(2, 0)?.toString() ?: ""
-                if (before.isNotEmpty()) {
-                    if (before.endsWith("  ")) {
-                        ic.deleteSurroundingText(1, 0)
-                    } else if (!before.endsWith(" ") && !before.endsWith("\n")) {
-                        ic.commitText(" ", 1)
-                    }
-                }
-            }
-            
             precedingDirty = true
             updateSuggestions()
         }
@@ -731,92 +650,6 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     override fun onToolbarAction(action: String) {
         val ic = currentInputConnection ?: return
         when (action) {
-            "whatsapp_quick" -> {
-                feedback()
-                val text = ic.getTextBeforeCursor(20, 0)?.toString()?.trim() ?: ""
-                val number = Regex("\\+?[0-9]{9,15}").find(text)?.value
-                if (number != null) {
-                    runCatching {
-                        val uri = android.net.Uri.parse("https://wa.me/${number.replace("+", "")}")
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-                        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                        startActivity(intent)
-                        requestHideSelf(0)
-                    }.onFailure {
-                        Toast.makeText(this, "WhatsApp is not installed", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    Toast.makeText(this, "Please type a phone number first", Toast.LENGTH_SHORT).show()
-                }
-            }
-            "dev_mode" -> {
-                feedback()
-                val keys = arrayOf("Tab" to KeyEvent.KEYCODE_TAB, "Esc" to KeyEvent.KEYCODE_ESCAPE, "Up" to KeyEvent.KEYCODE_DPAD_UP, "Down" to KeyEvent.KEYCODE_DPAD_DOWN, "Left" to KeyEvent.KEYCODE_DPAD_LEFT, "Right" to KeyEvent.KEYCODE_DPAD_RIGHT)
-                val items = keys.map { it.first }.toTypedArray()
-                val dialog = android.app.AlertDialog.Builder(this)
-                    .setTitle("Developer Keys")
-                    .setItems(items) { _, which ->
-                        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keys[which].second))
-                        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keys[which].second))
-                    }
-                    .create()
-                val window = dialog.window
-                if (window != null) {
-                    val token = (keyboard?.parent as? View)?.windowToken
-                    window.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG)
-                    val lp = window.attributes
-                    lp.token = token
-                    window.attributes = lp
-                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
-                }
-                dialog.show()
-            }
-            "format" -> {
-                feedback()
-                val sel = ic.getSelectedText(0)?.toString()
-                if (sel.isNullOrEmpty()) {
-                    Toast.makeText(this, "Select text to format", Toast.LENGTH_SHORT).show()
-                } else {
-                    val formats = arrayOf("Bold (*text*)", "Italic (_text_)", "Strikethrough (~text~)", "Code (`text`)")
-                    val dialog = android.app.AlertDialog.Builder(this)
-                        .setTitle("Format Text")
-                        .setItems(formats) { _, which ->
-                            val wrapper = when (which) {
-                                0 -> "*"
-                                1 -> "_"
-                                2 -> "~"
-                                3 -> "`"
-                                else -> ""
-                            }
-                            ic.commitText("$wrapper$sel$wrapper", 1)
-                        }
-                        .create()
-                    val window = dialog.window
-                    if (window != null) {
-                        val token = (keyboard?.parent as? View)?.windowToken
-                        window.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG)
-                        val lp = window.attributes
-                        lp.token = token
-                        window.attributes = lp
-                        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
-                    }
-                    dialog.show()
-                }
-            }
-            "case_convert" -> {
-                feedback()
-                val sel = ic.getSelectedText(0)?.toString()
-                if (sel.isNullOrEmpty()) {
-                    Toast.makeText(this, "Select text to convert case", Toast.LENGTH_SHORT).show()
-                } else {
-                    val converted = when {
-                        sel == sel.uppercase() -> sel.lowercase()
-                        sel == sel.lowercase() -> sel.split(" ").joinToString(" ") { it.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() } }
-                        else -> sel.uppercase()
-                    }
-                    ic.commitText(converted, 1)
-                }
-            }
             "undo" -> {
                 feedback()
                 undoRedoManager.performUndo(ic) { msg ->
@@ -882,14 +715,6 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             "translate" -> {
                 feedback()
                 keyboard.openTranslator()
-            }
-            "templates" -> {
-                feedback()
-                keyboard.openTemplates()
-            }
-            "notes" -> {
-                feedback()
-                keyboard.openNotes()
             }
             "calculator" -> {
                 feedback()
@@ -1097,19 +922,6 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (prefs.volumeCursor && (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
-            val ic = currentInputConnection
-            if (ic != null) {
-                if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
-                    ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT))
-                    ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_LEFT))
-                } else {
-                    ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT))
-                    ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_RIGHT))
-                }
-            }
-            return true
-        }
         if (event != null && event.isPrintingKey && !event.isCtrlPressed && !event.isAltPressed) {
             onCharacter(event.unicodeChar.toChar().toString())
             return true
@@ -1127,13 +939,6 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             return true
         }
         return super.onKeyDown(keyCode, event)
-    }
-
-    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        if (prefs.volumeCursor && (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
-            return true
-        }
-        return super.onKeyUp(keyCode, event)
     }
 
     private fun commitComposition(): String? {
@@ -1238,24 +1043,6 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
         val beforeString = runCatching {
             currentInputConnection?.getTextBeforeCursor(128, 0)?.toString()
         }.getOrNull() ?: ""
-        
-        val afterString = runCatching {
-            currentInputConnection?.getTextAfterCursor(128, 0)?.toString()
-        }.getOrNull() ?: ""
-
-        if (beforeString.isBlank() && afterString.isBlank()) {
-            val isChatApp = currentInputEditorInfo?.packageName?.let { 
-                it.contains("whatsapp") || it.contains("messenger") || it.contains("telegram") || it.contains("viber") || it.contains("sms") || it.contains("mms") || it.contains("chat") 
-            } == true
-            if (isChatApp && prefs.suggestions) {
-                if (prefs.useEnglish) {
-                    keyboard.setCandidates(listOf("Thanks!", "Okay", "Sounds good", "👍", "❤️"))
-                } else {
-                    keyboard.setCandidates(listOf("ස්තූතියි!", "එළකිරි", "හරි මචං", "👍", "❤️"))
-                }
-                return
-            }
-        }
 
         val mathEval = if (!composition.active) MathEvaluator.evaluateTrailingExpression(beforeString) else null
         if (mathEval != null) {
@@ -1290,28 +1077,13 @@ class SlashboardInputMethodService : InputMethodService(), KeyboardActions {
             activeSnippetPhrase = null
         }
 
-        // NIC Analyzer
-        val trailingNIC = if (!composition.active) Regex("""\b([0-9]{9}[vVxX]|[0-9]{12})\b$""").find(beforeString)?.value else null
-        if (trailingNIC != null) {
-            val nicInfo = SmartParsers.parseNIC(trailingNIC)
-            if (nicInfo != null) {
-                keyboard.setCandidates(listOf(nicInfo, trailingNIC))
-                return
-            }
-        }
-
-        // Cheque Amount / Number to Words
-        val trailingDigits = if (!composition.active) Regex("""\b(\d{1,12}(?:\.\d{1,2})?)\b$""").find(beforeString)?.value else null
-        if (trailingDigits != null) {
-            val sinWords = SmartParsers.numberToWordsSinhala(trailingDigits)
-            val engWords = SmartParsers.numberToWordsEnglish(trailingDigits)
-            
-            if (sinWords != null && engWords != null) {
-                activeNumberDigits = trailingDigits
-                activeNumberWords = sinWords // Keeping previous variable semantic
-                keyboard.setCandidates(listOf(sinWords, engWords, trailingDigits))
-                return
-            }
+        val trailingDigits = if (!composition.active) Regex("""\b(\d{1,12})\b$""").find(beforeString)?.value else null
+        val numWords = trailingDigits?.let { SinhalaNumberToWords.convert(it) }
+        if (numWords != null) {
+            activeNumberDigits = trailingDigits
+            activeNumberWords = numWords
+            keyboard.setCandidates(listOf(numWords, trailingDigits), setOf(numWords))
+            return
         } else {
             activeNumberDigits = null
             activeNumberWords = null

@@ -23,15 +23,6 @@ class EmojiRepository(context: Context) {
         val objectsList = mutableListOf<String>()
         val symbolsList = mutableListOf<String>()
         val flagsList = mutableListOf<String>()
-        val kaomojiList = mutableListOf(
-            "¯\\_(ツ)_/¯", "( ˘ ³˘)♥", "( ͡° ͜ʖ ͡°)", "ಠ_ಠ", "ʕ•ᴥ•ʔ",
-            "(ง'̀-'́)ง", "(╯°□°）╯︵ ┻━┻", "┬─┬ノ( º _ ºノ)", "(☞ﾟヮﾟ)☞",
-            "༼ つ ◕_◕ ༽つ", "(•_•)", "( •_•)>⌐■-■", "(⌐■_■)",
-            "\\(^-^)/", "(>_<)", "(*_*)", "(T_T)", "(@_@)", "(^_-)",
-            "(¬‿¬) [අඩෝ]", "(•_•) [සිරාවට?]", "(-_-) [එපා වෙනවා]", "(⊙_⊙) [අම්මටසිරි]",
-            "(^_-) [එළකිරි]", "(T_T) [අයියෝ]", "¯\\_(ツ)_/¯ [අනේ මන්දා]",
-            "[දෙයියනේ!]", "[අම්මෝ!]", "[පිස්සුද!]", "[සිරාවට!]", "[සුපිරි!]"
-        )
 
         categorizedLists["Smileys & Emotion"] = smileysList
         categorizedLists["People & Body"] = peopleList
@@ -42,7 +33,6 @@ class EmojiRepository(context: Context) {
         categorizedLists["Objects"] = objectsList
         categorizedLists["Symbols"] = symbolsList
         categorizedLists["Flags"] = flagsList
-        categorizedLists["Kaomoji & ASCII"] = kaomojiList
 
         runCatching {
             val provider = com.vanniktech.emoji.ios.IosEmojiProvider()
@@ -124,8 +114,7 @@ class EmojiRepository(context: Context) {
             EmojiCategory("Travel & Places", "🚗", travelList.distinct()),
             EmojiCategory("Objects", "💡", objectsList.distinct()),
             EmojiCategory("Symbols", "❤️", symbolsList.distinct()),
-            EmojiCategory("Flags", "🚩", flagsList.distinct()),
-            EmojiCategory("Kaomoji & ASCII", "¯\\_(ツ)_/¯", kaomojiList.distinct())
+            EmojiCategory("Flags", "🚩", flagsList.distinct())
         )
     }
 

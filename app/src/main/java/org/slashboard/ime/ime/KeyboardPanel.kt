@@ -286,7 +286,7 @@ internal class KeyboardPanel(
         } else {
             android.graphics.Color.WHITE
         }
-        capFor(key)?.let { popups.showPreview(it, previewText, popupBg, colors.dark, colors.ink, colors.action) }
+        capFor(key)?.let { popups.showPreview(it, previewText, popupBg, colors.dark, colors.ink) }
     }
 
     override fun onHidePreview() = popups.hidePreview()

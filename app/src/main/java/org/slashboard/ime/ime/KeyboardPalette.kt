@@ -20,7 +20,6 @@ data class KeyboardPalette(
     val dynamic: Boolean,
     val keyRadiusDp: Float? = null,
     val blurEffect: Boolean = false,
-    val blurRadius: Float? = null,
     val keyOpacity: Float = 1.0f,
     val backgroundImagePath: String? = null,
     val spaceKey: Int? = null,
@@ -64,23 +63,25 @@ object KeyboardPaletteResolver {
         }
     }
 
-    fun resolve(context: Context, theme: String, highContrast: Boolean, appPackageName: String? = null): KeyboardPalette {
+    fun resolve(context: Context, theme: String, highContrast: Boolean): KeyboardPalette {
         val dark = when (theme) {
             "light", "cyberpunk", "lavender", "rose_gold", "cherry", "solarized_light", "mint", "peach", "silver", "material_light", "ios_style", "neumorphic", "cherry_blossom", "transparent_glass_light", "minimal_white", "pastel_dream", "nordic_clean" -> false
             "system" -> context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
             else -> true
         }
         
-        var basePalette = if (theme == "system" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (theme == "system" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             try {
-                dynamic(context, dark, highContrast)
+                return dynamic(context, dark, highContrast)
             } catch (e: Exception) {
-                resolveBase(context, "dark", highContrast, dark) // Fallback if system colors are missing on this OEM
+                // Fallback if system colors are missing on this OEM
             }
-        } else if (theme.startsWith("custom_")) {
+        }
+        
+        if (theme.startsWith("custom_")) {
             val custom = org.slashboard.ime.settings.theme.CustomThemeManager.getTheme(context, theme)
             if (custom != null) {
-                KeyboardPalette(
+                return KeyboardPalette(
                     background = safeParseColor(custom.background, "#0F172A"),
                     key = safeParseColor(custom.key, "#1E293B"),
                     utility = safeParseColor(custom.utility, "#1E293B"),
@@ -106,38 +107,9 @@ object KeyboardPaletteResolver {
                     shadowElevationDp = custom.shadowElevationDp,
                     glowColor = safeParseColorOrNull(custom.glowColor)
                 )
-            } else {
-                resolveBase(context, "dark", highContrast, dark)
-            }
-        } else {
-            resolveBase(context, theme, highContrast, dark)
-        }
-
-        if (appPackageName != null) {
-            val appAccent = when {
-                appPackageName.contains("whatsapp") -> Color.parseColor("#25D366")
-                appPackageName.contains("facebook") -> Color.parseColor("#1877F2")
-                appPackageName.contains("youtube") -> Color.parseColor("#FF0000")
-                appPackageName.contains("twitter") || appPackageName.contains("x.com") || appPackageName.contains("twttr") -> Color.parseColor("#1DA1F2")
-                appPackageName.contains("instagram") -> Color.parseColor("#E1306C")
-                appPackageName.contains("telegram") -> Color.parseColor("#0088CC")
-                appPackageName.contains("reddit") -> Color.parseColor("#FF4500")
-                appPackageName.contains("slack") -> Color.parseColor("#4A154B")
-                appPackageName.contains("discord") -> Color.parseColor("#5865F2")
-                else -> null
-            }
-            if (appAccent != null) {
-                basePalette = basePalette.copy(
-                    action = appAccent,
-                    glowColor = appAccent
-                )
             }
         }
-
-        return basePalette
-    }
-
-    private fun resolveBase(context: Context, theme: String, highContrast: Boolean, dark: Boolean): KeyboardPalette {
+        
         return when (theme) {
             // Transparent Glass Themes (Translucent keys with clear background)
             "transparent_glass", "transparent" -> KeyboardPalette(
