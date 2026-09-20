@@ -28,7 +28,7 @@ internal class HandlerScheduler(private val handler: android.os.Handler) : TaskS
     }
 }
 
-internal enum class PointerState { IDLE, PRESSED, LONG_PRESS, FLICK, SPACE_DRAG, SPACE_SWIPE, DELETE_SWIPE, CANCELLED }
+internal enum class PointerState { IDLE, PRESSED, LONG_PRESS, SPACE_LONG_PRESS, FLICK, SPACE_DRAG, SPACE_SWIPE, DELETE_SWIPE, CANCELLED }
 
 internal class TouchController(
     var decoder: TouchDecoder,
@@ -52,11 +52,13 @@ internal class TouchController(
         fun onCommit(output: String)
         fun onBackspace(word: Boolean)
         fun onSpace()
+        fun onSpaceLongPress() {}
         fun onEnter()
         fun onShift()
         fun onLayer(layer: KeyboardLayer)
         fun onEmoji()
         fun onGlobe()
+        fun onLanguageSwitch()
         fun onHaptic()
         fun onCursorDelta(delta: Int)
         fun onCursorTick()
@@ -118,6 +120,8 @@ internal class TouchController(
             if (key.action == KeyCode.CHAR) listener.onPreview(key)
             if (key.action == KeyCode.DELETE) {
                 scheduler.post(KeyboardGeometry.DELETE_REPEAT_START_MS, REPEAT) { repeatDelete() }
+            } else if (key.action == KeyCode.SPACE) {
+                scheduler.post(KeyboardGeometry.LANGUAGE_SWITCH_HOLD_MS, SPACE_LONG_PRESS) { openLanguageSwitcher() }
             } else if (key.action == KeyCode.CHAR && key.extras.isNotEmpty()) {
                 scheduler.post(longPressMs, LONG_PRESS) { openPicker() }
             }
@@ -145,11 +149,11 @@ internal class TouchController(
                     absDy > KeyboardGeometry.SPACE_SWIPE_DP * density &&
                     absDy > absDx * 1.2f
                 ) {
-                    scheduler.cancel(LONG_PRESS)
+                    scheduler.cancel(LONG_PRESS); scheduler.cancel(SPACE_LONG_PRESS)
                     listener.onHidePreview()
                     state = PointerState.SPACE_SWIPE
                 } else if (key?.action == KeyCode.SPACE && absDx > KeyboardGeometry.SPACE_DRAG_DP * density) {
-                    scheduler.cancel(LONG_PRESS)
+                    scheduler.cancel(LONG_PRESS); scheduler.cancel(SPACE_LONG_PRESS)
                     listener.onHidePreview()
                     state = PointerState.SPACE_DRAG
                     stepCursor(dx)
@@ -193,6 +197,7 @@ internal class TouchController(
                 val picked = listener.onHidePicker()
                 if (picked != null) listener.onCommit(picked) else key?.let { commit(it) }
             }
+            PointerState.SPACE_LONG_PRESS -> Unit
             PointerState.FLICK -> {
                 listener.onFlick(key ?: return, false)
                 key.flickOutput?.let(listener::onCommit)
@@ -244,6 +249,7 @@ internal class TouchController(
             KeyCode.LAYER -> key.payload.takeIf { it.isNotEmpty() }?.let { listener.onLayer(KeyboardLayer.valueOf(it)) }
             KeyCode.EMOJI -> listener.onEmoji()
             KeyCode.GLOBE -> listener.onGlobe()
+            KeyCode.LANGUAGE -> listener.onLanguageSwitch()
         }
     }
 
@@ -259,6 +265,14 @@ internal class TouchController(
         if (key.extras.isEmpty()) return
         state = PointerState.LONG_PRESS
         listener.onShowPicker(key)
+    }
+
+    private fun openLanguageSwitcher() {
+        val key = selected ?: return
+        if (key.action != KeyCode.SPACE || state != PointerState.PRESSED) return
+        state = PointerState.SPACE_LONG_PRESS
+        listener.onHidePreview()
+        listener.onSpaceLongPress()
     }
 
     private fun repeatDelete() {
@@ -313,6 +327,7 @@ internal class TouchController(
 
     companion object {
         private const val LONG_PRESS = "long-press"
+        private const val SPACE_LONG_PRESS = "space-long-press"
         private const val REPEAT = "repeat"
     }
 }

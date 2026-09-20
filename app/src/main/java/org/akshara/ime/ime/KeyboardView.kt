@@ -17,6 +17,7 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.inputmethod.InlineSuggestion
 import android.widget.*
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
@@ -38,12 +39,16 @@ interface KeyboardActions {
     fun onCharacter(value: String)
     fun onBackspace(word: Boolean = false)
     fun onSpace()
+    fun onSpaceLongPress() {}
+    fun onLanguageSwitch() {}
     fun onEnter()
     fun onCandidate(value: String)
     fun onGlobe()
     fun onModeRequested(mode: InputMode)
     fun onHide()
     fun onCursorDelta(delta: Int)
+    fun onSettings() {}
+    fun onClipboardOpen() {}
     fun onPressFeedback() {}
     fun languageScoreForKey(output: String): Float = 0f
     fun onPreviewDelete(clusters: Int) {}
@@ -81,6 +86,7 @@ class KeyboardView(
     private var searchLayer = KeyboardLayer.LETTERS
     private var emojiCategoryIndex = 1
     private var englishOneWord = false
+    private var persistentEnglish = false
     private var clipboardExtraPx = 0
     private var clipboardDragActive = false
     private var clipboardDragTracking = false
@@ -95,8 +101,24 @@ class KeyboardView(
     private val utility = palette.utility
     private val ink = palette.ink
     private val rail = SuggestionRail(context, ink, { actions.onCandidate(it) }) {
+        actions.onClipboardOpen()
         leaveClipboardOrToggle()
     }
+    private val railHost = FrameLayout(context).apply {
+        clipChildren = false
+        clipToPadding = false
+    }
+    private val inlineAutofill = HorizontalScrollView(context).apply {
+        isHorizontalScrollBarEnabled = false
+        overScrollMode = OVER_SCROLL_NEVER
+        visibility = GONE
+    }
+    private val inlineRow = LinearLayout(context).apply {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(8), dp(2), dp(8), dp(2))
+    }
+    private var inlineAutofillGeneration = 0
     private val clipboardHandle = View(context).apply {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         isClickable = true
@@ -125,6 +147,8 @@ class KeyboardView(
                     render()
                 }
             }
+            override fun onSpaceLongPress() = actions.onSpaceLongPress()
+            override fun onLanguageSwitch() = actions.onLanguageSwitch()
             override fun onSpaceSwipe(up: Boolean) {
                 if (layer == KeyboardLayer.LETTERS) actions.onSpaceSwipe(up)
             }
@@ -134,6 +158,7 @@ class KeyboardView(
             override fun onModeRequested(mode: InputMode) = actions.onModeRequested(mode)
             override fun onHide() = actions.onHide()
             override fun onCursorDelta(delta: Int) = actions.onCursorDelta(delta)
+            override fun onSettings() = actions.onSettings()
             override fun onPressFeedback() = actions.onPressFeedback()
             override fun languageScoreForKey(output: String) = actions.languageScoreForKey(output)
             override fun onPreviewDelete(clusters: Int) = actions.onPreviewDelete(clusters)
@@ -174,7 +199,10 @@ class KeyboardView(
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         setPadding(0, dp(KeyboardGeometry.TOP_PAD_DP), 0, 0)
         rail.keySliver = suggestionKeySliver()
-        addView(rail, LayoutParams(LayoutParams.MATCH_PARENT, suggestionRailHeight()))
+        railHost.addView(rail, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        inlineAutofill.addView(inlineRow, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        railHost.addView(inlineAutofill, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(railHost, LayoutParams(LayoutParams.MATCH_PARENT, suggestionRailHeight()))
         body.orientation = VERTICAL
         body.clipChildren = true
         body.clipToPadding = true
@@ -314,7 +342,8 @@ class KeyboardView(
         offerGlobe: Boolean,
         enter: String,
         editor: EditorLayout = EditorLayout.TEXT,
-        playSpaceIntro: Boolean = false
+        playSpaceIntro: Boolean = false,
+        english: Boolean = false
     ) {
         this.mode = mode; enterLabel = enter; editorLayout = editor; this.offerGlobe = offerGlobe
         clipboardHistoryEnabled = KeyboardPreferences(context).clipboardHistory
@@ -322,6 +351,7 @@ class KeyboardView(
         clipboardExtraPx = 0
         endClipboardDrag()
         englishOneWord = false
+        persistentEnglish = english
         animateSpaceLabel = playSpaceIntro
         val width = if (prefs.oneHanded == "center") LayoutParams.MATCH_PARENT else (resources.displayMetrics.widthPixels * .82f).toInt()
         (body.layoutParams as LayoutParams).apply { this.width = width; gravity = when (prefs.oneHanded) { "left" -> Gravity.START; "right" -> Gravity.END; else -> Gravity.CENTER } }
@@ -333,6 +363,27 @@ class KeyboardView(
         candidates = values.take(3)
         emojiCandidates = emoji.filter { it.isNotBlank() }.distinct().take(2)
         bindRail(true)
+    }
+    fun setInlineAutofillSuggestions(suggestions: List<InlineSuggestion>) {
+        val generation = ++inlineAutofillGeneration
+        inlineRow.removeAllViews()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || suggestions.isEmpty()) {
+            inlineAutofill.visibility = GONE
+            rail.visibility = VISIBLE
+            return
+        }
+        inlineAutofill.visibility = VISIBLE
+        rail.visibility = GONE
+        val size = android.util.Size((resources.displayMetrics.widthPixels * .72f).toInt(), suggestionRailHeight())
+        val executor = java.util.concurrent.Executor { handler.post(it) }
+        suggestions.take(3).forEach { suggestion ->
+            suggestion.inflate(context, size, executor) { view ->
+                if (generation != inlineAutofillGeneration) return@inflate
+                inlineRow.addView(view, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT).apply {
+                    marginEnd = dp(8)
+                })
+            }
+        }
     }
     fun setClipboardItems(recent: List<String>, pinned: List<String> = emptyList()) {
         clipboardRecent = recent
@@ -353,7 +404,7 @@ class KeyboardView(
         popups.dismiss()
         sliverPanel = null
         if (layer != KeyboardLayer.CLIPBOARD) clipboardExtraPx = 0
-        rail.layoutParams = (rail.layoutParams as LayoutParams).apply {
+        railHost.layoutParams = (railHost.layoutParams as LayoutParams).apply {
             height = if (keepSuggestionRail()) suggestionRailHeight() else 0
         }
         bindRail(false)
@@ -377,7 +428,8 @@ class KeyboardView(
         }
         val spaceLabel = spaceCaption()
         val rows = KeyboardLayoutFactory.typingRows(
-            mode, layer, shifted, capsLock, if (englishOneWord) EditorLayout.ASCII else editorLayout, prefs.topRow, prefs.emojiPicker, enterLabel, spaceLabel, false
+            mode, layer, shifted, capsLock, if (englishOneWord || persistentEnglish) EditorLayout.ASCII else editorLayout,
+            prefs.topRow, prefs.emojiPicker, enterLabel, spaceLabel, false, languageSwitchLabel()
         )
         val rowHeight = KeyboardGeometry.rowHeightPx(prefs.keyboardSize, isLandscape(), resources.displayMetrics.density, rows.size)
         panel.debug = BuildConfig.DEBUG && prefs.debugOverlay
@@ -388,9 +440,20 @@ class KeyboardView(
 
     private fun bindRail(animated: Boolean) {
         val show = layer == KeyboardLayer.LETTERS && editorLayout == EditorLayout.TEXT
-        rail.setEmptyTitle(if (show) mode.title else "")
+        if (inlineAutofill.visibility == VISIBLE) {
+            rail.visibility = GONE
+            return
+        }
+        rail.visibility = VISIBLE
+        rail.setEmptyTitle("")
         rail.setClipboardVisible(showClipboardButton())
         rail.setSuggestions(if (show) candidates else emptyList(), animated && show, if (show) emojiCandidates else emptyList())
+    }
+
+    private fun languageSwitchLabel(): String? = when {
+        editorLayout != EditorLayout.TEXT -> null
+        persistentEnglish -> "සිං"
+        else -> "EN"
     }
 
     private fun keepSuggestionRail() =
@@ -399,6 +462,7 @@ class KeyboardView(
         )
     private fun spaceCaption() = when {
         englishOneWord -> "English · one word"
+        persistentEnglish -> "English"
         editorLayout != EditorLayout.TEXT -> "English"
         else -> "Akshara - ${mode.title}"
     }
@@ -406,6 +470,15 @@ class KeyboardView(
     fun setEnglishOneWord(active: Boolean) {
         if (englishOneWord == active) return
         englishOneWord = active
+        if (layer == KeyboardLayer.LETTERS && usesTypingPanel()) bindTyping()
+    }
+
+    fun setPersistentEnglish(active: Boolean) {
+        if (persistentEnglish == active) return
+        persistentEnglish = active
+        englishOneWord = false
+        // Avoid carrying a Sinhala one-shot Shift across a fast language switch.
+        shiftLatch.reset()
         if (layer == KeyboardLayer.LETTERS && usesTypingPanel()) bindTyping()
     }
 
@@ -585,6 +658,7 @@ class KeyboardView(
                 layer = KeyboardLayer.LETTERS
                 render()
             },
+            onSettings = { actions.onSettings() },
             onClearRecent = {
                 clipboardStore.clearHistory()
                 refreshClipboardFromStore()

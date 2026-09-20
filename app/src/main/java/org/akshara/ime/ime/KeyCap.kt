@@ -88,6 +88,7 @@ internal class KeyCap(context: Context) : View(context) {
         if (text.isNotEmpty()) {
             val function = key.utility || text.length > 2 && !KeyTypography.isSinhala(text)
             labelPaint.color = colors.ink
+            labelPaint.typeface = KeyTypography.keyTypeface(text)
             var textSize = if (function) KeyTypography.functionPx(resources) else KeyTypography.mainPx(resources, text)
             val maxWidth = width - dp(4)
             while (textSize > dp(11) && labelPaint.apply { this.textSize = textSize }.measureText(text) > maxWidth) {
@@ -150,6 +151,7 @@ internal class KeyCap(context: Context) : View(context) {
         KeyCode.ENTER -> "Enter"
         KeyCode.EMOJI -> "Emoji"
         KeyCode.GLOBE -> "Next keyboard"
+        KeyCode.LANGUAGE -> "Switch keyboard language"
         KeyCode.LAYER -> when (key.payload) {
             KeyboardLayer.NUMBERS.name -> "Numbers and symbols"
             KeyboardLayer.LETTERS.name -> "Letters"

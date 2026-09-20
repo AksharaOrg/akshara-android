@@ -7,7 +7,7 @@
     <string name="settings_subtitle">Sinhala keyboard</string>
     <string name="category_get_started">Setup</string>
     <string name="category_typing">Typing</string>
-    <string name="category_tools">Emoji &amp; clipboard</string>
+    <string name="category_tools">Keyboard features</string>
     <string name="category_appearance">Appearance &amp; feedback</string>
     <string name="category_privacy">Privacy &amp; data</string>
     <string name="category_about">About</string>
@@ -21,6 +21,8 @@
     <string name="input_mode">Sinhala input method</string>
     <string name="suggestions">Show suggestions</string>
     <string name="suggestions_summary">Local Sinhala word predictions above the keys</string>
+    <string name="autocorrect">Autocorrect</string>
+    <string name="autocorrect_summary">Correct an unambiguous Sinhala spelling mistake when you finish a word</string>
     <string name="emoji_suggestions">Emoji suggestions</string>
     <string name="emoji_suggestions_summary">Suggest emoji for Sinhala words</string>
     <string name="top_row">Optional top row</string>
@@ -32,11 +34,15 @@
     <string name="smart_punctuation_summary">Trim spaces around marks; add a space after . ? !</string>
     <string name="english_one_word">English for one word</string>
     <string name="english_one_word_summary">Swipe up on Space for one Latin word</string>
+    <string name="persistent_english">Start in English</string>
+    <string name="persistent_english_summary">Hold Space to switch between Sinhala and English while typing</string>
     <string name="emoji_picker">Emoji key</string>
     <string name="emoji_picker_summary">Show the built-in emoji picker</string>
     <string name="skin_tone">Preferred skin tone</string>
     <string name="clipboard_history">Clipboard history</string>
     <string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device. Pin clips from the keyboard to keep them.</string>
+    <string name="inline_autofill">Inline autofill</string>
+    <string name="inline_autofill_summary">Show password-manager and form-fill suggestions in the keyboard bar</string>
     <string name="theme">Theme</string>
     <string name="key_spacing">Key spacing</string>
     <string name="keyboard_size">Keyboard height</string>
@@ -105,6 +111,9 @@
     <string name="notices_dataset">Dataset</string>
     <string name="notices_dataset_doi">Dataset DOI</string>
     <string name="notices_cc_by">CC BY 4.0</string>
+    <string name="notices_english_frequency_title">English word frequencies</string>
+    <string name="notices_english_frequency_body">English completions and autocorrection use the 25,000-word frequency export from aparrish/wordfreq-en-25000, derived from rspeer/wordfreq. The bundled data is available under CC BY-SA 4.0; required upstream source attributions are included with the app.</string>
+    <string name="notices_english_frequency_source">wordfreq source and attribution</string>
     <string name="notices_privacy_title">Privacy</string>
     <string name="notices_privacy_body">The source corpus is not included in the app. Predictions use the compact on-device models bundled with Akshara.</string>
     <string name="diagnostics_app_title">App</string>
@@ -126,4 +135,5 @@
     <string name="link_corpus">https://huggingface.co/datasets/Remeinium/CleanSinhalaTextCorpus</string>
     <string name="link_corpus_doi">https://doi.org/10.57967/hf/6460</string>
     <string name="link_cc_by">https://creativecommons.org/licenses/by/4.0/</string>
+    <string name="link_english_frequency">https://github.com/aparrish/wordfreq-en-25000</string>
 </resources>

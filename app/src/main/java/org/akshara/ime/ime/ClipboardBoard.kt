@@ -7,11 +7,14 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -21,6 +24,7 @@ internal class ClipboardBoard(
     private val colors: KeyboardColors,
     private val onPaste: (String) -> Unit,
     private val onBack: () -> Unit,
+    private val onSettings: () -> Unit,
     private val onClearRecent: () -> Unit,
     private val onPinRecent: (Int) -> Unit,
     private val onRemoveRecent: (Int) -> Unit,
@@ -33,7 +37,7 @@ internal class ClipboardBoard(
     private var tab = Tab.RECENT
     private val recentTab = tabChip("Recent") { select(Tab.RECENT) }
     private val pinnedTab = tabChip("Pinned") { select(Tab.PINNED) }
-    private val clear = toolbarIcon(org.akshara.ime.R.drawable.ic_delete, "Clear recent clips") { onClearRecent() }
+    private val clear = toolbarIcon(org.akshara.ime.R.drawable.ic_delete, "Clear recent clips") { }
     private val empty = TextView(context).apply {
         gravity = Gravity.CENTER
         textSize = 15f
@@ -51,6 +55,7 @@ internal class ClipboardBoard(
 
     init {
         orientation = VERTICAL
+        clear.setOnClickListener { showClearConfirmation(clear) }
         addView(toolbar(), LayoutParams(LayoutParams.MATCH_PARENT, dp(44)))
         addView(tabs(), LayoutParams(LayoutParams.MATCH_PARENT, dp(40)).apply {
             topMargin = dp(4)
@@ -98,6 +103,19 @@ internal class ClipboardBoard(
         bind()
     }
 
+    /** A confirmation menu remains safely attached to the IME window. */
+    private fun showClearConfirmation(anchor: View) {
+        if (recent.isEmpty()) return
+        PopupMenu(context, anchor).apply {
+            menu.add("Clear all recent clips?").setOnMenuItemClickListener {
+                onClearRecent()
+                true
+            }
+            menu.add("Cancel")
+            show()
+        }
+    }
+
     private fun toolbar() = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
@@ -112,6 +130,10 @@ internal class ClipboardBoard(
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
             setTextColor(colors.ink)
         }, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        addView(
+            settingsButton(),
+            LayoutParams(dp(48), LayoutParams.MATCH_PARENT)
+        )
         addView(clear, LayoutParams(dp(48), LayoutParams.MATCH_PARENT))
     }
 
@@ -146,6 +168,49 @@ internal class ClipboardBoard(
         contentDescription = description
         background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
         setOnClickListener { click() }
+    }
+
+    private fun settingsButton() = toolbarIcon(
+        org.akshara.ime.R.drawable.ic_settings,
+        "Hold for 1.5 seconds to open keyboard settings"
+    ) {
+        Toast.makeText(context, "Hold for 1.5 seconds to open Settings", Toast.LENGTH_SHORT).show()
+    }.apply {
+        var opened = false
+        var pressedAt = 0L
+        fun openSettings() {
+            if (opened) return
+            opened = true
+            isPressed = false
+            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            onSettings()
+        }
+        val openSettings = Runnable { openSettings() }
+        setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    opened = false
+                    pressedAt = android.os.SystemClock.elapsedRealtime()
+                    removeCallbacks(openSettings)
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    isPressed = true
+                    postDelayed(openSettings, SETTINGS_HOLD_MS)
+                }
+                MotionEvent.ACTION_UP -> {
+                    isPressed = false
+                    removeCallbacks(openSettings)
+                    // Some IMEs defer child callbacks while a key is held. Check the actual
+                    // elapsed hold as a fallback so the settings action is never missed.
+                    if (!opened && android.os.SystemClock.elapsedRealtime() - pressedAt >= SETTINGS_HOLD_MS) openSettings()
+                    else if (!opened) performClick()
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    isPressed = false
+                    removeCallbacks(openSettings)
+                }
+            }
+            true
+        }
     }
 
     private inner class Adapter : RecyclerView.Adapter<Holder>() {
@@ -233,4 +298,8 @@ internal class ClipboardBoard(
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    private companion object {
+        const val SETTINGS_HOLD_MS = 1_500L
+    }
 }

@@ -29,6 +29,7 @@ internal object KeyboardGeometry {
     const val KEY_AREA_TALL_DP = 250
     const val SLIVER_DP = 4
     const val LONG_PRESS_MS = 400L
+    const val LANGUAGE_SWITCH_HOLD_MS = 500L
     const val DELETE_REPEAT_START_MS = 420L
     const val DELETE_REPEAT_MS = 80L
     const val DELETE_WORD_AFTER = 20

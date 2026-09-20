@@ -148,7 +148,8 @@ internal object KeyboardLayoutFactory {
         keys.forEachIndexed { index, key ->
             when (key.action) {
                 KeyCode.SPACE -> spaceIndex = index
-                KeyCode.CHAR, KeyCode.EMOJI -> widths[index] = ten
+                // Language is intentionally the same physical size as '.' and Emoji, not a wide modifier.
+                KeyCode.CHAR, KeyCode.EMOJI, KeyCode.LANGUAGE -> widths[index] = ten
                 else -> widths[index] = shift
             }
         }
@@ -232,9 +233,10 @@ internal object KeyboardLayoutFactory {
         emojiPicker: Boolean,
         enterLabel: String,
         spaceLabel: String,
-        offerGlobe: Boolean = false
+        offerGlobe: Boolean = false,
+        languageSwitchLabel: String? = null
     ): List<RowDef> = when (layer) {
-        KeyboardLayer.LETTERS -> letterRows(mode, shifted, caps, editor, topRow, emojiPicker, enterLabel, spaceLabel, offerGlobe)
+        KeyboardLayer.LETTERS -> letterRows(mode, shifted, caps, editor, topRow, emojiPicker, enterLabel, spaceLabel, offerGlobe, languageSwitchLabel)
         KeyboardLayer.NUMBERS -> symbolRows(KeyboardView.numbers, KeyboardLayer.SYMBOLS, "=\\<", enterLabel, spaceLabel, emojiPicker)
         KeyboardLayer.SYMBOLS -> symbolRows(KeyboardView.symbols, KeyboardLayer.NUMBERS, "?123", enterLabel, spaceLabel, emojiPicker)
         else -> emptyList()
@@ -249,15 +251,17 @@ internal object KeyboardLayoutFactory {
         emojiPicker: Boolean,
         enterLabel: String,
         spaceLabel: String,
-        offerGlobe: Boolean
+        offerGlobe: Boolean,
+        languageSwitchLabel: String?
     ): List<RowDef> {
         val rows = ArrayList<RowDef>(6)
         val literal = editor != EditorLayout.TEXT
         val wijesekara = !literal && mode == InputMode.WIJESEKARA
-        if (!literal && topRow == "numbers") {
+        // Persistent English is rendered as ASCII, but remains a full text keyboard.
+        if ((!literal || editor == EditorLayout.ASCII) && topRow == "numbers") {
             rows += RowDef("1234567890".map { charDef(it.toString(), it.toString()) }, expandEdges = true, sliverTop = true)
         }
-        if (!literal && topRow == "emoji") {
+        if ((!literal || editor == EditorLayout.ASCII) && topRow == "emoji") {
             rows += RowDef(
                 listOf("😀", "😂", "❤️", "👍", "🙏", "🔥", "✨", "🎉", "🇱🇰", "😊").map { charDef(it, it) },
                 expandEdges = true,
@@ -293,7 +297,7 @@ internal object KeyboardLayoutFactory {
                     listOf(deleteDef().copy(widthFraction = KeyboardGeometry.DELETE))
             )
         }
-        rows += bottomRow(editor, emojiPicker, enterLabel, spaceLabel, offerGlobe, ukComma = !wijesekara)
+        rows += bottomRow(editor, emojiPicker, enterLabel, spaceLabel, offerGlobe, ukComma = !wijesekara, languageSwitchLabel)
         return rows
     }
 
@@ -344,20 +348,25 @@ internal object KeyboardLayoutFactory {
         enterLabel: String,
         spaceLabel: String,
         offerGlobe: Boolean,
-        ukComma: Boolean
+        ukComma: Boolean,
+        languageSwitchLabel: String?
     ): RowDef {
         val keys = ArrayList<KeyDef>(8)
         keys += KeyDef("?123", "?123", "", KeyCode.LAYER, KeyboardGeometry.SYMBOLS, utility = true, payload = KeyboardLayer.NUMBERS.name)
         when (editor) {
             EditorLayout.EMAIL -> keys += charDef("@", "@", KeyboardGeometry.PUNCT)
             EditorLayout.URI -> keys += charDef("/", "/", KeyboardGeometry.PUNCT)
-            else -> if (ukComma) keys += commaDef()
+            else -> when {
+                languageSwitchLabel != null -> keys += languageSwitchDef(languageSwitchLabel)
+                ukComma -> keys += commaDef()
+            }
         }
-        if (emojiPicker && editor == EditorLayout.TEXT) {
+        // Persistent English uses the ASCII layout while still being a normal text editor.
+        if (emojiPicker && editor in setOf(EditorLayout.TEXT, EditorLayout.ASCII)) {
             keys += KeyDef("emoji", "", "", KeyCode.EMOJI, KeyboardGeometry.PUNCT, icon = org.akshara.ime.R.drawable.ic_key_emoji, utility = true)
         }
         val trailing = ArrayList<KeyDef>(3)
-        if (editor == EditorLayout.TEXT || editor == EditorLayout.EMAIL || editor == EditorLayout.URI) {
+        if (editor in setOf(EditorLayout.TEXT, EditorLayout.ASCII, EditorLayout.EMAIL, EditorLayout.URI)) {
             trailing += periodDef()
         }
         trailing += enterDef(enterLabel)
@@ -401,6 +410,11 @@ internal object KeyboardLayoutFactory {
             extras = extras, flickOutput = extras.firstOrNull()?.second
         )
     }
+
+    private fun languageSwitchDef(label: String) = KeyDef(
+        "language", label, "", KeyCode.LANGUAGE, KeyboardGeometry.PUNCT,
+        utility = true
+    )
 
     private fun periodDef(): KeyDef {
         val extras = KeyAlternates.extras(".", InputMode.PHONETIC, KeyboardLayer.NUMBERS, false)

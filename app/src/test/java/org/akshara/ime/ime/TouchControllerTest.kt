@@ -125,6 +125,7 @@ class TouchControllerTest {
         override fun onLayer(layer: KeyboardLayer) = Unit
         override fun onEmoji() = Unit
         override fun onGlobe() = Unit
+        override fun onLanguageSwitch() = Unit
         override fun onHaptic() = Unit
         override fun onCursorDelta(delta: Int) { cursor += delta }
         override fun onCursorTick() = Unit

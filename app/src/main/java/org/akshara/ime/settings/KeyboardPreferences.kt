@@ -9,6 +9,7 @@ class KeyboardPreferences(context: Context) {
         get() = runCatching { InputMode.valueOf(store.getString(MODE, null) ?: "SMART_PHONETIC") }.getOrDefault(InputMode.SMART_PHONETIC)
         set(value) = store.edit().putString(MODE, value.name).apply()
     var suggestions: Boolean by bool(SUGGESTIONS, true)
+    var autocorrect: Boolean by bool(AUTOCORRECT, false)
     var emojiSuggestions: Boolean by bool(EMOJI_SUGGESTIONS, false)
     var emojiPicker: Boolean by bool(EMOJI_PICKER, true)
     var haptics: Boolean by bool(HAPTICS, true)
@@ -40,6 +41,8 @@ class KeyboardPreferences(context: Context) {
     var smartQuotes: Boolean by bool(SMART_QUOTES, true)
     var smartPunctuation: Boolean by bool(SMART_PUNCTUATION, true)
     var englishForOneWord: Boolean by bool(ENGLISH_ONE_WORD, false)
+    var persistentEnglish: Boolean by bool(PERSISTENT_ENGLISH, false)
+    var inlineAutofill: Boolean by bool(INLINE_AUTOFILL, true)
 
     fun reset() {
         val keepDeveloper = developerUnlocked
@@ -52,7 +55,7 @@ class KeyboardPreferences(context: Context) {
     }
     companion object {
         const val FILE = "akshara_keyboard_preferences"
-        private const val MODE = "mode"; private const val SUGGESTIONS = "suggestions"
+        private const val MODE = "mode"; private const val SUGGESTIONS = "suggestions"; private const val AUTOCORRECT = "autocorrect"
         private const val EMOJI_SUGGESTIONS = "emoji_suggestions"; private const val EMOJI_PICKER = "emoji_picker"
         private const val HAPTICS = "haptics"; private const val KEY_SOUNDS = "key_sounds"
         private const val HIGH_CONTRAST = "high_contrast"; private const val CLIPBOARD = "clipboard"
@@ -65,5 +68,7 @@ class KeyboardPreferences(context: Context) {
         private const val SMART_QUOTES = "smart_quotes"
         private const val SMART_PUNCTUATION = "smart_punctuation"
         private const val ENGLISH_ONE_WORD = "english_for_one_word"
+        private const val PERSISTENT_ENGLISH = "persistent_english"
+        private const val INLINE_AUTOFILL = "inline_autofill"
     }
 }

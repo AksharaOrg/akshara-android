@@ -14,7 +14,7 @@ internal data class Bounds(
     fun inset(dx: Float, dy: Float) = Bounds(left + dx, top + dy, right - dx, bottom - dy)
 }
 
-internal enum class KeyCode { CHAR, SHIFT, DELETE, SPACE, ENTER, LAYER, EMOJI, GLOBE }
+internal enum class KeyCode { CHAR, SHIFT, DELETE, SPACE, ENTER, LAYER, EMOJI, GLOBE, LANGUAGE }
 
 internal data class KeyDef(
     val id: String,

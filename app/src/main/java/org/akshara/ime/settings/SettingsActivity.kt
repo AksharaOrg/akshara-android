@@ -129,13 +129,6 @@ class SettingsActivity : Activity() {
             choice(R.string.input_mode, R.drawable.ic_language, R.color.settings_icon_blue, R.array.input_mode_entries, R.array.input_mode_values, prefs.mode.name) {
                 prefs.mode = runCatching { InputMode.valueOf(it) }.getOrDefault(InputMode.SMART_PHONETIC)
             }
-            toggle(R.string.suggestions, R.string.suggestions_summary, R.drawable.ic_suggestions, R.color.settings_icon_orange, prefs.suggestions) {
-                prefs.suggestions = it
-                render()
-            }
-            toggle(R.string.emoji_suggestions, R.string.emoji_suggestions_summary, R.drawable.ic_emoji, R.color.settings_icon_yellow, prefs.emojiSuggestions, enabled = prefs.suggestions) {
-                prefs.emojiSuggestions = it
-            }
             choice(R.string.top_row, R.drawable.ic_numbers, R.color.settings_icon_indigo, R.array.top_row_entries, R.array.top_row_values, prefs.topRow) {
                 prefs.topRow = it
             }
@@ -153,8 +146,21 @@ class SettingsActivity : Activity() {
                     prefs.englishForOneWord = it
                 }
             }
+            toggle(R.string.persistent_english, R.string.persistent_english_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.persistentEnglish) {
+                prefs.persistentEnglish = it
+            }
         }
         section(R.string.category_tools) {
+            toggle(R.string.suggestions, R.string.suggestions_summary, R.drawable.ic_suggestions, R.color.settings_icon_orange, prefs.suggestions) {
+                prefs.suggestions = it
+                render()
+            }
+            toggle(R.string.autocorrect, R.string.autocorrect_summary, R.drawable.ic_suggestions, R.color.settings_icon_teal, prefs.autocorrect) {
+                prefs.autocorrect = it
+            }
+            toggle(R.string.emoji_suggestions, R.string.emoji_suggestions_summary, R.drawable.ic_emoji, R.color.settings_icon_yellow, prefs.emojiSuggestions, enabled = prefs.suggestions) {
+                prefs.emojiSuggestions = it
+            }
             toggle(R.string.emoji_picker, R.string.emoji_picker_summary, R.drawable.ic_emoji, R.color.settings_icon_yellow, prefs.emojiPicker) {
                 prefs.emojiPicker = it
             }
@@ -163,6 +169,9 @@ class SettingsActivity : Activity() {
             }
             toggle(R.string.clipboard_history, R.string.clipboard_summary, R.drawable.ic_clipboard, R.color.settings_icon_teal, prefs.clipboardHistory) {
                 prefs.clipboardHistory = it
+            }
+            toggle(R.string.inline_autofill, R.string.inline_autofill_summary, R.drawable.ic_key_caps, R.color.settings_icon_blue, prefs.inlineAutofill) {
+                prefs.inlineAutofill = it
             }
         }
         section(R.string.category_appearance) {
@@ -293,6 +302,10 @@ class SettingsActivity : Activity() {
             action(R.string.notices_dataset, 0, R.drawable.ic_doc, R.color.settings_icon_orange) { openUrl(R.string.link_corpus) }
             action(R.string.notices_dataset_doi, 0, R.drawable.ic_doc, R.color.settings_icon_orange) { openUrl(R.string.link_corpus_doi) }
             action(R.string.notices_cc_by, 0, R.drawable.ic_doc, R.color.settings_icon_green) { openUrl(R.string.link_cc_by) }
+        }
+        copy(R.string.notices_english_frequency_title, R.string.notices_english_frequency_body)
+        section(0) {
+            action(R.string.notices_english_frequency_source, 0, R.drawable.ic_code, R.color.settings_icon_blue) { openUrl(R.string.link_english_frequency) }
         }
         copy(R.string.notices_privacy_title, R.string.notices_privacy_body)
     }

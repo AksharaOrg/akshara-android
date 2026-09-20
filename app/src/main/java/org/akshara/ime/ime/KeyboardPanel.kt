@@ -238,11 +238,13 @@ internal class KeyboardPanel(
     override fun onCommit(output: String) = actions.onCharacter(output)
     override fun onBackspace(word: Boolean) = actions.onBackspace(word)
     override fun onSpace() = actions.onSpace()
+    override fun onSpaceLongPress() = actions.onSpaceLongPress()
     override fun onEnter() = actions.onEnter()
     override fun onShift() = onShift.invoke()
     override fun onLayer(layer: KeyboardLayer) = onLayer.invoke(layer)
     override fun onEmoji() = onLayer.invoke(KeyboardLayer.EMOJI)
     override fun onGlobe() = actions.onGlobe()
+    override fun onLanguageSwitch() = actions.onLanguageSwitch()
 
     override fun onHaptic() {
         actions.onPressFeedback()
@@ -282,6 +284,7 @@ internal class KeyboardPanel(
             KeyCode.LAYER -> spec.payload.takeIf { it.isNotEmpty() }?.let { onLayer(KeyboardLayer.valueOf(it)) }
             KeyCode.EMOJI -> onLayer(KeyboardLayer.EMOJI)
             KeyCode.GLOBE -> actions.onGlobe()
+            KeyCode.LANGUAGE -> actions.onLanguageSwitch()
         }
     }
 }
