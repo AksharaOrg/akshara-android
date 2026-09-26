@@ -1,6 +1,7 @@
 package org.akshara.ime.settings
 
 import android.content.Context
+import android.content.SharedPreferences
 import org.akshara.ime.engine.InputMode
 
 class KeyboardPreferences(context: Context) {
@@ -10,12 +11,16 @@ class KeyboardPreferences(context: Context) {
         set(value) = store.edit().putString(MODE, value.name).apply()
     var suggestions: Boolean by bool(SUGGESTIONS, true)
     var autocorrect: Boolean by bool(AUTOCORRECT, false)
+    var englishAutocorrect: Boolean by bool("english_autocorrect", true)
+    var autoCapitalization: Boolean by bool("auto_capitalization", true)
     var emojiSuggestions: Boolean by bool(EMOJI_SUGGESTIONS, false)
     var emojiPicker: Boolean by bool(EMOJI_PICKER, true)
     var haptics: Boolean by bool(HAPTICS, true)
     var keySounds: Boolean by bool(KEY_SOUNDS, false)
     var highContrast: Boolean by bool(HIGH_CONTRAST, false)
     var clipboardHistory: Boolean by bool(CLIPBOARD, false)
+    var clipboardPreview: Boolean by bool(CLIPBOARD_PREVIEW, false)
+    var spacePunctuationKeys: Boolean by bool(SPACE_PUNCTUATION_KEYS, true)
     var topRow: String
         get() = store.getString(TOP_ROW, "none") ?: "none"
         set(value) = store.edit().putString(TOP_ROW, value).apply()
@@ -44,6 +49,12 @@ class KeyboardPreferences(context: Context) {
     var persistentEnglish: Boolean by bool(PERSISTENT_ENGLISH, false)
     var inlineAutofill: Boolean by bool(INLINE_AUTOFILL, true)
 
+    fun register(listener: SharedPreferences.OnSharedPreferenceChangeListener) =
+        store.registerOnSharedPreferenceChangeListener(listener)
+
+    fun unregister(listener: SharedPreferences.OnSharedPreferenceChangeListener) =
+        store.unregisterOnSharedPreferenceChangeListener(listener)
+
     fun reset() {
         val keepDeveloper = developerUnlocked
         store.edit().clear().apply()
@@ -59,10 +70,12 @@ class KeyboardPreferences(context: Context) {
         private const val EMOJI_SUGGESTIONS = "emoji_suggestions"; private const val EMOJI_PICKER = "emoji_picker"
         private const val HAPTICS = "haptics"; private const val KEY_SOUNDS = "key_sounds"
         private const val HIGH_CONTRAST = "high_contrast"; private const val CLIPBOARD = "clipboard"
+        const val CLIPBOARD_PREVIEW = "clipboard_preview"
+        const val SPACE_PUNCTUATION_KEYS = "space_punctuation_keys"
         private const val TOP_ROW = "top_row"; private const val ONE_HANDED = "one_handed"
         private const val KEY_SPACING = "key_spacing"; private const val KEYBOARD_SIZE = "keyboard_size"
         private const val SPATIAL_DECODER = "spatial_decoder"; private const val DEBUG_OVERLAY = "debug_overlay"
-        private const val THEME = "theme"; private const val SKIN_TONE = "skin_tone"
+        const val THEME = "theme"; private const val SKIN_TONE = "skin_tone"
         private const val DEVELOPER = "developer_unlocked"
         private const val DOUBLE_SPACE = "double_space_period"
         private const val SMART_QUOTES = "smart_quotes"

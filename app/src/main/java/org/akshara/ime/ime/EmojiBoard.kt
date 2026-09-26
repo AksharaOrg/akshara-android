@@ -108,3 +108,74 @@ internal object EmojiBoard {
         return cell * count
     }
 }
+
+/** One continuous catalog; category buttons jump to section headings. */
+internal class EmojiCatalogView(
+    context: Context,
+    sections: List<Pair<String, List<String>>>,
+    ink: Int,
+    tone: String,
+    onCategory: (Int) -> Unit,
+    onPick: (String) -> Unit
+) : RecyclerView(context) {
+    private data class Entry(val text: String, val category: Int, val heading: Boolean = false, val empty: Boolean = false)
+    private val columns = EmojiBoard.columns(context)
+    private val entries = buildList {
+        sections.forEachIndexed { category, (title, emoji) ->
+            add(Entry(title, category, heading = true))
+            if (emoji.isEmpty()) add(Entry("Recently used emoji appear here", category, empty = true))
+            else {
+                emoji.forEach { add(Entry(it, category)) }
+                repeat((columns - emoji.size % columns) % columns) { add(Entry("", category)) }
+            }
+        }
+    }
+    private val manager = GridLayoutManager(context, columns).apply {
+        spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int) = if (entries[position].heading || entries[position].empty) columns else 1
+        }
+    }
+    init {
+        layoutManager = manager
+        adapter = object : Adapter<ViewHolder>() {
+            override fun getItemCount() = entries.size
+            override fun getItemViewType(position: Int) = if (entries[position].heading || entries[position].empty) 1 else 0
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+                val cell = if (viewType == 0) EmojiCell(context, ink) else TextView(context).apply {
+                    textSize = 12f
+                    setTextColor(ColorUtils.setAlphaComponent(ink, 160))
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(8), 0, dp(8), 0)
+                }
+                cell.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, if (viewType == 0) LayoutParams.WRAP_CONTENT else dp(26))
+                return object : ViewHolder(cell) {}
+            }
+            override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+                val entry = entries[position]
+                val cell = holder.itemView as TextView
+                cell.text = if (entry.heading || entry.empty) entry.text else org.akshara.ime.data.EmojiRepository.withTone(entry.text, tone)
+                val pickable = !entry.heading && !entry.empty && entry.text.isNotEmpty()
+                cell.setOnClickListener(if (pickable) View.OnClickListener { onPick(cell.text.toString()) } else null)
+                cell.isClickable = pickable
+                cell.isFocusable = pickable
+                cell.contentDescription = if (pickable) "Emoji ${entry.text}" else null
+                cell.importantForAccessibility = if (entry.text.isEmpty()) View.IMPORTANT_FOR_ACCESSIBILITY_NO else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+                androidx.core.view.ViewCompat.setAccessibilityHeading(cell, entry.heading)
+            }
+        }
+        itemAnimator = null
+        overScrollMode = View.OVER_SCROLL_NEVER
+        setPadding(dp(4), 0, dp(4), 0)
+        clipToPadding = true
+        addOnScrollListener(object : OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                entries.getOrNull(manager.findFirstVisibleItemPosition())?.let { onCategory(it.category) }
+            }
+        })
+    }
+    fun showCategory(category: Int) {
+        val position = entries.indexOfFirst { it.category == category && it.heading }
+        if (position >= 0) manager.scrollToPositionWithOffset(position, 0)
+    }
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+}

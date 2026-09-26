@@ -13,7 +13,7 @@ class KeyboardMetricsTest {
             val layout = placePhonetic(width)
             val q = layout.rowKeys(0)
             assertEquals(10, q.size)
-            val insetH = 2f
+            val insetH = 1f
             q.dropLast(1).forEach { key ->
                 assertEquals(metrics.tenKeyWidth - 2 * insetH, key.visual.width, 0.6f)
                 assertTrue(key.visual.width < key.logical.width)
@@ -22,9 +22,9 @@ class KeyboardMetricsTest {
             assertEquals(width - metrics.inset - insetH, q.last().visual.right, 0.6f)
             assertEquals(0f, q.first().logical.left, 0.01f)
             assertEquals(width, q.last().logical.right, 0.01f)
-            assertEquals(5f, q.first().visual.top, 0.01f)
-            assertEquals(47f, q.first().visual.bottom, 0.01f)
-            assertEquals(42f, q.first().visual.height, 0.01f)
+            assertEquals(6f, q.first().visual.top, 0.01f)
+            assertEquals(46f, q.first().visual.bottom, 0.01f)
+            assertEquals(40f, q.first().visual.height, 0.01f)
 
             val a = layout.keyById("a")!!
             val l = layout.keyById("l")!!
@@ -63,6 +63,30 @@ class KeyboardMetricsTest {
         }
     }
 
+    @Test fun sharedGuttersStayAlignedAcrossSinhalaLayoutsAndSpacingPreferences() {
+        for (width in listOf(360f, 461f, 800f)) for (spacing in listOf("compact", "standard", "spacious")) {
+            fun board(mode: InputMode) = KeyboardLayoutFactory.place(
+                KeyboardLayoutFactory.typingRows(mode, KeyboardLayer.LETTERS, false, false,
+                    EditorLayout.TEXT, "none", false, "↵", "සිංහල"), width, 58.5f, spacing = spacing)
+            val phonetic = board(InputMode.PHONETIC)
+            val smart = board(InputMode.SMART_PHONETIC)
+            val wijesekara = board(InputMode.WIJESEKARA)
+            assertEquals(phonetic.keys.map { it.visual }, smart.keys.map { it.visual })
+            assertEquals(11, wijesekara.rowKeys(0).size)
+            for (row in 0..2) {
+                val reference = phonetic.rowKeys(row)
+                val sinhala = wijesekara.rowKeys(row)
+                assertEquals(reference.first().visual.top, sinhala.first().visual.top, .01f)
+                assertEquals(reference.first().visual.height, sinhala.first().visual.height, .01f)
+                sinhala.zipWithNext().forEach { (left, right) ->
+                    assertTrue("Wijesekara keys must retain visible gutters", right.visual.left > left.visual.right)
+                }
+            }
+            assertEquals(phonetic.rowKeys(0).first().visual.left, wijesekara.rowKeys(0).first().visual.left, 1f)
+            assertEquals(phonetic.rowKeys(0).last().visual.right, wijesekara.rowKeys(0).last().visual.right, 1f)
+        }
+    }
+
     @Test fun presentPutsTheBestCandidateInTheCentreSlot() {
         assertEquals(listOf("give", "good", "go"), SuggestionRail.present(listOf("good", "give", "go")).slots)
         assertEquals(listOf<String?>(null, "ක", null), SuggestionRail.present(listOf("ක")).slots)
@@ -91,7 +115,7 @@ class KeyboardMetricsTest {
         val shift = wijesekara.keyById("shift")!!
         val del = wijesekara.keyById("delete")!!
         assertEquals(phonetic.keyById("shift")!!.visual.left, shift.visual.left, 0.6f)
-        assertEquals(width - metrics.inset - 2f, del.visual.right, 0.6f)
+        assertEquals(width - metrics.inset - 1f, del.visual.right, 0.6f)
         assertEquals(phonetic.keyById("enter")!!.visual.width, wijesekara.keyById("enter")!!.visual.width, 0.6f)
         assertEquals(phonetic.keyById("?123")!!.visual.width, wijesekara.keyById("?123")!!.visual.width, 0.6f)
     }
@@ -115,11 +139,11 @@ class KeyboardMetricsTest {
             InputMode.PHONETIC, KeyboardLayer.NUMBERS, false, false,
             EditorLayout.TEXT, "none", true, "↵", "English"
         )
-        assertEquals(listOf(10, 10, 9, 6), rows.map { it.keys.size })
+        assertEquals(listOf(10, 10, 9, 5), rows.map { it.keys.size })
         assertEquals(KeyCode.LAYER, rows[2].keys.first().action)
         assertEquals(KeyCode.DELETE, rows[2].keys.last().action)
         assertEquals(",", rows[3].keys[1].id)
-        assertEquals(0.40f, rows[3].keys.first { it.action == KeyCode.SPACE }.widthFraction, 0.001f)
+        assertEquals(0.50f, rows[3].keys.first { it.action == KeyCode.SPACE }.widthFraction, 0.001f)
         assertTrue(rows[3].keys.first { it.id == "." }.extras.any { it.second == "," })
     }
 

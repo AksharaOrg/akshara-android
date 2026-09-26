@@ -126,6 +126,12 @@ class SettingsActivity : Activity() {
             ) { (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker() }
         }
         section(R.string.category_typing) {
+            toggle(R.string.auto_capitalization, R.string.auto_capitalization_summary, R.drawable.ic_key_caps, R.color.settings_icon_blue, prefs.autoCapitalization) {
+                prefs.autoCapitalization = it
+            }
+            toggle(R.string.english_autocorrect, R.string.english_autocorrect_summary, R.drawable.ic_suggestions, R.color.settings_icon_teal, prefs.englishAutocorrect) {
+                prefs.englishAutocorrect = it
+            }
             choice(R.string.input_mode, R.drawable.ic_language, R.color.settings_icon_blue, R.array.input_mode_entries, R.array.input_mode_values, prefs.mode.name) {
                 prefs.mode = runCatching { InputMode.valueOf(it) }.getOrDefault(InputMode.SMART_PHONETIC)
             }
@@ -149,6 +155,9 @@ class SettingsActivity : Activity() {
             toggle(R.string.persistent_english, R.string.persistent_english_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.persistentEnglish) {
                 prefs.persistentEnglish = it
             }
+            toggle(R.string.space_punctuation_keys, R.string.space_punctuation_keys_summary, R.drawable.ic_language, R.color.settings_icon_gray, prefs.spacePunctuationKeys) {
+                prefs.spacePunctuationKeys = it
+            }
         }
         section(R.string.category_tools) {
             toggle(R.string.suggestions, R.string.suggestions_summary, R.drawable.ic_suggestions, R.color.settings_icon_orange, prefs.suggestions) {
@@ -169,6 +178,9 @@ class SettingsActivity : Activity() {
             }
             toggle(R.string.clipboard_history, R.string.clipboard_summary, R.drawable.ic_clipboard, R.color.settings_icon_teal, prefs.clipboardHistory) {
                 prefs.clipboardHistory = it
+            }
+            toggle(R.string.clipboard_preview, R.string.clipboard_preview_summary, R.drawable.ic_clipboard, R.color.settings_icon_teal, prefs.clipboardPreview) {
+                prefs.clipboardPreview = it
             }
             toggle(R.string.inline_autofill, R.string.inline_autofill_summary, R.drawable.ic_key_caps, R.color.settings_icon_blue, prefs.inlineAutofill) {
                 prefs.inlineAutofill = it

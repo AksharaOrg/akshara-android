@@ -40,6 +40,10 @@ class EditorIntegrationTest {
             info.imeOptions = EditorInfo.IME_ACTION_DONE
             ReflectionHelpers.setField(service, "mInputEditorInfo", info)
             service.onEnter()
+            assertEquals(original.drop(1), editor.text.toString())
+
+            info.imeOptions = EditorInfo.IME_ACTION_NONE
+            service.onEnter()
             assertEquals("\n" + original.drop(1), editor.text.toString())
         } finally { controller.destroy() }
     }

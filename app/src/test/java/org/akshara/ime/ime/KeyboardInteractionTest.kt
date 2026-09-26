@@ -15,7 +15,7 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class KeyboardInteractionTest {
     @Test @org.robolectric.annotation.Config(qualifiers = "land")
-    fun landscapePanelsAlsoKeepTheSameHeight() = allPanelsKeepTheSameHeightIncludingTallAndOptionalRows()
+    fun landscapePanelsKeepUsableHeights() = auxiliaryPanelsKeepUsableHeightsIncludingTallAndOptionalRows()
     @Test fun emojiSearchTypingDoesNotWriteIntoHostEditor() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         var hostText = ""
@@ -30,7 +30,7 @@ class KeyboardInteractionTest {
         assertEquals("", hostText)
         assertNotNull(findButton(view, "Back to emoji"))
     }
-    @Test fun allPanelsKeepTheSameHeightIncludingTallAndOptionalRows() {
+    @Test fun auxiliaryPanelsKeepUsableHeightsIncludingTallAndOptionalRows() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val prefs = KeyboardPreferences(context)
         for (size in listOf("compact", "standard", "tall")) {
@@ -49,11 +49,12 @@ class KeyboardInteractionTest {
                 assertEquals("Clipboard $size $top", typing, height())
                 findButton(view, "Clipboard history")!!.performClick()
                 findButton(view, "Emoji")!!.performClick()
-                assertEquals("Emoji $size $top", typing, height())
+                val picker = height()
+                assertTrue("Emoji picker must not shrink below typing: $size $top", picker >= typing)
                 findButton(view, "Search emoji")!!.performClick()
-                assertEquals("Search $size $top", typing, height())
+                assertTrue("Search keeps full-size typing keys: $size $top", height() >= typing)
                 findButton(view, "Back to emoji")!!.performClick()
-                assertEquals(typing, height())
+                assertEquals(picker, height())
             }
         }
         prefs.reset()
@@ -240,6 +241,30 @@ class KeyboardInteractionTest {
         assertTrue(hidden == null || hidden.visibility != View.VISIBLE)
     }
 
+    @Test fun quickPastePreviewAndEmojiAreToolbarActions() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().clear().commit()
+        val prefs = KeyboardPreferences(context)
+        var quickPastes = 0
+        val actions = object : KeyboardActions by idleActions() {
+            override fun onClipboardPreviewPaste() { quickPastes++ }
+        }
+        val view = KeyboardView(context, actions, prefs)
+        view.configure(InputMode.SMART_PHONETIC, false, "↵")
+        view.setClipboardPreview("hello")
+        layoutKeyboard(view)
+        assertNotNull(findButton(view, "Emoji"))
+        assertNull(view.typingLayout()!!.keys.firstOrNull { it.action == KeyCode.EMOJI })
+        findButton(view, "Paste hello")!!.performClick()
+        assertEquals(1, quickPastes)
+
+        prefs.emojiPicker = false
+        view.configure(InputMode.SMART_PHONETIC, false, "↵")
+        layoutKeyboard(view)
+        assertTrue(findButton(view, "Emoji") == null || findButton(view, "Emoji")!!.visibility != View.VISIBLE)
+        prefs.reset()
+    }
+
     @Test fun clipboardPullExpandsAndCollapsesWhileCollapsedStaysEqualHeight() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().clear().commit()
@@ -329,7 +354,7 @@ class KeyboardInteractionTest {
         layoutKeyboard(view)
         view.setEnglishOneWord(true)
         layoutKeyboard(view)
-        assertEquals("English · one word", view.typingLayout()!!.keyById("space")!!.label)
+        assertEquals("Akshara - English · one word", view.typingLayout()!!.keyById("space")!!.label)
     }
 
     @Test fun spaceOnSymbolsReturnsToLetters() {

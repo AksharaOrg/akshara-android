@@ -15,16 +15,35 @@ class KeyboardPolicyTest {
         assertEquals(listOf("😀", "😂"), SuggestionRail.present(listOf("first", "second", "third"), listOf("😀", "😂")).emoji)
         assertEquals(listOf("😀"), SuggestionRail.present(emptyList(), listOf("😀", "😀", " ")).emoji)
     }
-    @Test fun multilineDoneAndNoEnterActionUseReturn() {
+    @Test fun explicitMultilineActionWinsAndNoEnterActionUsesReturn() {
         val info = EditorInfo().apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             imeOptions = EditorInfo.IME_ACTION_DONE
         }
-        assertEquals("↵", AksharaInputMethodService.enterLabel(info))
-        assertEquals(EditorInfo.IME_ACTION_NONE, AksharaInputMethodService.enterAction(info))
+        assertEquals("Done", AksharaInputMethodService.enterLabel(info))
+        assertEquals(EditorInfo.IME_ACTION_DONE, AksharaInputMethodService.enterAction(info))
         info.inputType = InputType.TYPE_CLASS_TEXT
         info.imeOptions = EditorInfo.IME_ACTION_SEND or EditorInfo.IME_FLAG_NO_ENTER_ACTION
         assertEquals("↵", AksharaInputMethodService.enterLabel(info))
+    }
+    @Test fun urlEditorsAllowSinhalaAndClipboardButPasswordsDoNot() {
+        val url = EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI }
+        val password = EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
+        assertTrue(AksharaInputMethodService.supportsSinhala(AksharaInputMethodService.editorLayout(url)))
+        assertTrue(AksharaInputMethodService.isClipboardEditor(url))
+        assertFalse(AksharaInputMethodService.isClipboardEditor(password))
+        assertTrue(AksharaInputMethodService.isSecureEditor(password))
+    }
+    @Test fun punctuationSettingKeepsCommaAndPeriodBesideSpace() {
+        val rows = KeyboardLayoutFactory.typingRows(
+            org.akshara.ime.engine.InputMode.PHONETIC, KeyboardLayer.LETTERS, false, false,
+            EditorLayout.TEXT, "none", true, "Done", "Akshara", false, "EN", true
+        )
+        val bottom = rows.last().keys
+        val space = bottom.indexOfFirst { it.action == KeyCode.SPACE }
+        assertEquals(",", bottom[space - 1].id)
+        assertEquals(".", bottom[space + 1].id)
+        assertTrue(bottom.none { it.action == KeyCode.EMOJI })
     }
     @Test fun literalLettersNeverExposeSinhalaHintsOrAlternates() {
         for (mode in org.akshara.ime.engine.InputMode.values()) {

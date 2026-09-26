@@ -21,15 +21,21 @@ internal class UnmarkedPreview {
         return ic.getTextBeforeCursor(before.length, 0)?.toString() == before
     }
 
-    fun replace(ic: InputConnection, value: String): Boolean {
-        if (!matches(ic)) return false
+    fun replace(ic: InputConnection, value: String, alreadyValidated: Boolean = false): Boolean {
+        if (!alreadyValidated && !matches(ic)) return false
+        val previousText = text
+        val stablePrefix = if (before.endsWith(previousText)) before.dropLast(previousText.length) else ""
+        val previousEnd = end
         ic.beginBatchEdit()
         try {
             if (text.isNotEmpty()) ic.deleteSurroundingText(text.length, 0)
             ic.commitText(value, 1)
             text = value
-            before = ic.getTextBeforeCursor(value.length + 64, 0)?.toString().orEmpty()
-            end = ic.getExtractedText(ExtractedTextRequest(), 0)?.let { it.startOffset + it.selectionEnd }
+            // Keep the local anchor current. Selection callbacks invalidate it when the host
+            // moves the cursor, avoiding two additional binder reads after every keypress.
+            before = if (previousText.isEmpty()) ic.getTextBeforeCursor(value.length + 64, 0)?.toString().orEmpty() else stablePrefix + value
+            end = if (previousText.isEmpty()) ic.getExtractedText(ExtractedTextRequest(), 0)?.let { it.startOffset + it.selectionEnd }
+                else previousEnd?.plus(value.length - previousText.length)
         } finally { ic.endBatchEdit() }
         return true
     }

@@ -96,6 +96,9 @@ internal class KeyboardPanel(
                 cap.setOnClickListener { cap.spec?.let(::activate) }
             }
         }
+        // Input events can arrive before Android's next layout traversal. Publish the
+        // new outputs and geometry synchronously so a consumed Shift is not reused.
+        if (width > 0) placeKeys(width.toFloat())
         requestLayout()
         invalidate()
     }
@@ -111,7 +114,10 @@ internal class KeyboardPanel(
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        val width = (r - l).toFloat()
+        placeKeys((r - l).toFloat())
+    }
+
+    private fun placeKeys(width: Float) {
         if (width <= 0f || rows.isEmpty()) return
         val density = resources.displayMetrics.density
         val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE

@@ -1,6 +1,6 @@
 package org.akshara.ime.ime
 
-/** Gboard UK slots with 2dp extra chin and slightly more keycap gutters. */
+/** Shared Gboard-like keycap gutters, with layout-specific row packing. */
 internal object KeyboardGeometry {
     const val LETTER = 0.10f
     const val ROW2_OFFSET = 0.05f
@@ -20,8 +20,8 @@ internal object KeyboardGeometry {
     /** Fraction of each neighbouring cell the space bar steals as extra hit area. */
     const val SPACE_STEAL = 0.28f
     const val SHIFT_DOUBLE_MS = 400L
-    const val VISUAL_INSET_H_DP = 2f
-    const val VISUAL_INSET_V_DP = 5f
+    const val VISUAL_INSET_H_DP = 1f
+    const val VISUAL_INSET_V_DP = 6f
     const val RAIL_PORTRAIT_DP = 46
     const val RAIL_LANDSCAPE_DP = 38
     const val KEY_AREA_COMPACT_DP = 218
@@ -30,8 +30,8 @@ internal object KeyboardGeometry {
     const val SLIVER_DP = 4
     const val LONG_PRESS_MS = 400L
     const val LANGUAGE_SWITCH_HOLD_MS = 500L
-    const val DELETE_REPEAT_START_MS = 420L
-    const val DELETE_REPEAT_MS = 80L
+    const val DELETE_REPEAT_START_MS = 350L
+    const val DELETE_REPEAT_MS = 60L
     const val DELETE_WORD_AFTER = 20
     const val PERSONALIZATION_CLAMP = 0.18f
     const val EWMA_OLD = 0.98f
@@ -41,7 +41,7 @@ internal object KeyboardGeometry {
     const val SPACE_SWIPE_DP = 28
     const val SPACE_STEP_DP = 24
     const val DELETE_SWIPE_DP = 24
-    const val ICON_DP = 22f
+    const val ICON_DP = 24f
     const val TOP_PAD_DP = 8
     const val BOTTOM_PAD_DP = 30
     const val LETTER_RADIUS_DP = 8f
@@ -53,11 +53,11 @@ internal object KeyboardGeometry {
     const val SPACE_COLLAPSE_SCALE = 0.88f
     const val PREVIEW_HEIGHT_DP = 58
     const val PREVIEW_TEXT_SP = 32f
-    const val EMOJI_TEXT_SP = 40f
+    const val EMOJI_TEXT_SP = 36f
     const val EMOJI_TAB_DP = 44
     const val EMOJI_MIN_CELL_DP = 48
-    const val EMOJI_COLUMNS_PORTRAIT = 8
-    const val EMOJI_COLUMNS_LANDSCAPE = 10
+    const val EMOJI_COLUMNS_PORTRAIT = 9
+    const val EMOJI_COLUMNS_LANDSCAPE = 16
     const val EMOJI_ROWS_PORTRAIT = 5
     const val EMOJI_ROWS_LANDSCAPE = 3
     /** Hit height from the top of the IME for clipboard expand/collapse. */
@@ -100,8 +100,8 @@ internal object KeyboardGeometry {
 
     fun visualInsetH(density: Float, spacing: String): Float {
         val dp = when (spacing) {
-            "compact" -> 1f
-            "spacious" -> 3f
+            "compact" -> 0.5f
+            "spacious" -> 2f
             else -> VISUAL_INSET_H_DP
         }
         return dp * density
@@ -109,8 +109,8 @@ internal object KeyboardGeometry {
 
     fun visualInsetV(density: Float, spacing: String): Float {
         val dp = when (spacing) {
-            "compact" -> 4f
-            "spacious" -> 6f
+            "compact" -> 5f
+            "spacious" -> 7f
             else -> VISUAL_INSET_V_DP
         }
         return dp * density

@@ -234,11 +234,13 @@ internal object KeyboardLayoutFactory {
         enterLabel: String,
         spaceLabel: String,
         offerGlobe: Boolean = false,
-        languageSwitchLabel: String? = null
+        languageSwitchLabel: String? = null,
+        spacePunctuationKeys: Boolean = false,
+        english: Boolean = false
     ): List<RowDef> = when (layer) {
-        KeyboardLayer.LETTERS -> letterRows(mode, shifted, caps, editor, topRow, emojiPicker, enterLabel, spaceLabel, offerGlobe, languageSwitchLabel)
-        KeyboardLayer.NUMBERS -> symbolRows(KeyboardView.numbers, KeyboardLayer.SYMBOLS, "=\\<", enterLabel, spaceLabel, emojiPicker)
-        KeyboardLayer.SYMBOLS -> symbolRows(KeyboardView.symbols, KeyboardLayer.NUMBERS, "?123", enterLabel, spaceLabel, emojiPicker)
+        KeyboardLayer.LETTERS -> letterRows(mode, shifted, caps, editor, topRow, enterLabel, spaceLabel, offerGlobe, languageSwitchLabel, spacePunctuationKeys, english)
+        KeyboardLayer.NUMBERS -> symbolRows(KeyboardView.numbers, KeyboardLayer.SYMBOLS, "=\\<", enterLabel, spaceLabel)
+        KeyboardLayer.SYMBOLS -> symbolRows(KeyboardView.symbols, KeyboardLayer.NUMBERS, "?123", enterLabel, spaceLabel)
         else -> emptyList()
     }
 
@@ -248,20 +250,21 @@ internal object KeyboardLayoutFactory {
         caps: Boolean,
         editor: EditorLayout,
         topRow: String,
-        emojiPicker: Boolean,
         enterLabel: String,
         spaceLabel: String,
         offerGlobe: Boolean,
-        languageSwitchLabel: String?
+        languageSwitchLabel: String?,
+        spacePunctuationKeys: Boolean,
+        english: Boolean
     ): List<RowDef> {
         val rows = ArrayList<RowDef>(6)
-        val literal = editor != EditorLayout.TEXT
+        val literal = english || editor !in setOf(EditorLayout.TEXT, EditorLayout.URI) || (editor == EditorLayout.URI && languageSwitchLabel == null)
         val wijesekara = !literal && mode == InputMode.WIJESEKARA
         // Persistent English is rendered as ASCII, but remains a full text keyboard.
-        if ((!literal || editor == EditorLayout.ASCII) && topRow == "numbers") {
+        if ((!literal || editor == EditorLayout.ASCII || (english && editor == EditorLayout.TEXT)) && topRow == "numbers") {
             rows += RowDef("1234567890".map { charDef(it.toString(), it.toString()) }, expandEdges = true, sliverTop = true)
         }
-        if ((!literal || editor == EditorLayout.ASCII) && topRow == "emoji") {
+        if ((!literal || editor == EditorLayout.ASCII || (english && editor == EditorLayout.TEXT)) && topRow == "emoji") {
             rows += RowDef(
                 listOf("😀", "😂", "❤️", "👍", "🙏", "🔥", "✨", "🎉", "🇱🇰", "😊").map { charDef(it, it) },
                 expandEdges = true,
@@ -284,20 +287,28 @@ internal object KeyboardLayoutFactory {
             }
         } else {
             fun key(id: String) = letterDef(id, mode, false, shifted, caps, KeyboardGeometry.LETTER).let {
-                if (literal) it.copy(label = it.output, hint = null, extras = emptyList(), flickOutput = null) else it
+                if (literal) it.copy(label = it.output, hint = null,
+                    extras = if (english && editor == EditorLayout.TEXT) KeyAlternates.extras(id, InputMode.PHONETIC, KeyboardLayer.LETTERS, shifted || caps) else emptyList(),
+                    flickOutput = null) else it
             }
-            val q = KeyboardView.qwertyRows[0].map(::key)
+            val q = KeyboardView.qwertyRows[0].mapIndexed { index, id ->
+                val letter = key(id)
+                if (english && topRow != "numbers") {
+                    val number = "1234567890"[index].toString()
+                    letter.copy(hint = number, extras = listOf(number to number) + letter.extras)
+                } else letter
+            }
             val a = KeyboardView.qwertyRows[1].map(::key)
             val z = KeyboardView.qwertyRows[2].map(::key)
             rows += RowDef(q, startFraction = 0f, expandEdges = true, sliverTop = firstLetters)
             rows += RowDef(a, startFraction = KeyboardGeometry.ROW2_OFFSET, expandEdges = true)
             rows += RowDef(
-                listOf(shiftDef(caps).copy(widthFraction = KeyboardGeometry.SHIFT)) +
+                listOf(shiftDef(caps, shifted).copy(widthFraction = KeyboardGeometry.SHIFT)) +
                     z +
                     listOf(deleteDef().copy(widthFraction = KeyboardGeometry.DELETE))
             )
         }
-        rows += bottomRow(editor, emojiPicker, enterLabel, spaceLabel, offerGlobe, ukComma = !wijesekara, languageSwitchLabel)
+        rows += bottomRow(editor, enterLabel, spaceLabel, offerGlobe, ukComma = !wijesekara, languageSwitchLabel, spacePunctuationKeys)
         return rows
     }
 
@@ -312,8 +323,7 @@ internal object KeyboardLayoutFactory {
         alternate: KeyboardLayer,
         alternateLabel: String,
         enterLabel: String,
-        spaceLabel: String,
-        emojiPicker: Boolean
+        spaceLabel: String
     ): List<RowDef> {
         val rows = grid.take(2).mapIndexed { index, labels ->
             val fraction = 1f / labels.size
@@ -332,9 +342,6 @@ internal object KeyboardLayoutFactory {
         val bottom = ArrayList<KeyDef>(6)
         bottom += KeyDef("ABC", "ABC", "", KeyCode.LAYER, KeyboardGeometry.SYMBOLS, utility = true, payload = KeyboardLayer.LETTERS.name)
         bottom += commaDef()
-        if (emojiPicker) {
-            bottom += KeyDef("emoji", "", "", KeyCode.EMOJI, KeyboardGeometry.PUNCT, icon = org.akshara.ime.R.drawable.ic_key_emoji, utility = true)
-        }
         bottom += spaceDef(1f - bottom.sumOf { it.widthFraction.toDouble() }.toFloat() - KeyboardGeometry.PUNCT - KeyboardGeometry.ENTER, spaceLabel)
         bottom += periodDef()
         bottom += enterDef(enterLabel)
@@ -344,29 +351,31 @@ internal object KeyboardLayoutFactory {
 
     private fun bottomRow(
         editor: EditorLayout,
-        emojiPicker: Boolean,
         enterLabel: String,
         spaceLabel: String,
         offerGlobe: Boolean,
         ukComma: Boolean,
-        languageSwitchLabel: String?
+        languageSwitchLabel: String?,
+        spacePunctuationKeys: Boolean
     ): RowDef {
         val keys = ArrayList<KeyDef>(8)
         keys += KeyDef("?123", "?123", "", KeyCode.LAYER, KeyboardGeometry.SYMBOLS, utility = true, payload = KeyboardLayer.NUMBERS.name)
         when (editor) {
             EditorLayout.EMAIL -> keys += charDef("@", "@", KeyboardGeometry.PUNCT)
-            EditorLayout.URI -> keys += charDef("/", "/", KeyboardGeometry.PUNCT)
-            else -> when {
-                languageSwitchLabel != null -> keys += languageSwitchDef(languageSwitchLabel)
-                ukComma -> keys += commaDef()
+            EditorLayout.URI -> {
+                if (languageSwitchLabel != null) keys += languageSwitchDef(languageSwitchLabel)
+                keys += charDef("/", "/", KeyboardGeometry.PUNCT)
             }
+            else -> if (languageSwitchLabel != null) keys += languageSwitchDef(languageSwitchLabel)
         }
-        // Persistent English uses the ASCII layout while still being a normal text editor.
-        if (emojiPicker && editor in setOf(EditorLayout.TEXT, EditorLayout.ASCII)) {
-            keys += KeyDef("emoji", "", "", KeyCode.EMOJI, KeyboardGeometry.PUNCT, icon = org.akshara.ime.R.drawable.ic_key_emoji, utility = true)
+        val textLike = editor in setOf(EditorLayout.TEXT, EditorLayout.ASCII, EditorLayout.EMAIL, EditorLayout.URI)
+        if (spacePunctuationKeys && textLike) {
+            keys += commaDef()
+        } else if (editor !in setOf(EditorLayout.EMAIL, EditorLayout.URI) && languageSwitchLabel == null && ukComma) {
+            keys += commaDef()
         }
         val trailing = ArrayList<KeyDef>(3)
-        if (editor in setOf(EditorLayout.TEXT, EditorLayout.ASCII, EditorLayout.EMAIL, EditorLayout.URI)) {
+        if (textLike) {
             trailing += periodDef()
         }
         trailing += enterDef(enterLabel)
@@ -424,9 +433,13 @@ internal object KeyboardLayoutFactory {
         )
     }
 
-    private fun shiftDef(caps: Boolean) = KeyDef(
+    private fun shiftDef(caps: Boolean, shifted: Boolean = false) = KeyDef(
         KeyRow.SHIFT, "", "", KeyCode.SHIFT, KeyboardGeometry.SHIFT,
-        icon = if (caps) org.akshara.ime.R.drawable.ic_key_caps else org.akshara.ime.R.drawable.ic_key_shift,
+        icon = when {
+            caps -> org.akshara.ime.R.drawable.ic_key_caps
+            shifted -> org.akshara.ime.R.drawable.ic_key_shift_active
+            else -> org.akshara.ime.R.drawable.ic_key_shift
+        },
         utility = true
     )
 

@@ -23,17 +23,26 @@ internal class SuggestionRail(
     context: Context,
     private val ink: Int,
     private val onCandidate: (String) -> Unit,
-    private val onClipboard: () -> Unit
+    private val onClipboard: () -> Unit,
+    private val onEmoji: () -> Unit,
+    private val onClipboardPreview: () -> Unit,
+    private val onEmojiPicked: (String) -> Unit
 ) : FrameLayout(context) {
     var keySliver = 0
     private val chips = Array(3) { MorphChip(context, ink) }
-    private val emojiChips = Array(2) { MorphChip(context, ink) }
+    private val emojiChips = Array(2) { MorphChip(context, ink, true) }
     private val chipRow = LinearLayout(context)
     private val emojiRow = LinearLayout(context)
     private val rightColumn = FrameLayout(context)
     private val empty = TextView(context)
     private val clipboard = ImageView(context)
+    private val emoji = ImageView(context)
+    private val actions = LinearLayout(context)
+    private val previewHost = FrameLayout(context)
+    private val clipboardPreview = TextView(context)
     private val emptyRow = LinearLayout(context)
+    private var isEmptyState = true
+    private var previewVisible = false
 
     init {
         blockForceDark()
@@ -78,13 +87,49 @@ internal class SuggestionRail(
             clipboard.setBackgroundResource(ripple.resourceId)
         }
         clipboard.setOnClickListener { onClipboard() }
+        emoji.setImageResource(org.akshara.ime.R.drawable.ic_key_emoji)
+        emoji.setColorFilter(ink)
+        emoji.scaleType = ImageView.ScaleType.CENTER_INSIDE
+        emoji.setPadding(dp(10), dp(8), dp(10), dp(8))
+        emoji.contentDescription = "Emoji"
+        emoji.isClickable = true
+        emoji.isFocusable = true
+        if (context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, ripple, true)) {
+            emoji.setBackgroundResource(ripple.resourceId)
+        }
+        emoji.setOnClickListener { onEmoji() }
+        actions.orientation = LinearLayout.HORIZONTAL
+        actions.gravity = Gravity.CENTER_VERTICAL
+        actions.addView(clipboard, LinearLayout.LayoutParams(dp(44), LayoutParams.MATCH_PARENT))
+        actions.addView(emoji, LinearLayout.LayoutParams(dp(44), LayoutParams.MATCH_PARENT))
+
+        clipboardPreview.textSize = 14f
+        clipboardPreview.setTextColor(ink)
+        clipboardPreview.gravity = Gravity.CENTER
+        clipboardPreview.includeFontPadding = false
+        clipboardPreview.background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(24).toFloat()
+            setColor(ColorUtils.setAlphaComponent(ink, 28))
+        }
+        clipboardPreview.setPadding(dp(12), 0, dp(12), 0)
+        clipboardPreview.maxLines = 1
+        clipboardPreview.ellipsize = android.text.TextUtils.TruncateAt.END
+        clipboardPreview.setCompoundDrawablesWithIntrinsicBounds(org.akshara.ime.R.drawable.ic_key_clipboard, 0, 0, 0)
+        clipboardPreview.compoundDrawablePadding = dp(8)
+        clipboardPreview.setOnClickListener { onClipboardPreview() }
+        clipboardPreview.isClickable = true
+        clipboardPreview.isFocusable = true
+        clipboardPreview.visibility = GONE
         emptyRow.orientation = LinearLayout.HORIZONTAL
         emptyRow.gravity = Gravity.CENTER_VERTICAL
         emptyRow.addView(empty, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(emptyRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        addView(clipboard, LayoutParams(dp(44), LayoutParams.MATCH_PARENT, Gravity.START or Gravity.CENTER_VERTICAL))
+        previewHost.addView(clipboardPreview, LayoutParams(LayoutParams.WRAP_CONTENT, dp(36), Gravity.CENTER))
+        addView(previewHost, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(actions, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT, Gravity.START or Gravity.CENTER_VERTICAL))
         showEmpty(true)
         setClipboardVisible(false)
+        setEmojiVisible(false)
     }
 
     fun setEmptyTitle(title: String) {
@@ -96,10 +141,42 @@ internal class SuggestionRail(
         clipboard.isClickable = visible
         clipboard.isFocusable = visible
         clipboard.importantForAccessibility = if (visible) IMPORTANT_FOR_ACCESSIBILITY_YES else IMPORTANT_FOR_ACCESSIBILITY_NO
-        val start = if (visible) dp(44) else 0
+        updateActionInsets()
+    }
+
+    fun setEmojiVisible(visible: Boolean) {
+        emoji.visibility = if (visible) VISIBLE else GONE
+        emoji.isClickable = visible
+        emoji.isFocusable = visible
+        emoji.importantForAccessibility = if (visible) IMPORTANT_FOR_ACCESSIBILITY_YES else IMPORTANT_FOR_ACCESSIBILITY_NO
+        updateActionInsets()
+    }
+
+    fun setClipboardPreview(label: String?, image: Boolean = false) {
+        previewVisible = !label.isNullOrBlank()
+        clipboardPreview.text = label.orEmpty()
+        clipboardPreview.contentDescription = label?.let { "Paste $it" }
+        clipboardPreview.setCompoundDrawablesWithIntrinsicBounds(
+            if (image) org.akshara.ime.R.drawable.ic_doc else org.akshara.ime.R.drawable.ic_key_clipboard,
+            0, 0, 0
+        )
+        clipboardPreview.compoundDrawables.filterNotNull().forEach { drawable ->
+            drawable.mutate().setTint(ink)
+            drawable.setBounds(0, 0, dp(18), dp(18))
+        }
+        clipboardPreview.setCompoundDrawables(clipboardPreview.compoundDrawables[0], null, null, null)
+        renderContent()
+    }
+
+    private fun updateActionInsets() {
+        val start = (if (clipboard.visibility == VISIBLE) dp(44) else 0) +
+            (if (emoji.visibility == VISIBLE) dp(44) else 0)
         chipRow.setPadding(start, 0, 0, 0)
         empty.setPadding(start, 0, 0, 0)
-        if (visible) clipboard.bringToFront()
+        // Equal side insets keep short clips centered while long clips cannot cover actions.
+        previewHost.setPadding(start + dp(8), 0, start + dp(8), 0)
+        actions.visibility = if (start > 0) VISIBLE else GONE
+        if (start > 0) actions.bringToFront()
     }
 
     fun setSuggestions(ranked: List<String>, animated: Boolean, emoji: List<String> = emptyList()) {
@@ -127,10 +204,16 @@ internal class SuggestionRail(
     }
 
     private fun showEmpty(emptyState: Boolean) {
-        emptyRow.visibility = if (emptyState) VISIBLE else INVISIBLE
-        chipRow.visibility = if (emptyState) INVISIBLE else VISIBLE
+        isEmptyState = emptyState
+        renderContent()
+    }
+
+    private fun renderContent() {
+        clipboardPreview.visibility = if (previewVisible) VISIBLE else GONE
+        emptyRow.visibility = if (!previewVisible && isEmptyState) VISIBLE else INVISIBLE
+        chipRow.visibility = if (!previewVisible && !isEmptyState) VISIBLE else INVISIBLE
         emptyRow.isClickable = false
-        emptyRow.alpha = if (emptyState) 1f else 0f
+        emptyRow.alpha = if (!previewVisible && isEmptyState) 1f else 0f
         chipRow.alpha = 1f
         emptyRow.animate().cancel()
         chipRow.animate().cancel()
@@ -165,7 +248,7 @@ internal class SuggestionRail(
         }
     }
 
-    private inner class MorphChip(context: Context, private val color: Int) : FrameLayout(context) {
+    private inner class MorphChip(context: Context, private val color: Int, private val emoji: Boolean = false) : FrameLayout(context) {
         private val morph = MorphLabel(context, color)
         private var text: String? = null
 
@@ -203,8 +286,7 @@ internal class SuggestionRail(
                 }
                 MotionEvent.ACTION_UP -> {
                     isPressed = false
-                    if (event.y >= 0 && event.y <= height - keySliver) onCandidate(value)
-                    performClick()
+                    if (event.y >= 0 && event.y <= height - keySliver) performClick()
                     return true
                 }
                 MotionEvent.ACTION_CANCEL -> {
@@ -217,6 +299,7 @@ internal class SuggestionRail(
 
         override fun performClick(): Boolean {
             super.performClick()
+            text?.let { if (emoji) onEmojiPicked(it) else onCandidate(it) }
             return true
         }
     }

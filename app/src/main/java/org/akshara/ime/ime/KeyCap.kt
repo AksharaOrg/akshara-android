@@ -56,7 +56,9 @@ internal class KeyCap(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         val key = spec ?: return
         val pressed = isPressed
-        val base = if (key.utility) colors.utility else colors.key
+        val normalKey = if (colors.dark && !colors.highContrast)
+            ColorUtils.blendARGB(colors.key, colors.ink, .045f) else colors.key
+        val base = if (key.utility) colors.utility else normalKey
         fill.color = if (pressed) ColorUtils.blendARGB(base, if (colors.dark) 0xFFFFFFFF.toInt() else 0xFF000000.toInt(), 0.18f) else base
         val radius = when (key.action) {
             KeyCode.LAYER, KeyCode.ENTER -> height / 2f
@@ -72,7 +74,7 @@ internal class KeyCap(context: Context) : View(context) {
             fill.style = Paint.Style.FILL
         }
         if (key.icon != null) {
-            val drawable = iconFor(key.icon)
+            val drawable = iconFor(if (key.action == KeyCode.DELETE) org.akshara.ime.R.drawable.ic_key_backspace_outline else key.icon)
             val size = dp(KeyboardGeometry.ICON_DP).toInt().coerceAtMost(minOf(width, height) - dp(8).toInt())
             val left = (width - size) / 2
             val top = (height - size) / 2
@@ -88,7 +90,7 @@ internal class KeyCap(context: Context) : View(context) {
         if (text.isNotEmpty()) {
             val function = key.utility || text.length > 2 && !KeyTypography.isSinhala(text)
             labelPaint.color = colors.ink
-            labelPaint.typeface = KeyTypography.keyTypeface(text)
+            labelPaint.typeface = KeyTypography.keyTypeface()
             var textSize = if (function) KeyTypography.functionPx(resources) else KeyTypography.mainPx(resources, text)
             val maxWidth = width - dp(4)
             while (textSize > dp(11) && labelPaint.apply { this.textSize = textSize }.measureText(text) > maxWidth) {

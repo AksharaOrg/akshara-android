@@ -49,6 +49,9 @@ interface KeyboardActions {
     fun onCursorDelta(delta: Int)
     fun onSettings() {}
     fun onClipboardOpen() {}
+    fun onClipboardPreviewPaste() {}
+    fun onEmojiPicked(value: String) = onCharacter(value)
+    fun onPasteText(value: String) = onCharacter(value)
     fun onPressFeedback() {}
     fun languageScoreForKey(output: String): Float = 0f
     fun onPreviewDelete(clusters: Int) {}
@@ -66,7 +69,9 @@ class KeyboardView(
     private var mode = prefs.mode
     private var layer = KeyboardLayer.LETTERS
     private val shiftLatch = ShiftLatch()
-    private val shifted get() = shiftLatch.shifted || shiftLatch.capsLock
+    private var autoShift = false
+    private var suppressAutoShift = false
+    private val shifted get() = shiftLatch.shifted || shiftLatch.capsLock || (autoShift && !suppressAutoShift)
     private val capsLock get() = shiftLatch.capsLock
     private var enterLabel = "↵"
     private var editorLayout = EditorLayout.TEXT
@@ -77,6 +82,8 @@ class KeyboardView(
     private var clipboardRecent = emptyList<String>()
     private var clipboardPinned = emptyList<String>()
     private var clipboardHistoryEnabled = prefs.clipboardHistory
+    private var clipboardPreviewLabel: String? = null
+    private var clipboardPreviewIsImage = false
     private var recentEmoji = emptyList<String>()
     private val emojiRepo = EmojiRepository(context)
     private val clipboardStore = ClipboardHistoryStore(context)
@@ -84,7 +91,9 @@ class KeyboardView(
     private var emojiQuery = ""
     private var searchShift = false
     private var searchLayer = KeyboardLayer.LETTERS
-    private var emojiCategoryIndex = 1
+    private var emojiCategoryIndex = 0
+    private var emojiCatalog: EmojiCatalogView? = null
+    private val emojiTabs = mutableListOf<ImageButton>()
     private var englishOneWord = false
     private var persistentEnglish = false
     private var clipboardExtraPx = 0
@@ -100,10 +109,21 @@ class KeyboardView(
     private val key = palette.key
     private val utility = palette.utility
     private val ink = palette.ink
-    private val rail = SuggestionRail(context, ink, { actions.onCandidate(it) }) {
-        actions.onClipboardOpen()
-        leaveClipboardOrToggle()
-    }
+    private val rail = SuggestionRail(
+        context,
+        ink,
+        { actions.onCandidate(it) },
+        {
+            actions.onClipboardOpen()
+            leaveClipboardOrToggle()
+        },
+        {
+            layer = KeyboardLayer.EMOJI
+            render()
+        },
+        { actions.onClipboardPreviewPaste() },
+        { actions.onEmojiPicked(it) }
+    )
     private val railHost = FrameLayout(context).apply {
         clipChildren = false
         clipToPadding = false
@@ -132,11 +152,16 @@ class KeyboardView(
     private val panel = KeyboardPanel(
         context, prefs, popups, object : KeyboardActions {
             override fun onCharacter(value: String) {
-                actions.onCharacter(value)
+                val hadAutoShift = autoShift
+                autoShift = false
+                suppressAutoShift = false
+                if (value in listOf("😀", "😂", "❤️", "👍", "🙏", "🔥", "✨", "🎉", "🇱🇰", "😊")) actions.onEmojiPicked(value)
+                else actions.onCharacter(value)
                 if (shiftLatch.shifted && !shiftLatch.capsLock) {
                     shiftLatch.consumeOneShot()
                     bindTyping()
                 }
+                if (persistentEnglish && hadAutoShift) bindTyping()
             }
             override fun onBackspace(word: Boolean) = actions.onBackspace(word)
             override fun onSpace() {
@@ -159,6 +184,8 @@ class KeyboardView(
             override fun onHide() = actions.onHide()
             override fun onCursorDelta(delta: Int) = actions.onCursorDelta(delta)
             override fun onSettings() = actions.onSettings()
+            override fun onClipboardPreviewPaste() = actions.onClipboardPreviewPaste()
+            override fun onEmojiPicked(value: String) = actions.onEmojiPicked(value)
             override fun onPressFeedback() = actions.onPressFeedback()
             override fun languageScoreForKey(output: String) = actions.languageScoreForKey(output)
             override fun onPreviewDelete(clusters: Int) = actions.onPreviewDelete(clusters)
@@ -348,6 +375,8 @@ class KeyboardView(
         this.mode = mode; enterLabel = enter; editorLayout = editor; this.offerGlobe = offerGlobe
         clipboardHistoryEnabled = KeyboardPreferences(context).clipboardHistory
         shiftLatch.reset(); layer = KeyboardLayer.LETTERS
+        autoShift = false
+        suppressAutoShift = false
         clipboardExtraPx = 0
         endClipboardDrag()
         englishOneWord = false
@@ -391,7 +420,15 @@ class KeyboardView(
         rail.setClipboardVisible(showClipboardButton())
         if (layer == KeyboardLayer.CLIPBOARD) render()
     }
-    fun setRecentEmoji(values: List<String>) { recentEmoji = values }
+    fun setRecentEmoji(values: List<String>) {
+        recentEmoji = values
+        // Refresh recents on the next opening, without moving the grid under the user’s finger.
+    }
+    fun setClipboardPreview(label: String?, image: Boolean = false) {
+        clipboardPreviewLabel = label
+        clipboardPreviewIsImage = image
+        rail.setClipboardPreview(label, image)
+    }
 
     internal fun keyNameAt(x: Float, y: Float): String? {
         if (!usesTypingPanel() || panel.parent !== body) return null
@@ -428,8 +465,9 @@ class KeyboardView(
         }
         val spaceLabel = spaceCaption()
         val rows = KeyboardLayoutFactory.typingRows(
-            mode, layer, shifted, capsLock, if (englishOneWord || persistentEnglish) EditorLayout.ASCII else editorLayout,
-            prefs.topRow, prefs.emojiPicker, enterLabel, spaceLabel, false, languageSwitchLabel()
+            mode, layer, shifted, capsLock, editorLayout,
+            prefs.topRow, prefs.emojiPicker, enterLabel, spaceLabel, false, languageSwitchLabel(), prefs.spacePunctuationKeys,
+            englishOneWord || persistentEnglish
         )
         val rowHeight = KeyboardGeometry.rowHeightPx(prefs.keyboardSize, isLandscape(), resources.displayMetrics.density, rows.size)
         panel.debug = BuildConfig.DEBUG && prefs.debugOverlay
@@ -447,23 +485,25 @@ class KeyboardView(
         rail.visibility = VISIBLE
         rail.setEmptyTitle("")
         rail.setClipboardVisible(showClipboardButton())
+        rail.setEmojiVisible(prefs.emojiPicker && editorLayout == EditorLayout.TEXT && layer == KeyboardLayer.LETTERS)
+        rail.setClipboardPreview(clipboardPreviewLabel, clipboardPreviewIsImage)
         rail.setSuggestions(if (show) candidates else emptyList(), animated && show, if (show) emojiCandidates else emptyList())
     }
 
     private fun languageSwitchLabel(): String? = when {
-        editorLayout != EditorLayout.TEXT -> null
+        editorLayout !in setOf(EditorLayout.TEXT, EditorLayout.URI) -> null
         persistentEnglish -> "සිං"
         else -> "EN"
     }
 
     private fun keepSuggestionRail() =
-        editorLayout == EditorLayout.TEXT && layer in setOf(
+        editorLayout in setOf(EditorLayout.TEXT, EditorLayout.URI, EditorLayout.EMAIL) && layer in setOf(
             KeyboardLayer.LETTERS, KeyboardLayer.NUMBERS, KeyboardLayer.SYMBOLS, KeyboardLayer.CLIPBOARD
         )
     private fun spaceCaption() = when {
-        englishOneWord -> "English · one word"
-        persistentEnglish -> "English"
-        editorLayout != EditorLayout.TEXT -> "English"
+        englishOneWord -> "Akshara - English · one word"
+        persistentEnglish -> "Akshara - English"
+        editorLayout !in setOf(EditorLayout.TEXT, EditorLayout.URI) -> "Akshara - English"
         else -> "Akshara - ${mode.title}"
     }
 
@@ -480,6 +520,13 @@ class KeyboardView(
         // Avoid carrying a Sinhala one-shot Shift across a fast language switch.
         shiftLatch.reset()
         if (layer == KeyboardLayer.LETTERS && usesTypingPanel()) bindTyping()
+    }
+
+    fun setAutoCapitalization(active: Boolean) {
+        if (!active) suppressAutoShift = false
+        if (autoShift == active) return
+        autoShift = active
+        if (layer == KeyboardLayer.LETTERS) bindTyping()
     }
 
     private fun renderNativePad() {
@@ -518,94 +565,166 @@ class KeyboardView(
             showEmojiSearch()
             return
         }
-        val values = when (emojiCategoryIndex) {
-            0 -> recentEmoji
-            else -> emojiRepo.categories.getOrNull(emojiCategoryIndex - 1)?.emoji.orEmpty()
-        }
-        body.addView(emojiCategoryBar(), LayoutParams(LayoutParams.MATCH_PARENT, dp(KeyboardGeometry.EMOJI_TAB_DP)))
-        body.addView(emojiSectionTitle(), LayoutParams(LayoutParams.MATCH_PARENT, dp(28)))
-        val gridHeight = auxiliaryHeight() - dp(KeyboardGeometry.EMOJI_TAB_DP + 28 + 54)
-        val grid = if (values.isEmpty()) {
-            textView("Recently used emoji appear here", 14f)
-        } else {
-            emojiScroller(values)
-        }
-        body.addView(grid, LayoutParams(LayoutParams.MATCH_PARENT, gridHeight))
-        body.addView(emojiBottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, dp(54)))
+        val sections = listOf("Recent emoji" to recentEmoji) + emojiRepo.categories.map { it.name to it.emoji }
+        val catalog = EmojiCatalogView(context, sections, ink, prefs.skinTone,
+            onCategory = { index -> emojiCategoryIndex = index; updateEmojiTabs() },
+            onPick = { actions.onEmojiPicked(it) })
+        emojiCatalog = catalog
+        body.addView(emojiCategoryBar(), LayoutParams(LayoutParams.MATCH_PARENT, dp(44)))
+        val height = emojiPickerHeight() - dp(44 + 48)
+        body.addView(catalog, LayoutParams(LayoutParams.MATCH_PARENT, height))
+        body.addView(emojiBottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, dp(48)))
+        catalog.showCategory(emojiCategoryIndex)
+    }
+
+    private fun closeEmoji() {
+        emojiQuery = ""
+        emojiSearch = false
+        emojiCatalog = null
+        layer = KeyboardLayer.LETTERS
+        render()
     }
 
     private fun emojiCategoryBar() = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setBackgroundColor(bg)
-        addView(
-            iconButton(org.akshara.ime.R.drawable.ic_key_search, utility, "Search emoji") {
-                emojiSearch = true; render()
-            },
-            LayoutParams(dp(56), LayoutParams.MATCH_PARENT).margins()
-        )
-        val items = listOf("Recent" to "🕒") + emojiRepo.categories.map { it.name to it.icon }
-        items.forEachIndexed { i, item ->
-            val selected = !emojiSearch && emojiCategoryIndex == i
-            addView(emojiTab(item.second, item.first, selected) {
-                emojiSearch = false; emojiCategoryIndex = i; render()
-            }, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        setPadding(dp(8), 0, dp(4), 0)
+        addView(iconButton(org.akshara.ime.R.drawable.ic_nav_back, utility, "Letters") { closeEmoji() }.apply {
+            background = emojiPill(utility)
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+        }, LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(8) })
+        val scroll = HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled = false }
+        val tabs = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val search = TextView(context).apply {
+            text = "Search"
+            textSize = 14f
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(ink)
+            setPadding(dp(10), 0, dp(14), 0)
+            setCompoundDrawablesWithIntrinsicBounds(org.akshara.ime.R.drawable.ic_key_search, 0, 0, 0)
+            compoundDrawables[0].mutate().setTint(ink)
+            compoundDrawables[0].setBounds(0, 0, dp(18), dp(18))
+            setCompoundDrawables(compoundDrawables[0], null, null, null)
+            compoundDrawablePadding = dp(6)
+            contentDescription = "Search emoji"
+            background = emojiPill(utility)
+            isFocusable = true
+            setOnClickListener { emojiSearch = true; render() }
         }
+        tabs.addView(search, LayoutParams(dp(110), dp(34)).apply { marginEnd = dp(4) })
+        val icons = listOf(org.akshara.ime.R.drawable.ic_emoji_recent, org.akshara.ime.R.drawable.ic_key_emoji,
+            org.akshara.ime.R.drawable.ic_emoji_nature, org.akshara.ime.R.drawable.ic_emoji_food,
+            org.akshara.ime.R.drawable.ic_emoji_activity, org.akshara.ime.R.drawable.ic_emoji_travel,
+            org.akshara.ime.R.drawable.ic_emoji_objects, org.akshara.ime.R.drawable.ic_heart,
+            org.akshara.ime.R.drawable.ic_emoji_flags)
+        val names = listOf("Recent") + emojiRepo.categories.map { it.name }
+        emojiTabs.clear()
+        names.forEachIndexed { index, name ->
+            val tab = iconButton(icons[index], Color.TRANSPARENT, name) {
+                emojiCategoryIndex = index
+                emojiCatalog?.showCategory(index)
+                updateEmojiTabs()
+            }.apply { setPadding(dp(10), dp(10), dp(10), dp(10)) }
+            emojiTabs += tab
+            tabs.addView(tab, LayoutParams(dp(40), dp(36)))
+        }
+        scroll.addView(tabs)
+        addView(scroll, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        updateEmojiTabs()
+    }
+
+    private fun updateEmojiTabs() {
+        emojiTabs.forEachIndexed { index, tab ->
+            val selected = index == emojiCategoryIndex
+            tab.isSelected = selected
+            tab.setColorFilter(if (selected) bg else ColorUtils.setAlphaComponent(ink, 160))
+            tab.background = emojiPill(if (selected) ink else Color.TRANSPARENT)
+        }
+    }
+
+    private fun emojiPill(color: Int) = GradientDrawable().apply {
+        cornerRadius = dp(24).toFloat()
+        setColor(color)
     }
 
     private fun emojiBottomBar() = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setBackgroundColor(bg)
-        addView(button("ABC", utility, "Letters") { emojiQuery = ""; emojiSearch = false; layer = KeyboardLayer.LETTERS; render() }, LayoutParams(0, dp(54), 1f).margins())
-        addView(button("☺", palette.selected, "Emoji picker active") { }, LayoutParams(0, dp(54), 1f).margins())
-        addView(Space(context), LayoutParams(0, dp(54), 3f))
-        addView(backspaceButton(), LayoutParams(0, dp(54), 1f).margins())
+        setPadding(dp(8), dp(4), dp(8), dp(4))
+        addView(button("ABC", Color.TRANSPARENT, "Letters") { closeEmoji() }.apply { typeface = android.graphics.Typeface.DEFAULT; textSize = 16f }, LayoutParams(dp(48), dp(40)))
+        addView(Space(context), LayoutParams(0, 1, 1f))
+        addView(iconButton(org.akshara.ime.R.drawable.ic_key_emoji, ink, "Emoji picker active") { }.apply {
+            setColorFilter(bg)
+            background = emojiPill(ink)
+            isSelected = true
+        }, LayoutParams(dp(78), dp(38)))
+        addView(Space(context), LayoutParams(0, 1, 1f))
+        addView(backspaceButton().apply { background = null }, LayoutParams(dp(48), dp(40)))
     }
 
-    private fun emojiSectionTitle() = TextView(context).apply {
-        text = when (emojiCategoryIndex) {
-            0 -> "Recent emoji"
-            else -> emojiRepo.categories.getOrNull(emojiCategoryIndex - 1)?.name ?: "Emoji"
-        }
-        textSize = 12f
-        gravity = Gravity.START or Gravity.CENTER_VERTICAL
-        setTextColor(ColorUtils.setAlphaComponent(ink, 180))
-        setPadding(dp(12), 0, dp(12), 0)
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    private fun emojiPickerHeight(): Int {
+        if (isLandscape()) return auxiliaryHeight()
+        val desired = maxOf(auxiliaryHeight(), dp(400))
+        return maxOf(auxiliaryHeight(), minOf(desired, (resources.displayMetrics.heightPixels * .55f).toInt()))
     }
 
-    private fun emojiTab(icon: String, description: String, selected: Boolean, click: () -> Unit) = TextView(context).apply {
-        text = icon
-        textSize = 18f
-        gravity = Gravity.CENTER
-        includeFontPadding = false
-        if (Build.VERSION.SDK_INT >= 28) isFallbackLineSpacing = false
-        setTextColor(ink)
-        contentDescription = description
-        isClickable = true
-        isFocusable = true
-        background = if (selected) keyBackground(utility) else android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
-        setOnClickListener { click() }
-        minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
-        setPadding(0, dp(4), 0, dp(4))
-    }
     private fun showEmojiSearch() {
-        val header = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        header.addView(iconButton(org.akshara.ime.R.drawable.ic_key_back, utility, "Back to emoji") {
-            emojiSearch = false; render()
-        }, LayoutParams(dp(44), dp(40)))
-        header.addView(textView(if (emojiQuery.isEmpty()) "Search in English or Sinhala" else emojiQuery, 15f), LayoutParams(0, dp(40), 1f))
-        body.addView(header, LayoutParams(LayoutParams.MATCH_PARENT, dp(40)))
-        val sinhalaQuery = SinhalaEngine.transliterate(emojiQuery, InputMode.SMART_PHONETIC)
-        val results = (emojiRepo.search(emojiQuery, 64) + emojiRepo.search(sinhalaQuery, 64)).distinct().take(80)
-        val searchHeight = (KeyboardGeometry.keyAreaDp(prefs.keyboardSize, isLandscape()) * resources.displayMetrics.density * .72f).toInt()
-        val gridHeight = auxiliaryHeight() - dp(40) - searchHeight
-        when {
-            emojiQuery.isEmpty() -> body.addView(textView("Type a name to find emoji", 13f), LayoutParams(LayoutParams.MATCH_PARENT, gridHeight))
-            results.isEmpty() -> body.addView(textView("No emoji found", 13f), LayoutParams(LayoutParams.MATCH_PARENT, gridHeight))
-            else -> body.addView(emojiScroller(results), LayoutParams(LayoutParams.MATCH_PARENT, gridHeight))
+        emojiCatalog = null
+        val header = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), 0, dp(8), 0)
         }
+        header.addView(iconButton(org.akshara.ime.R.drawable.ic_nav_back, utility, "Back to emoji") {
+            emojiSearch = false; render()
+        }.apply {
+            background = emojiPill(utility)
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+        }, LayoutParams(dp(34), dp(34)))
+        header.addView(textView("Search emoji", 18f).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), 0, 0, 0)
+        }, LayoutParams(0, dp(44), 1f))
+        body.addView(header, LayoutParams(LayoutParams.MATCH_PARENT, dp(48)))
+        val sinhalaQuery = SinhalaEngine.transliterate(emojiQuery, InputMode.SMART_PHONETIC)
+        val results = if (emojiQuery.isBlank()) {
+            (recentEmoji + emojiRepo.categories.first().emoji).distinct().take(36)
+        } else (emojiRepo.search(emojiQuery, 64) + emojiRepo.search(sinhalaQuery, 64)).distinct().take(80)
+        val searchHeight = dp(KeyboardGeometry.keyAreaDp(prefs.keyboardSize, isLandscape()))
+        val gridHeight = if (isLandscape()) dp(50) else dp(104)
+        val resultsCard = LinearLayout(context).apply {
+            orientation = VERTICAL
+            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(key) }
+            clipToOutline = true
+        }
+        val grid = if (results.isEmpty()) textView("No emoji found", 13f) else emojiScroller(results)
+        resultsCard.addView(grid, LayoutParams(LayoutParams.MATCH_PARENT, gridHeight))
+        resultsCard.addView(View(context).apply { setBackgroundColor(ColorUtils.setAlphaComponent(ink, 24)) },
+            LayoutParams(LayoutParams.MATCH_PARENT, dp(1)))
+        val query = textView(emojiQuery.ifEmpty { "Search in English or Sinhala" }, 14f).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), 0, dp(14), 0)
+            setTextColor(if (emojiQuery.isEmpty()) ColorUtils.setAlphaComponent(ink, 150) else ink)
+            setSingleLine(true)
+            ellipsize = android.text.TextUtils.TruncateAt.START
+            contentDescription = "Emoji search: ${emojiQuery.ifEmpty { "Search in English or Sinhala" }}"
+            setCompoundDrawablesWithIntrinsicBounds(org.akshara.ime.R.drawable.ic_key_search, 0, 0, 0)
+            compoundDrawables[0].mutate().setTint(ink)
+            compoundDrawables[0].setBounds(0, 0, dp(18), dp(18))
+            setCompoundDrawables(compoundDrawables[0], null, null, null)
+            compoundDrawablePadding = dp(12)
+        }
+        val queryRow = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        queryRow.addView(query, LayoutParams(0, dp(36), 1f))
+        if (emojiQuery.isNotEmpty()) {
+            queryRow.addView(button("×", Color.TRANSPARENT, "Clear emoji search") {
+                emojiQuery = ""; render()
+            }, LayoutParams(dp(40), dp(36)))
+        }
+        resultsCard.addView(queryRow, LayoutParams(LayoutParams.MATCH_PARENT, dp(36)))
+        body.addView(resultsCard, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            setMargins(dp(8), 0, dp(8), dp(8))
+        })
         val searchActions = object : KeyboardActions by actions {
             override fun onCharacter(value: String) { emojiQuery += value; searchShift = false; render() }
             override fun onBackspace(word: Boolean) { emojiQuery = emojiQuery.dropLast(if (word) emojiQuery.length else 1); render() }
@@ -629,9 +748,9 @@ class KeyboardView(
         body.addView(searchPanel, LayoutParams(LayoutParams.MATCH_PARENT, searchHeight))
     }
     private fun emojiScroller(values: List<String>) =
-        EmojiBoard.scroller(context, values, ink, prefs.skinTone) { actions.onCharacter(it) }
+        EmojiBoard.scroller(context, values, ink, prefs.skinTone) { actions.onEmojiPicked(it) }
     private fun showClipboardButton() =
-        clipboardHistoryEnabled && editorLayout == EditorLayout.TEXT &&
+        clipboardHistoryEnabled && editorLayout in setOf(EditorLayout.TEXT, EditorLayout.URI, EditorLayout.EMAIL) &&
             layer in setOf(KeyboardLayer.LETTERS, KeyboardLayer.CLIPBOARD)
 
     private fun bindClipboard() {
@@ -648,7 +767,7 @@ class KeyboardView(
             context,
             KeyboardColors(key, utility, ink, palette.dark, palette.highContrast),
             onPaste = { clip ->
-                actions.onCharacter(clip)
+                actions.onPasteText(clip)
                 resetClipboardExpansion()
                 layer = KeyboardLayer.LETTERS
                 render()
@@ -822,6 +941,11 @@ class KeyboardView(
     }
 
     private fun updateShift() {
+        if (autoShift && !suppressAutoShift && !shiftLatch.active) {
+            suppressAutoShift = true
+            bindTyping()
+            return
+        }
         shiftLatch.tap(android.os.SystemClock.elapsedRealtime())
         bindTyping()
     }

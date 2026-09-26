@@ -1,8 +1,11 @@
 package org.akshara.ime.ime
 
 import android.content.ClipboardManager
+import android.content.ClipData
+import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
 import android.os.Build
@@ -11,6 +14,7 @@ import android.os.Handler
 import android.os.LocaleList
 import android.os.Looper
 import android.os.SystemClock
+import android.net.Uri
 import android.text.InputType
 import android.view.KeyEvent
 import android.view.View
@@ -22,6 +26,9 @@ import android.view.inputmethod.InlineSuggestionsResponse
 import android.widget.inline.InlinePresentationSpec
 import android.util.Size
 import androidx.core.view.WindowCompat
+import androidx.core.view.inputmethod.EditorInfoCompat
+import androidx.core.view.inputmethod.InputConnectionCompat
+import androidx.core.view.inputmethod.InputContentInfoCompat
 import org.akshara.ime.data.*
 import org.akshara.ime.engine.*
 import org.akshara.ime.settings.KeyboardPreferences
@@ -37,15 +44,26 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private lateinit var englishPrediction: EnglishPredictionRepository
     private lateinit var emoji: EmojiRepository
     private lateinit var clipboardHistory: ClipboardHistoryStore
+    private lateinit var recentEmojiStore: RecentEmojiStore
+    private lateinit var clipboardImageCache: ClipboardImageCache
     private val composition = CompositionSession()
     private val preview = UnmarkedPreview()
     private val slsSource = StringBuilder()
     private val executor = Executors.newSingleThreadExecutor()
+    private val clipboardExecutor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private var predictionTask: Future<*>? = null
+    private var suggestionRunnable: Runnable? = null
     private var generation = 0
     private var restricted = false
-    private var lastSelectionEnd = -1
+    private var secureEditor = true
+    private var clipboardEligible = false
+    private var latestClipboard: ClipData? = null
+    private data class StagedImage(val source: Uri, val content: Uri, val mimeType: String)
+    private var stagedImage: StagedImage? = null
+    private var stagingSource: Uri? = null
+    private var clipboardGeneration = 0
+    private var inputViewActive = false
     private var previousCommittedWord: String? = null
     private var recentEmoji = mutableListOf<String>()
     private var editorLayout = EditorLayout.TEXT
@@ -54,6 +72,10 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private var persistentEnglish = false
     private var lastSpaceAt = 0L
     private var pendingAutocorrection: PendingAutocorrection? = null
+    private var rejectedCorrection: String? = null
+    private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        main.post { applyPreferenceChange(key) }
+    }
 
     private var precedingDirty = true
     private var cachedPreceding = emptyList<String>()
@@ -62,7 +84,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
 
     override fun onCreate() {
         super.onCreate(); prefs = KeyboardPreferences(this); learning = LocalLearningStore(this)
-        prediction = PredictionRepository(this, learning); autocorrection = SinhalaAutocorrection(this); englishPrediction = EnglishPredictionRepository(this, learning); emoji = EmojiRepository(this); clipboardHistory = ClipboardHistoryStore(this)
+        prediction = PredictionRepository(this, learning); autocorrection = SinhalaAutocorrection(this); englishPrediction = EnglishPredictionRepository(this, learning); emoji = EmojiRepository(this); clipboardHistory = ClipboardHistoryStore(this); recentEmojiStore = RecentEmojiStore(this); clipboardImageCache = ClipboardImageCache(this)
+        recentEmoji = recentEmojiStore.items().toMutableList()
+        prefs.register(preferenceListener)
         executor.submit { prediction.warmup(); autocorrection.warmup(); englishPrediction.warmup() }
     }
     override fun onCreateInputView(): View {
@@ -73,14 +97,22 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting); cancelComposition(false)
+        pendingAutocorrection = null
+        rejectedCorrection = null
+        previousCommittedWord = null
+        clearClipboardPreview()
         restricted = attribute?.let(::isRestrictedEditor) ?: true
-        lastSelectionEnd = attribute?.initialSelEnd ?: -1
+        secureEditor = attribute?.let(::isSecureEditor) ?: true
+        clipboardEligible = attribute?.let(::isClipboardEditor) ?: false
         precedingDirty = true
         if (::keyboard.isInitialized) keyboard.setInlineAutofillSuggestions(emptyList())
     }
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        inputViewActive = true
         prefs = KeyboardPreferences(this); restricted = info?.let(::isRestrictedEditor) ?: true
+        secureEditor = info?.let(::isSecureEditor) ?: true
+        clipboardEligible = info?.let(::isClipboardEditor) ?: false
         editorLayout = editorLayout(info)
         val intro = spaceIntroAllowed && restarting != true
         spaceIntroAllowed = false
@@ -88,22 +120,29 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         persistentEnglish = prefs.persistentEnglish
         keyboard.configure(prefs.mode, offerSystemSwitch(), enterLabel(info), editorLayout, intro, persistentEnglish)
         keyboard.learningEnabled = !restricted && editorLayout == EditorLayout.TEXT
-        if (prefs.clipboardHistory) captureClipboard()
+        refreshClipboard()
         keyboard.setClipboardItems(clipboardHistory.items(), clipboardHistory.pinnedItems())
         listenForClipboard()
+        recentEmoji = recentEmojiStore.items().toMutableList()
         keyboard.setRecentEmoji(recentEmoji)
         applySystemBarAppearance()
         updateSuggestions()
     }
     override fun onFinishInput() { deleteAnchor = -1; deleteLength = 0; cancelComposition(false); super.onFinishInput() }
     override fun onDestroy() {
+        clearClipboardPreview()
         stopClipboardListener()
+        prefs.unregister(preferenceListener)
         predictionTask?.cancel(true)
+        suggestionRunnable?.let(main::removeCallbacks)
         executor.shutdownNow()
+        clipboardExecutor.shutdownNow()
         main.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
     override fun onFinishInputView(finishingInput: Boolean) {
+        inputViewActive = false
+        clearClipboardPreview()
         stopClipboardListener()
         cancelComposition(false)
         super.onFinishInputView(finishingInput)
@@ -123,10 +162,12 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         if (oldSelStart != newSelStart || oldSelEnd != newSelEnd) {
             precedingDirty = true
         }
-        lastSelectionEnd = newSelEnd
+        updateEnglishCapitalization()
     }
 
     override fun onCharacter(value: String) {
+        if (latestClipboard != null) clearClipboardPreview()
+        rejectedCorrection = null
         validatePreview()
         if (persistentEnglish) {
             commitComposition()
@@ -139,17 +180,17 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             updateSuggestions()
             return
         }
-        if (editorLayout != EditorLayout.TEXT) {
+        if (!supportsSinhala(editorLayout)) {
             commitComposition(); insertCommitted(value)
         } else if (prefs.mode == InputMode.WIJESEKARA && (value == "\u200D" || value.codePoints().anyMatch { it in 0x0D80..0xE0FF })) {
             slsSource.append(value)
             val rendered = SinhalaEngine.normalizeSls(slsSource.toString())
-            composition.replace(rendered); writePreview(rendered)
+            composition.replace(rendered); writePreview(rendered, true)
         } else if (prefs.mode != InputMode.WIJESEKARA && value.length == 1 && value[0].isLetter() && value[0].code < 128) {
             val rendered = composition.type(value, prefs.mode)
-            writePreview(rendered)
+            writePreview(rendered, true)
         } else {
-            commitComposition(); insertCommitted(value); if (value.codePoints().anyMatch { it > 0x1F000 }) rememberEmoji(value)
+            commitComposition(); insertCommitted(value)
         }
         updateSuggestions()
     }
@@ -169,18 +210,18 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
                 val rendered = SinhalaEngine.normalizeSls(slsSource.toString())
                 composition.replace(rendered)
                 if (rendered.isEmpty()) {
-                    writePreview("")
+                    writePreview("", true)
                     currentInputConnection?.finishComposingText()
                     slsSource.clear()
                 } else {
-                    writePreview(rendered)
+                    writePreview(rendered, true)
                 }
             } else {
                 val rendered = composition.backspace(prefs.mode)
                 if (rendered.isEmpty()) {
-                    writePreview("")
+                    writePreview("", true)
                     currentInputConnection?.finishComposingText()
-                } else writePreview(rendered)
+                } else writePreview(rendered, true)
             }
         } else {
             deleteFromHost(word)
@@ -225,7 +266,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onLanguageSwitch() = switchKeyboardLanguage()
 
     private fun switchKeyboardLanguage() {
-        if (editorLayout != EditorLayout.TEXT) return
+        if (!supportsSinhala(editorLayout)) return
         commitComposition()
         latinWordActive = false
         persistentEnglish = !persistentEnglish
@@ -236,22 +277,25 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onEnter() {
         val englishWord = if (persistentEnglish) currentLatinPrefix() else null
         val word = commitComposition(); if (latinWordActive) endLatinWord()
-        if (applyAutocorrection(englishWord ?: word, "\n")) { updateSuggestions(); return }
-        learn(englishWord ?: word)
         val info = currentInputEditorInfo
         val action = enterAction(info)
-        if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
+        val customAction = info?.actionLabel != null && info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION == 0
+        val hasAction = customAction || action !in setOf(EditorInfo.IME_ACTION_NONE, EditorInfo.IME_ACTION_UNSPECIFIED)
+        val corrected = applyAutocorrection(englishWord ?: word, if (hasAction) "" else "\n")
+        if (!corrected) learn(englishWord ?: word)
+        if (customAction) currentInputConnection?.performEditorAction(info!!.actionId)
+        else if (hasAction) {
             currentInputConnection?.performEditorAction(action)
             if (action == EditorInfo.IME_ACTION_DONE) requestHideSelf(0)
         }
-        else currentInputConnection?.commitText("\n", 1)
+        else if (!corrected) currentInputConnection?.commitText("\n", 1)
         cancelComposition(false); updateSuggestions()
     }
     override fun onCandidate(value: String) {
         validatePreview()
         feedback()
         if (value == AksharaEasterEgg.TRUE_NAME_DISPLAY) {
-            writePreview(AksharaEasterEgg.TRUE_NAME_INSERT); preview.clear()
+            writePreview(AksharaEasterEgg.TRUE_NAME_INSERT, true); preview.clear()
             composition.clear(); slsSource.clear(); updateSuggestions(); return
         }
         if (persistentEnglish) {
@@ -277,10 +321,24 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         if (editing != null) {
             replaceEditedWord(value, editing)
         } else {
-            writePreview(value); preview.clear()
+            writePreview(value, true); preview.clear()
             composition.clear(); slsSource.clear(); currentInputConnection?.commitText(" ", 1)
         }
         learn(value)
+        precedingDirty = true
+        updateSuggestions()
+    }
+    override fun onEmojiPicked(value: String) {
+        commitComposition()
+        insertCommitted(value)
+        rememberEmoji(value)
+        updateSuggestions()
+    }
+    override fun onPasteText(value: String) {
+        commitComposition()
+        pendingAutocorrection = null
+        lastSpaceAt = 0L
+        currentInputConnection?.commitText(value, 1)
         precedingDirty = true
         updateSuggestions()
     }
@@ -299,8 +357,45 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         startActivity(Intent(this, org.akshara.ime.settings.SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
     override fun onClipboardOpen() {
-        captureClipboard()
+        refreshClipboard()
         if (::keyboard.isInitialized) keyboard.setClipboardItems(clipboardHistory.items(), clipboardHistory.pinnedItems())
+    }
+
+    override fun onClipboardPreviewPaste() {
+        val clip = latestClipboard ?: return
+        if (!prefs.clipboardPreview || !clipboardEligible || secureEditor || clip.itemCount == 0) return
+        val item = clip.getItemAt(0)
+        val supportedImageMime = item.uri?.let { compatibleImageMime(clip.description) }
+        val image = stagedImage?.takeIf { it.source == item.uri }
+        // Do not disturb the current word if the copied image is still being prepared.
+        if (supportedImageMime != null && image == null) return
+        // Rich-content commits must not race an active composing region.
+        commitComposition()
+        val committed = image?.let { staged ->
+            supportedImageMime?.let {
+                val description = ClipDescription(clip.description.label, arrayOf(staged.mimeType))
+                val content = InputContentInfoCompat(staged.content, description, null)
+                runCatching {
+                    InputConnectionCompat.commitContent(
+                        currentInputConnection,
+                        currentInputEditorInfo,
+                        content,
+                        InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
+                        null
+                    )
+                }.getOrDefault(false)
+            }
+        } == true
+        if (!committed) {
+            val text = clipboardText(clip) ?: return
+            onPasteText(text)
+        }
+        latestClipboard = null
+        stagedImage = null
+        stagingSource = null
+        clipboardGeneration++
+        if (::keyboard.isInitialized) keyboard.setClipboardPreview(null)
+        updateSuggestions()
     }
 
     /** Avoid Android's landscape extract UI, which can make the IME appear detached. */
@@ -388,11 +483,11 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private fun insertCommitted(value: String) {
         pendingAutocorrection = null
         val ic = currentInputConnection ?: return
-        val quoted = if (prefs.smartQuotes && editorLayout == EditorLayout.TEXT) {
+        val quoted = if (!persistentEnglish && prefs.smartQuotes && editorLayout == EditorLayout.TEXT && value in setOf("'", "\"")) {
             val previous = ic.getTextBeforeCursor(1, 0)?.toString()?.lastOrNull()
             SmartPunctuationSpacing.smartQuote(value, previous)
         } else value
-        if (prefs.smartPunctuation && quoted.isNotEmpty() && quoted != " " && !quoted.startsWith("\n")) {
+        if (!persistentEnglish && editorLayout == EditorLayout.TEXT && prefs.smartPunctuation && quoted.isNotEmpty() && quoted != " " && !quoted.startsWith("\n")) {
             val before = ic.getTextBeforeCursor(8, 0)?.toString().orEmpty()
             val change = SmartPunctuationSpacing.adjustment(quoted, before, punctuationField())
             if (change.deletePrecedingCount > 0) ic.deleteSurroundingText(change.deletePrecedingCount, 0)
@@ -428,8 +523,8 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         if (composition.active && currentInputConnection?.let { !preview.matches(it) } == true) cancelComposition(false)
     }
 
-    private fun writePreview(value: String) {
-        currentInputConnection?.let { if (!preview.replace(it, value)) cancelComposition(false) }
+    private fun writePreview(value: String, alreadyValidated: Boolean = false) {
+        currentInputConnection?.let { if (!preview.replace(it, value, alreadyValidated)) cancelComposition(false) }
     }
 
     private fun commitComposition(): String? {
@@ -442,7 +537,12 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private data class PendingAutocorrection(val original: String, val replacement: String, val suffix: String)
 
     private fun applyAutocorrection(word: String?, suffix: String): Boolean {
-        if (!prefs.autocorrect || restricted || editorLayout != EditorLayout.TEXT || word.isNullOrBlank()) return false
+        if (!(if (persistentEnglish) prefs.englishAutocorrect else prefs.autocorrect) || restricted || editorLayout != EditorLayout.TEXT || word.isNullOrBlank()) return false
+        if (word == rejectedCorrection) return false
+        val editor = currentInputEditorInfo
+        if (editor != null && editor.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS != 0) return false
+        if (!currentInputConnection?.getSelectedText(0).isNullOrEmpty()) return false
+        if (currentInputConnection?.getTextAfterCursor(1, 0)?.firstOrNull()?.let(::isWordCharacter) == true) return false
         val replacement = (if (persistentEnglish) englishPrediction.correction(word) else autocorrection.correction(word))
             ?: return false
         val ic = currentInputConnection ?: return false
@@ -471,12 +571,14 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             ic.commitText(pending.original, 1)
         } finally { ic.endBatchEdit() }
         pendingAutocorrection = null
+        rejectedCorrection = pending.original
         precedingDirty = true
         return true
     }
     private fun cancelComposition(removeHostText: Boolean) {
         if (removeHostText && composition.rendered.isNotEmpty()) currentInputConnection?.deleteSurroundingText(composition.rendered.length, 0)
         currentInputConnection?.finishComposingText(); preview.clear(); composition.clear(); slsSource.clear(); generation++; predictionTask?.cancel(true)
+        suggestionRunnable?.let(main::removeCallbacks)
         precedingDirty = true
         if (::keyboard.isInitialized) keyboard.setCandidates(emptyList())
     }
@@ -506,7 +608,43 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         ic.endBatchEdit()
     }
     private fun updateSuggestions() {
+        generation++
+        predictionTask?.cancel(true)
+        suggestionRunnable?.let(main::removeCallbacks)
+        updateEnglishCapitalization()
         if (!::keyboard.isInitialized || restricted || !prefs.suggestions || latinWordActive || editorLayout != EditorLayout.TEXT) { if (::keyboard.isInitialized) keyboard.setCandidates(emptyList()); return }
+        suggestionRunnable?.let(main::removeCallbacks)
+        val pending = Runnable {
+            suggestionRunnable = null
+            computeSuggestions()
+        }
+        suggestionRunnable = pending
+        main.postDelayed(pending, SUGGESTION_DEBOUNCE_MS)
+    }
+
+    private fun updateEnglishCapitalization() {
+        if (!::keyboard.isInitialized) return
+        val info = currentInputEditorInfo
+        val enabled = prefs.autoCapitalization && persistentEnglish && editorLayout == EditorLayout.TEXT && !secureEditor
+        val requested = info?.inputType?.and(InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_CAP_WORDS or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES) ?: 0
+        val mode = if (requested != 0) requested else InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        val connection = currentInputConnection
+        val editorCaps = connection?.getCursorCapsMode(mode) ?: 0
+        // Some editors return zero even at the start of an empty field. Derive the same
+        // capitalization mode from nearby text when the editor does not provide one.
+        val nearby = if (enabled && editorCaps == 0) connection?.getTextBeforeCursor(128, 0) else null
+        val localCaps = nearby != null && when {
+            mode and InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS != 0 -> true
+            nearby.isEmpty() -> true
+            mode and InputType.TYPE_TEXT_FLAG_CAP_WORDS != 0 -> nearby.last().isWhitespace()
+            else -> nearby.last() == '\n' || Regex("""[.!?]["')\]]?\s+$""").containsMatchIn(nearby)
+        }
+        val caps = enabled && (editorCaps != 0 || localCaps)
+        keyboard.setAutoCapitalization(caps)
+    }
+
+    private fun computeSuggestions() {
+        if (!::keyboard.isInitialized || restricted || !prefs.suggestions || latinWordActive || editorLayout != EditorLayout.TEXT) return
         if (!composition.active) precedingDirty = true
         val word = currentWordAtCursor()
         // A correction in the middle of a word must be scored as that complete word.
@@ -546,7 +684,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     private fun currentLatinPrefix(): String = currentInputConnection?.getTextBeforeCursor(128, 0)?.toString()
-        ?.takeLastWhile { it.isLetter() }.orEmpty()
+        ?.takeLastWhile { it.isLetter() || it == '\'' || it == '’' }.orEmpty()
 
     private fun isEditingExistingWord(word: CursorWord): Boolean {
         if (word.suffix.isNotEmpty()) return true
@@ -558,7 +696,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
 
     private fun isWordCharacter(char: Char): Boolean {
         val type = Character.getType(char)
-        return char.isLetter() || type == Character.NON_SPACING_MARK.toInt() || type == Character.COMBINING_SPACING_MARK.toInt()
+        return char.isLetter() || (persistentEnglish && (char == '\'' || char == '’')) || type == Character.NON_SPACING_MARK.toInt() || type == Character.COMBINING_SPACING_MARK.toInt()
     }
 
     private fun replaceEditedWord(value: String, word: CursorWord) {
@@ -590,23 +728,51 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         previousCommittedWord = word
         executor.submit { learning.record(word, previous) }
     }
-    private fun captureClipboard() {
-        if (!prefs.clipboardHistory || restricted || editorLayout != EditorLayout.TEXT) return
+    private fun captureClipboardHistory(clip: ClipData) {
+        if (!prefs.clipboardHistory || !clipboardEligible || secureEditor || clip.itemCount == 0) return
+        if (currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0) return
+        clipboardText(clip)?.let(clipboardHistory::add)
+    }
+
+    private fun refreshClipboard(fresh: Boolean = false) {
+        if ((!prefs.clipboardHistory && !prefs.clipboardPreview) || !clipboardEligible || secureEditor) {
+            latestClipboard = null
+            stagedImage = null
+            stagingSource = null
+            clipboardGeneration++
+            if (::keyboard.isInitialized) keyboard.setClipboardPreview(null)
+            return
+        }
         val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = manager.primaryClip ?: return
-        if (clip.itemCount == 0) return
-        clip.getItemAt(0).coerceToText(this)?.toString()?.let(clipboardHistory::add)
+        val clip = runCatching { manager.primaryClip }.getOrNull()
+        if (clip == null || clip.itemCount == 0 || clip.description.extras?.getBoolean("android.content.extra.IS_SENSITIVE", false) == true) {
+            latestClipboard = null
+            stagedImage = null
+            stagingSource = null
+            clipboardGeneration++
+            if (::keyboard.isInitialized) keyboard.setClipboardPreview(null)
+            return
+        }
+        captureClipboardHistory(clip)
+        val next = clip.takeIf { prefs.clipboardPreview && (fresh || isRecentClipboard(it.description)) }
+        if (fresh || next?.getItemAt(0)?.uri != latestClipboard?.getItemAt(0)?.uri) {
+            stagedImage = null
+            stagingSource = null
+            clipboardGeneration++
+        }
+        latestClipboard = next
+        updateClipboardPreview()
     }
 
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
-        captureClipboard()
+        refreshClipboard(fresh = true)
         if (::keyboard.isInitialized) keyboard.setClipboardItems(clipboardHistory.items(), clipboardHistory.pinnedItems())
     }
 
     private fun listenForClipboard() {
         val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         manager.removePrimaryClipChangedListener(clipListener)
-        if (prefs.clipboardHistory && !restricted && editorLayout == EditorLayout.TEXT) {
+        if (inputViewActive && (prefs.clipboardHistory || prefs.clipboardPreview) && clipboardEligible && !secureEditor) {
             manager.addPrimaryClipChangedListener(clipListener)
         }
     }
@@ -614,7 +780,121 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private fun stopClipboardListener() {
         (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).removePrimaryClipChangedListener(clipListener)
     }
-    private fun rememberEmoji(value: String) { recentEmoji.remove(value); recentEmoji.add(0, value); if (recentEmoji.size > 32) recentEmoji = recentEmoji.take(32).toMutableList(); keyboard.setRecentEmoji(recentEmoji) }
+
+    private fun clearClipboardPreview() {
+        latestClipboard = null
+        stagedImage = null
+        stagingSource = null
+        clipboardGeneration++
+        if (::keyboard.isInitialized) keyboard.setClipboardPreview(null)
+    }
+
+    private fun clipboardText(clip: ClipData): String? {
+        if (clip.itemCount == 0) return null
+        val item = clip.getItemAt(0)
+        item.text?.toString()?.let { return it.takeIf(String::isNotBlank) }
+        item.htmlText?.let { html ->
+            return android.text.Html.fromHtml(html, android.text.Html.FROM_HTML_MODE_LEGACY)
+                .toString().takeIf(String::isNotBlank)
+        }
+        if ((0 until clip.description.mimeTypeCount).any { clip.description.getMimeType(it).startsWith("text/") }) {
+            return item.coerceToText(this)?.toString()?.takeIf(String::isNotBlank)
+        }
+        return null
+    }
+
+    private fun compatibleImageMime(description: ClipDescription): String? {
+        val accepted = EditorInfoCompat.getContentMimeTypes(currentInputEditorInfo ?: return null)
+        if (accepted.isEmpty()) return null
+        return (0 until description.mimeTypeCount)
+            .map(description::getMimeType)
+            .firstOrNull { offered ->
+                offered.startsWith("image/") && accepted.any { wanted -> ClipDescription.compareMimeTypes(offered, wanted) }
+            }
+    }
+
+    private fun isRecentClipboard(description: ClipDescription): Boolean {
+        val timestamp = description.timestamp
+        return timestamp <= 0L || System.currentTimeMillis() - timestamp <= CLIPBOARD_PREVIEW_MAX_AGE_MS
+    }
+
+    private fun updateClipboardPreview() {
+        if (!::keyboard.isInitialized) return
+        val clip = latestClipboard
+        if (clip == null || clip.itemCount == 0 || !prefs.clipboardPreview || !clipboardEligible || secureEditor) {
+            keyboard.setClipboardPreview(null)
+            return
+        }
+        val image = clip.getItemAt(0).uri != null && compatibleImageMime(clip.description) != null
+        val text = clipboardText(clip)
+        when {
+            image -> prepareClipboardImage(clip)
+            text != null -> {
+                val previewText = text.replace(Regex("\\s+"), " ").trim().take(64)
+                keyboard.setClipboardPreview(previewText)
+            }
+            else -> keyboard.setClipboardPreview(null)
+        }
+    }
+
+    private fun prepareClipboardImage(clip: ClipData) {
+        val source = clip.getItemAt(0).uri ?: return
+        val mime = compatibleImageMime(clip.description) ?: return
+        if (stagedImage?.source == source) {
+            keyboard.setClipboardPreview("Image", true)
+            return
+        }
+        if (stagingSource == source) {
+            keyboard.setClipboardPreview("Preparing image…", true)
+            return
+        }
+        stagingSource = source
+        val token = ++clipboardGeneration
+        keyboard.setClipboardPreview("Preparing image…", true)
+        clipboardExecutor.submit {
+            val staged = clipboardImageCache.stage(source, mime)
+            main.post {
+                if (token != clipboardGeneration || latestClipboard?.getItemAt(0)?.uri != source) return@post
+                stagingSource = null
+                stagedImage = staged?.let { StagedImage(source, it, mime) }
+                if (stagedImage != null) keyboard.setClipboardPreview("Image", true)
+                else keyboard.setClipboardPreview(null)
+            }
+        }
+    }
+
+    private fun applyPreferenceChange(key: String?) {
+        prefs = KeyboardPreferences(this)
+        if (!::keyboard.isInitialized) return
+        if (key == "persistent_english" && persistentEnglish == prefs.persistentEnglish) return
+        commitComposition()
+        val recreate = key == null || key == KeyboardPreferences.THEME || key == "high_contrast"
+        if (recreate) {
+            keyboard = KeyboardView(this, this, prefs)
+            setInputView(keyboard)
+        }
+        persistentEnglish = prefs.persistentEnglish
+        keyboard.configure(
+            prefs.mode,
+            offerSystemSwitch(),
+            enterLabel(currentInputEditorInfo),
+            editorLayout,
+            english = persistentEnglish
+        )
+        keyboard.learningEnabled = !restricted && editorLayout == EditorLayout.TEXT
+        keyboard.setRecentEmoji(recentEmojiStore.items())
+        keyboard.setClipboardItems(clipboardHistory.items(), clipboardHistory.pinnedItems())
+        if (!prefs.inlineAutofill) keyboard.setInlineAutofillSuggestions(emptyList())
+        if (inputViewActive) refreshClipboard() else clearClipboardPreview()
+        listenForClipboard()
+        applySystemBarAppearance()
+        updateSuggestions()
+    }
+
+    private fun rememberEmoji(value: String) {
+        recentEmoji = recentEmojiStore.add(value).toMutableList()
+        if (::keyboard.isInitialized) keyboard.setRecentEmoji(recentEmoji)
+    }
     private fun feedback() {
         if (prefs.haptics && ::keyboard.isInitialized) {
             val type = if (Build.VERSION.SDK_INT >= 27) android.view.HapticFeedbackConstants.KEYBOARD_PRESS else android.view.HapticFeedbackConstants.KEYBOARD_TAP
@@ -643,13 +923,27 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     companion object {
+        private const val SUGGESTION_DEBOUNCE_MS = 24L
+        private const val CLIPBOARD_PREVIEW_MAX_AGE_MS = 5 * 60 * 1000L
         fun enterAction(info: EditorInfo?): Int {
             if (info == null) return EditorInfo.IME_ACTION_NONE
-            val multiline = info.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_TEXT &&
-                info.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
-            if (multiline || info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0) return EditorInfo.IME_ACTION_NONE
+            if (info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0) return EditorInfo.IME_ACTION_NONE
             return info.imeOptions and EditorInfo.IME_MASK_ACTION
         }
+        fun isSecureEditor(info: EditorInfo): Boolean {
+            val cls = info.inputType and InputType.TYPE_MASK_CLASS
+            val variation = info.inputType and InputType.TYPE_MASK_VARIATION
+            return (cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD) || cls == InputType.TYPE_CLASS_TEXT && variation in setOf(
+                InputType.TYPE_TEXT_VARIATION_PASSWORD,
+                InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+                InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+            )
+        }
+        fun isClipboardEditor(info: EditorInfo): Boolean =
+            info.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_TEXT && !isSecureEditor(info)
+
+        fun supportsSinhala(layout: EditorLayout): Boolean =
+            layout == EditorLayout.TEXT || layout == EditorLayout.URI
         fun isRestrictedEditor(info: EditorInfo): Boolean {
             val cls = info.inputType and InputType.TYPE_MASK_CLASS
             val variation = info.inputType and InputType.TYPE_MASK_VARIATION
@@ -659,11 +953,12 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
                     InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS, InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS, InputType.TYPE_TEXT_VARIATION_URI, InputType.TYPE_TEXT_VARIATION_FILTER
                 )) return true
             return info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0 ||
+                info.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS != 0 ||
                 info.imeOptions and EditorInfo.IME_MASK_ACTION == EditorInfo.IME_ACTION_SEARCH
         }
-        fun enterLabel(info: EditorInfo?): String = when (enterAction(info)) {
+        fun enterLabel(info: EditorInfo?): String = if (info?.actionLabel != null && info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION == 0) info.actionLabel.toString() else when (enterAction(info)) {
             EditorInfo.IME_ACTION_GO -> "Go"; EditorInfo.IME_ACTION_SEARCH -> "⌕"; EditorInfo.IME_ACTION_SEND -> "Send"
-            EditorInfo.IME_ACTION_NEXT -> "Next"; EditorInfo.IME_ACTION_DONE -> "Done"; else -> "↵"
+            EditorInfo.IME_ACTION_NEXT -> "Next"; EditorInfo.IME_ACTION_PREVIOUS -> "Previous"; EditorInfo.IME_ACTION_DONE -> "Done"; else -> "↵"
         }
 
         fun editorLayout(info: EditorInfo?): EditorLayout {

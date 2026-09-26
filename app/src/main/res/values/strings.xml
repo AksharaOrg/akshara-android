@@ -19,6 +19,10 @@
     <string name="status_selected">Akshara is the active keyboard</string>
     <string name="status_select_needed">Choose Akshara from the keyboard picker</string>
     <string name="input_mode">Sinhala input method</string>
+    <string name="auto_capitalization">English auto-capitalization</string>
+    <string name="auto_capitalization_summary">Capitalize sentences and follow the text field’s capitalization rules</string>
+    <string name="english_autocorrect">English mistype correction</string>
+    <string name="english_autocorrect_summary">Correct common typos on Space or Enter. Press Backspace immediately to undo.</string>
     <string name="suggestions">Show suggestions</string>
     <string name="suggestions_summary">Local Sinhala word predictions above the keys</string>
     <string name="autocorrect">Autocorrect</string>
@@ -36,11 +40,15 @@
     <string name="english_one_word_summary">Swipe up on Space for one Latin word</string>
     <string name="persistent_english">Start in English</string>
     <string name="persistent_english_summary">Hold Space to switch between Sinhala and English while typing</string>
-    <string name="emoji_picker">Emoji key</string>
-    <string name="emoji_picker_summary">Show the built-in emoji picker</string>
+    <string name="emoji_picker">Emoji toolbar button</string>
+    <string name="emoji_picker_summary">Show the built-in emoji picker button on the suggestion bar</string>
     <string name="skin_tone">Preferred skin tone</string>
     <string name="clipboard_history">Clipboard history</string>
     <string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device. Pin clips from the keyboard to keep them.</string>
+    <string name="clipboard_preview">Quick paste preview</string>
+    <string name="clipboard_preview_summary">Show recently copied text or a compatible image on the suggestion bar. Disabled by default.</string>
+    <string name="space_punctuation_keys">Comma and period beside Space</string>
+    <string name="space_punctuation_keys_summary">Keep comma on the left and period on the right of the space bar</string>
     <string name="inline_autofill">Inline autofill</string>
     <string name="inline_autofill_summary">Show password-manager and form-fill suggestions in the keyboard bar</string>
     <string name="theme">Theme</string>
@@ -88,7 +96,7 @@
     <string name="privacy_permissions_title">Permissions</string>
     <string name="privacy_permissions_body">Akshara has no internet permission. Vibration is used only for keypress haptics. The keyboard can read text fields while it is open, which Android requires for any IME.</string>
     <string name="privacy_clipboard_title">Clipboard history</string>
-    <string name="privacy_clipboard_body">When enabled, Akshara saves copied text while the keyboard is open. Items stay on this device and are never sent over the network. Pin important clips from the keyboard; they stay until you delete them manually.</string>
+    <string name="privacy_clipboard_body">Clipboard features are disabled by default. Quick paste shows the latest copied text or compatible image while the keyboard is open. Images are copied temporarily into the app cache so Android can grant the receiving app access, then removed automatically. Clipboard history can save copied text on this device. Clipboard content is never shown in password fields or sent over the network.</string>
     <string name="privacy_predictions_title">Predictions</string>
     <string name="privacy_predictions_body">Word suggestions use compact models bundled with the app. Source corpora are not included and never leave your device.</string>
     <string name="privacy_diagnostics_title">Diagnostics</string>

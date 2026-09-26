@@ -11,6 +11,17 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class UnmarkedPreviewTest {
+    @Test fun movingToAnIdenticalWordDoesNotReplaceOtherText() {
+        val editor = EditText(ApplicationProvider.getApplicationContext())
+        editor.setText("abc ")
+        editor.setSelection(4)
+        val ic = editor.onCreateInputConnection(EditorInfo())!!
+        val preview = UnmarkedPreview()
+        preview.replace(ic, "abc")
+        editor.setSelection(3)
+        assertFalse(preview.replace(ic, "wrong"))
+        assertEquals("abc abc", editor.text.toString())
+    }
     @Test fun previewReplacesOnlyItsOwnTextWithoutComposingUnderline() {
         val editor = EditText(ApplicationProvider.getApplicationContext())
         editor.setText("left right")

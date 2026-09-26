@@ -15,6 +15,7 @@ class KeyboardPreferencesTest {
     @Test fun defaultsArePrivateAndPractical() {
         val p = KeyboardPreferences(context); assertEquals(InputMode.SMART_PHONETIC, p.mode); assertTrue(p.suggestions); assertFalse(p.clipboardHistory)
         assertTrue(p.doubleSpacePeriod); assertTrue(p.smartQuotes); assertTrue(p.smartPunctuation); assertFalse(p.englishForOneWord)
+        assertFalse(p.clipboardPreview); assertTrue(p.spacePunctuationKeys); assertTrue(p.emojiPicker)
     }
     @Test fun valuesPersistAndReset() {
         KeyboardPreferences(context).apply { mode = InputMode.WIJESEKARA; highContrast = true }
