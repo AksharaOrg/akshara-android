@@ -26,7 +26,8 @@ internal class SuggestionRail(
     private val onClipboard: () -> Unit,
     private val onEmoji: () -> Unit,
     private val onClipboardPreview: () -> Unit,
-    private val onEmojiPicked: (String) -> Unit
+    private val onEmojiPicked: (String) -> Unit,
+    private val onSettings: () -> Unit = {}
 ) : FrameLayout(context) {
     var keySliver = 0
     private val chips = Array(3) { MorphChip(context, ink) }
@@ -37,6 +38,7 @@ internal class SuggestionRail(
     private val empty = TextView(context)
     private val clipboard = ImageView(context)
     private val emoji = ImageView(context)
+    private val settings = ImageView(context)
     private val actions = LinearLayout(context)
     private val previewHost = FrameLayout(context)
     private val clipboardPreview = TextView(context)
@@ -98,6 +100,17 @@ internal class SuggestionRail(
             emoji.setBackgroundResource(ripple.resourceId)
         }
         emoji.setOnClickListener { onEmoji() }
+        settings.setImageResource(org.akshara.ime.R.drawable.ic_settings)
+        settings.setColorFilter(ink)
+        settings.scaleType = ImageView.ScaleType.CENTER_INSIDE
+        settings.setPadding(dp(11), dp(9), dp(11), dp(9))
+        settings.contentDescription = "Keyboard settings"
+        settings.isClickable = true
+        settings.isFocusable = true
+        if (context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, ripple, true)) {
+            settings.setBackgroundResource(ripple.resourceId)
+        }
+        settings.setOnClickListener { onSettings() }
         actions.orientation = LinearLayout.HORIZONTAL
         actions.gravity = Gravity.CENTER_VERTICAL
         actions.addView(clipboard, LinearLayout.LayoutParams(dp(44), LayoutParams.MATCH_PARENT))
@@ -127,6 +140,8 @@ internal class SuggestionRail(
         previewHost.addView(clipboardPreview, LayoutParams(LayoutParams.WRAP_CONTENT, dp(36), Gravity.CENTER))
         addView(previewHost, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(actions, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT, Gravity.START or Gravity.CENTER_VERTICAL))
+        // Gboard-style toolbar: settings stays pinned to the end of the rail.
+        addView(settings, LayoutParams(dp(44), LayoutParams.MATCH_PARENT, Gravity.END or Gravity.CENTER_VERTICAL))
         showEmpty(true)
         setClipboardVisible(false)
         setEmojiVisible(false)
@@ -171,10 +186,10 @@ internal class SuggestionRail(
     private fun updateActionInsets() {
         val start = (if (clipboard.visibility == VISIBLE) dp(44) else 0) +
             (if (emoji.visibility == VISIBLE) dp(44) else 0)
-        chipRow.setPadding(start, 0, 0, 0)
-        empty.setPadding(start, 0, 0, 0)
+        chipRow.setPadding(start, 0, dp(44), 0)
+        empty.setPadding(start, 0, dp(44), 0)
         // Equal side insets keep short clips centered while long clips cannot cover actions.
-        previewHost.setPadding(start + dp(8), 0, start + dp(8), 0)
+        previewHost.setPadding(maxOf(start, dp(44)) + dp(8), 0, maxOf(start, dp(44)) + dp(8), 0)
         actions.visibility = if (start > 0) VISIBLE else GONE
         if (start > 0) actions.bringToFront()
     }
@@ -217,6 +232,7 @@ internal class SuggestionRail(
         chipRow.alpha = 1f
         emptyRow.animate().cancel()
         chipRow.animate().cancel()
+        settings.bringToFront()
     }
 
     private fun divider() = View(context).apply {

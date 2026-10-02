@@ -158,6 +158,12 @@ class SettingsActivity : Activity() {
             toggle(R.string.space_punctuation_keys, R.string.space_punctuation_keys_summary, R.drawable.ic_language, R.color.settings_icon_gray, prefs.spacePunctuationKeys) {
                 prefs.spacePunctuationKeys = it
             }
+            toggle(R.string.key_hints, R.string.key_hints_summary, R.drawable.ic_keyboard, R.color.settings_icon_gray, prefs.keyHints) {
+                prefs.keyHints = it
+            }
+            toggle(R.string.show_with_hardware_keyboard, R.string.show_with_hardware_keyboard_summary, R.drawable.ic_keyboard, R.color.settings_icon_indigo, prefs.showWithHardwareKeyboard) {
+                prefs.showWithHardwareKeyboard = it
+            }
         }
         section(R.string.category_tools) {
             toggle(R.string.suggestions, R.string.suggestions_summary, R.drawable.ic_suggestions, R.color.settings_icon_orange, prefs.suggestions) {

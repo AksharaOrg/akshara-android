@@ -20,7 +20,8 @@ internal data class KeyboardColors(
     val utility: Int,
     val ink: Int,
     val dark: Boolean,
-    val highContrast: Boolean
+    val highContrast: Boolean,
+    val hints: Boolean = true
 )
 
 internal class KeyCap(context: Context) : View(context) {
@@ -87,6 +88,7 @@ internal class KeyCap(context: Context) : View(context) {
             return
         }
         val text = if (flickActive && key.flickOutput != null) key.flickOutput else key.label
+        val hint = key.hint?.takeIf { colors.hints && !flickActive && !key.utility }
         if (text.isNotEmpty()) {
             val function = key.utility || text.length > 2 && !KeyTypography.isSinhala(text)
             labelPaint.color = colors.ink
@@ -98,14 +100,21 @@ internal class KeyCap(context: Context) : View(context) {
             }
             labelPaint.textSize = textSize
             val fm = labelPaint.fontMetrics
-            val baseline = if (KeyTypography.isSinhala(text)) KeyTypography.sinhalaBaseline(height / 2f, fm) else KeyTypography.baseline(height / 2f, fm)
+            // Like Gboard, a hinted key keeps its label slightly low so the corner hint has room.
+            val centerY = height / 2f + if (hint.isNullOrEmpty()) 0f else dp(KeyTypography.HINT_LABEL_SHIFT_DP)
+            val baseline = if (KeyTypography.isSinhala(text)) KeyTypography.sinhalaBaseline(centerY, fm) else KeyTypography.baseline(centerY, fm)
             canvas.drawText(text, width / 2f, baseline, labelPaint)
         }
-        val hint = key.hint
-        if (!hint.isNullOrEmpty() && !flickActive) {
-            hintPaint.color = ColorUtils.setAlphaComponent(colors.ink, 150)
-            hintPaint.textSize = KeyTypography.hintPx(resources)
-            canvas.drawText(hint, width - dp(4), dp(13), hintPaint)
+        if (!hint.isNullOrEmpty()) {
+            hintPaint.color = ColorUtils.setAlphaComponent(colors.ink, 140)
+            hintPaint.typeface = KeyTypography.keyTypeface()
+            var hintSize = KeyTypography.hintPx(resources)
+            val maxHintWidth = width * 0.4f
+            while (hintSize > dp(7) && hintPaint.apply { textSize = hintSize }.measureText(hint) > maxHintWidth) {
+                hintSize *= 0.9f
+            }
+            hintPaint.textSize = hintSize
+            canvas.drawText(hint, width - dp(KeyTypography.HINT_INSET_DP), dp(KeyTypography.HINT_INSET_DP) - hintPaint.fontMetrics.ascent * 0.72f, hintPaint)
         }
     }
 

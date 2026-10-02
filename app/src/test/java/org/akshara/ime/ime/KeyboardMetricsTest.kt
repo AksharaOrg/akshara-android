@@ -50,7 +50,7 @@ class KeyboardMetricsTest {
             val comma = layout.keyById(",")!!
             val space = layout.keyById("space")!!
             val qKey = layout.keyById("q")!!
-            assertEquals("Q", qKey.label)
+            assertEquals("q", qKey.label)
             assertEquals("q", qKey.output)
             assertEquals(shift.visual.width, symbols.visual.width, 0.6f)
             assertEquals(shift.visual.width, enter.visual.width, 1f)

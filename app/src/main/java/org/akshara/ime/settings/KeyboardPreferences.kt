@@ -48,6 +48,8 @@ class KeyboardPreferences(context: Context) {
     var englishForOneWord: Boolean by bool(ENGLISH_ONE_WORD, false)
     var persistentEnglish: Boolean by bool(PERSISTENT_ENGLISH, false)
     var inlineAutofill: Boolean by bool(INLINE_AUTOFILL, true)
+    var keyHints: Boolean by bool(KEY_HINTS, true)
+    var showWithHardwareKeyboard: Boolean by bool(SHOW_WITH_HARDWARE_KEYBOARD, true)
 
     fun register(listener: SharedPreferences.OnSharedPreferenceChangeListener) =
         store.registerOnSharedPreferenceChangeListener(listener)
@@ -83,5 +85,7 @@ class KeyboardPreferences(context: Context) {
         private const val ENGLISH_ONE_WORD = "english_for_one_word"
         private const val PERSISTENT_ENGLISH = "persistent_english"
         private const val INLINE_AUTOFILL = "inline_autofill"
+        const val KEY_HINTS = "key_hints"
+        const val SHOW_WITH_HARDWARE_KEYBOARD = "show_with_hardware_keyboard"
     }
 }
