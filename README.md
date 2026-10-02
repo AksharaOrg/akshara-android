@@ -136,3 +136,11 @@ review the staged files:
 git status
 git diff --cached
 ```
+
+## License
+
+Akshara for Android is released under the [MIT License](LICENSE).
+
+The bundled language data in `app/src/main/res/raw/` is licensed separately by
+its original authors. See the attribution files beside each data file, or
+**About → Open Source Notices** in the app.
