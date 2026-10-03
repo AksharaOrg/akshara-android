@@ -151,6 +151,9 @@ class SettingsActivity : Activity() {
                 toggle(R.string.english_one_word, R.string.english_one_word_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.englishForOneWord) {
                     prefs.englishForOneWord = it
                 }
+                toggle(R.string.smart_phonetic_v2, R.string.smart_phonetic_v2_summary, R.drawable.ic_language, R.color.settings_icon_blue, prefs.smartPhoneticV2) {
+                    prefs.smartPhoneticV2 = it
+                }
             }
             toggle(R.string.persistent_english, R.string.persistent_english_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.persistentEnglish) {
                 prefs.persistentEnglish = it

@@ -205,9 +205,13 @@ object SinhalaEngine {
         return text.startsWith(prefix)
     }
 
+    /** Smart Phonetic uses the grammar-correct v2 romanization ([SmartPhoneticV2]); set from preferences. */
+    @Volatile var smartPhoneticV2 = false
+
     fun transliterate(source: String, mode: InputMode): String = when (mode) {
         InputMode.WIJESEKARA -> normalizeSls(source)
-        InputMode.SMART_PHONETIC -> transliterateWith(source, smartConsonants, smartVowels, true)
+        InputMode.SMART_PHONETIC ->
+            if (smartPhoneticV2) SmartPhoneticV2.transliterate(source) else transliterateWith(source, smartConsonants, smartVowels, true)
         InputMode.PHONETIC -> transliterateWith(source, consonants, vowels, false)
     }
 

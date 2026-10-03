@@ -50,6 +50,7 @@ class KeyboardPreferences(context: Context) {
     var inlineAutofill: Boolean by bool(INLINE_AUTOFILL, true)
     var keyHints: Boolean by bool(KEY_HINTS, true)
     var showWithHardwareKeyboard: Boolean by bool(SHOW_WITH_HARDWARE_KEYBOARD, true)
+    var smartPhoneticV2: Boolean by bool(SMART_PHONETIC_V2, false)
 
     fun register(listener: SharedPreferences.OnSharedPreferenceChangeListener) =
         store.registerOnSharedPreferenceChangeListener(listener)
@@ -87,5 +88,6 @@ class KeyboardPreferences(context: Context) {
         private const val INLINE_AUTOFILL = "inline_autofill"
         const val KEY_HINTS = "key_hints"
         const val SHOW_WITH_HARDWARE_KEYBOARD = "show_with_hardware_keyboard"
+        const val SMART_PHONETIC_V2 = "smart_phonetic_v2"
     }
 }

@@ -84,6 +84,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
 
     override fun onCreate() {
         super.onCreate(); prefs = KeyboardPreferences(this); learning = LocalLearningStore(this)
+        SinhalaEngine.smartPhoneticV2 = prefs.smartPhoneticV2
         prediction = PredictionRepository(this, learning); autocorrection = SinhalaAutocorrection(this); englishPrediction = EnglishPredictionRepository(this, learning); emoji = EmojiRepository(this); clipboardHistory = ClipboardHistoryStore(this); recentEmojiStore = RecentEmojiStore(this); clipboardImageCache = ClipboardImageCache(this)
         recentEmoji = recentEmojiStore.items().toMutableList()
         prefs.register(preferenceListener)
@@ -111,6 +112,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         super.onStartInputView(info, restarting)
         inputViewActive = true
         prefs = KeyboardPreferences(this); restricted = info?.let(::isRestrictedEditor) ?: true
+        SinhalaEngine.smartPhoneticV2 = prefs.smartPhoneticV2
         secureEditor = info?.let(::isSecureEditor) ?: true
         clipboardEligible = info?.let(::isClipboardEditor) ?: false
         editorLayout = editorLayout(info)
@@ -231,10 +233,12 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
     override fun onSpace() {
         val englishWord = if (persistentEnglish) currentLatinPrefix() else null
+        val phonetic = if (phoneticV2Active() && composition.source.isNotEmpty()) composition.source to precedingWords(0) else null
         val word = commitComposition()
         if (latinWordActive) endLatinWord()
         val ic = currentInputConnection
-        val corrected = applyAutocorrection(englishWord ?: word, " ")
+        val corrected = (phonetic != null && applyPhoneticChoice(phonetic.first, phonetic.second, word)) ||
+            applyAutocorrection(englishWord ?: word, " ")
         if (corrected) {
             lastSpaceAt = SystemClock.elapsedRealtime()
         } else if (ic != null && tryDoubleSpace(ic)) {
@@ -429,6 +433,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
 
     override fun languageScoreForKey(output: String): Float {
         if (restricted || editorLayout != EditorLayout.TEXT || latinWordActive || persistentEnglish) return 0f
+        if (phoneticV2Active() && output.length == 1 && output[0].isLetter() && output[0].code < 128) {
+            return prediction.phoneticPrefixEvidence(composition.source + output)
+        }
         val next = if (prefs.mode != InputMode.WIJESEKARA && output.length == 1 && output[0].isLetter() && output[0].code < 128) {
             SinhalaEngine.transliterate(composition.source + output, prefs.mode)
         } else if (prefs.mode == InputMode.WIJESEKARA) {
@@ -548,6 +555,23 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         if (currentInputConnection?.getTextAfterCursor(1, 0)?.firstOrNull()?.let(::isWordCharacter) == true) return false
         val replacement = (if (persistentEnglish) englishPrediction.correction(word) else autocorrection.correction(word))
             ?: return false
+        return replaceCommittedWord(word, replacement, suffix)
+    }
+
+    private fun phoneticV2Active() =
+        SinhalaEngine.smartPhoneticV2 && prefs.mode == InputMode.SMART_PHONETIC && !persistentEnglish && !latinWordActive
+
+    /** Smart Phonetic v2: Space commits the dictionary spelling of what was typed (හොඳ for "honda"); Backspace undoes it. */
+    private fun applyPhoneticChoice(source: String, preceding: List<String>, word: String?): Boolean {
+        if (restricted || editorLayout != EditorLayout.TEXT || word.isNullOrBlank() || word == rejectedCorrection) return false
+        val editor = currentInputEditorInfo
+        if (editor != null && editor.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS != 0) return false
+        if (currentInputConnection?.getTextAfterCursor(1, 0)?.firstOrNull()?.let(::isWordCharacter) == true) return false
+        val replacement = prediction.phoneticChoice(source, preceding)?.takeIf { it != word } ?: return false
+        return replaceCommittedWord(word, replacement, " ")
+    }
+
+    private fun replaceCommittedWord(word: String, replacement: String, suffix: String): Boolean {
         val ic = currentInputConnection ?: return false
         ic.beginBatchEdit()
         try {
@@ -655,6 +679,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         val prefix = if (editing) word.text else composition.rendered
         val source = composition.source; val context = precedingWords(if (editing) word.prefix.length else 0)
         val englishActive = persistentEnglish
+        val phoneticSource = source.takeIf { !editing && it.isNotEmpty() && phoneticV2Active() }
         val latinPrefix = if (englishActive) {
             if (editing) word.text else currentLatinPrefix()
         } else ""
@@ -663,6 +688,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         predictionTask = executor.submit {
             try {
                 val values = if (englishActive) englishPrediction.candidates(latinPrefix, context, 3).toMutableList()
+                else if (phoneticSource != null) prediction.phoneticCandidates(phoneticSource, context, 3).toMutableList()
                 else prediction.candidates(prefix, context, 3).map { it.text }.toMutableList()
                 if (AksharaEasterEgg.isCompleteTrueName(prefix, source)) values.add(0, AksharaEasterEgg.TRUE_NAME_DISPLAY)
                 val emojiQuery = if (englishActive) latinPrefix else prefix
@@ -868,11 +894,13 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
 
     private fun applyPreferenceChange(key: String?) {
         prefs = KeyboardPreferences(this)
+        SinhalaEngine.smartPhoneticV2 = prefs.smartPhoneticV2
         if (key == null || key == KeyboardPreferences.SHOW_WITH_HARDWARE_KEYBOARD) updateInputViewShown()
         if (!::keyboard.isInitialized) return
         if (key == "persistent_english" && persistentEnglish == prefs.persistentEnglish) return
         commitComposition()
-        val recreate = key == null || key == KeyboardPreferences.THEME || key == "high_contrast" || key == KeyboardPreferences.KEY_HINTS
+        val recreate = key == null || key == KeyboardPreferences.THEME || key == "high_contrast" || key == KeyboardPreferences.KEY_HINTS ||
+            key == KeyboardPreferences.SMART_PHONETIC_V2
         if (recreate) {
             keyboard = KeyboardView(this, this, prefs)
             setInputView(keyboard)

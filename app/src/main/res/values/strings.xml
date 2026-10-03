@@ -38,6 +38,8 @@
     <string name="smart_punctuation_summary">Trim spaces around marks; add a space after . ? !</string>
     <string name="english_one_word">English for one word</string>
     <string name="english_one_word_summary">Swipe up on Space for one Latin word</string>
+    <string name="smart_phonetic_v2">Grammar-correct Smart Phonetic</string>
+    <string name="smart_phonetic_v2_summary">New spelling rules: d types ද, D types ඩ. Space picks the dictionary spelling; Backspace undoes it</string>
     <string name="persistent_english">Start in English</string>
     <string name="persistent_english_summary">Hold Space to switch between Sinhala and English while typing</string>
     <string name="emoji_picker">Emoji toolbar button</string>
