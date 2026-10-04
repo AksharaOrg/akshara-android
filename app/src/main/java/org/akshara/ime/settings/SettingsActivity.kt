@@ -3,8 +3,10 @@ package org.akshara.ime.settings
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -51,6 +53,19 @@ class SettingsActivity : Activity() {
     private var backCallback: Any? = null
     private var buildTapCount = 0
     private var lastBuildTap = 0L
+
+    /** The Theme setting applies here too: Light or Dark overrides the system's night mode for this screen. */
+    override fun attachBaseContext(base: Context) {
+        val night = when (KeyboardPreferences(base).theme) {
+            "light" -> Configuration.UI_MODE_NIGHT_NO
+            "dark" -> Configuration.UI_MODE_NIGHT_YES
+            else -> null
+        }
+        if (night == null) return super.attachBaseContext(base)
+        val config = Configuration(base.resources.configuration)
+        config.uiMode = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
+        super.attachBaseContext(base.createConfigurationContext(config))
+    }
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -138,7 +153,7 @@ class SettingsActivity : Activity() {
 
     /** Home: setup status, then one row per settings page, like Gboard. */
     private fun renderHome() {
-        layoutInflater.inflate(R.layout.settings_header, container, true)
+        logoHeader(R.layout.settings_header)
         val enabled = keyboardEnabled()
         val selected = keyboardSelected()
         section(R.string.category_get_started) {
@@ -220,6 +235,11 @@ class SettingsActivity : Activity() {
                 }
                 toggle(R.string.english_one_word, R.string.english_one_word_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.englishForOneWord) {
                     prefs.englishForOneWord = it
+                }
+                if (prefs.smartPhoneticV2) {
+                    action(R.string.research_learn, R.string.research_learn_summary, R.drawable.ic_doc, R.color.settings_icon_blue) {
+                        openUrl(R.string.link_research_romanization)
+                    }
                 }
             }
             if (prefs.smartPhoneticV2) {
@@ -328,7 +348,10 @@ class SettingsActivity : Activity() {
         toolbar(R.string.theme)
         section(0) {
             choice(R.string.theme, R.drawable.ic_palette, R.color.settings_icon_purple, R.array.theme_entries, R.array.theme_values, prefs.theme) {
-                prefs.theme = it
+                if (it != prefs.theme) {
+                    prefs.theme = it
+                    recreate()   // re-reads the theme in attachBaseContext
+                }
             }
             toggle(R.string.high_contrast, R.string.high_contrast_summary, R.drawable.ic_palette, R.color.settings_icon_gray, prefs.highContrast) {
                 prefs.highContrast = it
@@ -396,20 +419,31 @@ class SettingsActivity : Activity() {
 
     private fun renderAbout() {
         toolbar(R.string.category_about)
+        logoHeader(R.layout.settings_about_header)
         section(0) {
+            labeled(R.string.about_version, BuildConfig.VERSION_NAME)
+            labeled(R.string.about_build, BuildConfig.VERSION_CODE.toString(), onClick = ::handleBuildTap)
+        }
+        section(R.string.about_people) {
+            action(R.string.credits_title, 0, R.drawable.ic_heart, R.color.settings_icon_pink,
+                summaryText = resources.getQuantityString(R.plurals.credits_summary, contributors.size, contributors.size)) {
+                open(Page.CREDITS)
+            }
+            action(R.string.contribute_title, R.string.contribute_summary, R.drawable.ic_code, R.color.settings_icon_indigo) {
+                openUrl(R.string.link_github)
+            }
+        }
+        section(R.string.about_legal) {
             action(R.string.privacy_title, R.string.privacy_summary, R.drawable.ic_privacy, R.color.settings_icon_teal) { open(Page.PRIVACY) }
-            action(R.string.notices_title, 0, R.drawable.ic_doc, R.color.settings_icon_orange) { open(Page.NOTICES) }
-            action(R.string.credits_title, 0, R.drawable.ic_heart, R.color.settings_icon_pink) { open(Page.CREDITS) }
+            action(R.string.notices_title, R.string.notices_summary, R.drawable.ic_doc, R.color.settings_icon_orange) { open(Page.NOTICES) }
+            labeled(R.string.about_copyright_label, getString(R.string.about_copyright_value))
+            labeled(R.string.about_license_label, getString(R.string.about_license_value))
+        }
+        section(0) {
             action(R.string.diagnostics_title, 0, R.drawable.ic_pulse, R.color.settings_icon_red) { open(Page.DIAGNOSTICS) }
             if (prefs.developerUnlocked) {
                 action(R.string.developer_title, 0, R.drawable.ic_bug, R.color.settings_icon_mint) { open(Page.DEVELOPER) }
             }
-        }
-        section(0) {
-            labeled(R.string.about_version, BuildConfig.VERSION_NAME)
-            labeled(R.string.about_build, BuildConfig.VERSION_CODE.toString(), onClick = ::handleBuildTap)
-            labeled(R.string.about_copyright_label, getString(R.string.about_copyright_value))
-            labeled(R.string.about_license_label, getString(R.string.about_license_value))
         }
         section(0) {
             action(R.string.reset_title, R.string.reset_summary, R.drawable.ic_restart, R.color.settings_icon_red, destructive = true) {
@@ -444,10 +478,13 @@ class SettingsActivity : Activity() {
                 openUrl(R.string.link_github)
             }
         }
-        copy(R.string.notices_contributors_title, R.string.credits_thimira_body)
+        copy(R.string.research_title, R.string.notices_research_body)
         section(0) {
-            action(R.string.credits_thimira_title, 0, R.drawable.ic_heart, R.color.settings_icon_pink, summaryText = getString(R.string.link_thimira)) {
-                openUrl(R.string.link_thimira)
+            action(R.string.notices_source_code, 0, R.drawable.ic_code, R.color.settings_icon_indigo, summaryText = getString(R.string.link_research_source)) {
+                openUrl(R.string.link_research_source)
+            }
+            action(R.string.website_title, 0, R.drawable.ic_language, R.color.settings_icon_blue, summaryText = getString(R.string.link_research)) {
+                openUrl(R.string.link_research)
             }
         }
         copy(R.string.notices_frequency_title, R.string.notices_frequency_body)
@@ -469,13 +506,22 @@ class SettingsActivity : Activity() {
 
     private fun renderCredits() {
         toolbar(R.string.credits_title)
-        copy(R.string.credits_thimira_title, R.string.credits_thimira_body)
         section(0) {
-            action(R.string.website_title, 0, R.drawable.ic_language, R.color.settings_icon_blue, summaryText = getString(R.string.link_thimira)) {
-                openUrl(R.string.link_thimira)
+            for (person in contributors) {
+                actionText(person.name, person.role, R.drawable.ic_heart, R.color.settings_icon_pink,
+                    onClick = person.link?.let { link -> { openUrl(link) } })
+            }
+        }
+        copy(0, R.string.credits_footer)
+        section(0) {
+            action(R.string.contribute_title, R.string.contribute_summary, R.drawable.ic_code, R.color.settings_icon_indigo) {
+                openUrl(R.string.link_github)
             }
         }
     }
+
+    /** The people behind Akshara, in display order; edit res/raw/contributors.json (and CONTRIBUTORS.md) to add someone. */
+    private val contributors: List<Contributor> by lazy { Contributor.load(this) }
 
     private fun renderDiagnostics() {
         toolbar(R.string.diagnostics_title)
@@ -505,6 +551,12 @@ class SettingsActivity : Activity() {
                 prefs.debugOverlay = it
             }
         }
+    }
+
+    /** A header with the logo; the tile's rounded outline also clips the logo image. */
+    private fun logoHeader(layout: Int) {
+        layoutInflater.inflate(layout, container, true)
+        container.getChildAt(container.childCount - 1).findViewById<ImageView>(R.id.settings_logo).clipToOutline = true
     }
 
     private fun toolbar(title: Int) {
@@ -553,6 +605,11 @@ class SettingsActivity : Activity() {
                 card, title, summaryText ?: summary.takeIf { it != 0 }?.let(::getString),
                 icon, tint, chevron = onClick != null, destructive = destructive
             )
+            if (onClick != null) row.setOnClickListener { onClick() }
+        }
+
+        fun actionText(title: String, summary: String?, icon: Int, tint: Int, onClick: (() -> Unit)? = null) {
+            val row = inflateRow(card, 0, summary, icon, tint, chevron = onClick != null, titleText = title)
             if (onClick != null) row.setOnClickListener { onClick() }
         }
 
@@ -608,11 +665,12 @@ class SettingsActivity : Activity() {
         chevron: Boolean = false,
         clickable: Boolean = false,
         switch: Boolean = false,
-        destructive: Boolean = false
+        destructive: Boolean = false,
+        titleText: String? = null
     ): View {
         val row = layoutInflater.inflate(R.layout.settings_item, parent, false)
         val titleView = row.findViewById<TextView>(R.id.settings_item_title)
-        titleView.setText(title)
+        if (titleText != null) titleView.text = titleText else titleView.setText(title)
         if (destructive) titleView.setTextColor(attrColor(android.R.attr.colorError).takeIf { it != 0 } ?: 0xFFB00020.toInt())
         row.findViewById<TextView>(R.id.settings_item_summary).apply {
             text = summary.orEmpty()
@@ -672,8 +730,10 @@ class SettingsActivity : Activity() {
         }
     }
 
-    private fun openUrl(res: Int) {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(getString(res))))
+    private fun openUrl(res: Int) = openUrl(getString(res))
+
+    private fun openUrl(url: String) {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 
     private fun keyboardEnabled(): Boolean {

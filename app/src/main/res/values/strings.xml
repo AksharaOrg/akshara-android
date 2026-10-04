@@ -113,7 +113,22 @@
     <string name="privacy_title">Privacy Policy</string>
     <string name="privacy_summary">Typing stays on this device</string>
     <string name="notices_title">Open Source Notices</string>
-    <string name="credits_title">Credits</string>
+    <string name="credits_title">Contributors</string>
+    <plurals name="credits_summary">
+        <item quantity="one">%d person</item>
+        <item quantity="other">%d people</item>
+    </plurals>
+    <string name="credits_footer">Akshara is open source, and more people are welcome to join. Thank you also to everyone who reports issues, tests builds and shares feedback.</string>
+    <string name="contribute_title">Contribute on GitHub</string>
+    <string name="contribute_summary">Report issues, suggest words or send a pull request</string>
+    <string name="about_made_by">Made in Sri Lanka by the Akshara contributors.</string>
+    <string name="about_people">People</string>
+    <string name="about_legal">Legal</string>
+    <string name="research_title">Sinhala Phonetic Orthography</string>
+    <string name="research_learn">How grammar-correct spelling works</string>
+    <string name="research_learn_summary">The rules and sources, on the research site</string>
+    <string name="notices_summary">Spelling research, word lists, corpora and their licenses</string>
+    <string name="notices_research_body">Copyright © 2026 Srilal Siriwardhana. Licensed under the MIT License. Grammar-correct Smart Phonetic and the dictionary sound matching are ports of its reference code, and follow its orthographic rules.</string>
     <string name="diagnostics_title">Diagnostics</string>
     <string name="developer_title">Developer</string>
     <string name="website_title">Website</string>
@@ -140,9 +155,6 @@
     <string name="notices_akshara_title">Akshara</string>
     <string name="notices_akshara_body">Copyright © 2026 Lahiru Himesh Madusanka. Licensed under the MIT License.</string>
     <string name="notices_source_code">Source code</string>
-    <string name="notices_contributors_title">Contributors</string>
-    <string name="credits_thimira_title">Thimira Thenuwara</string>
-    <string name="credits_thimira_body">Phonetic and Smart Phonetic layout fixes.</string>
     <string name="notices_language_title">Language resources</string>
     <string name="notices_frequency_title">A Word Frequency List for Sinhala</string>
     <string name="notices_frequency_body">The bundled frequency model is a compact derivative of the University of Moratuwa National Languages Processing Centre word-frequency list. It retains the first 40,000 high-frequency entries, filters malformed or overlong tokens, and is sorted for on-device prefix lookup.\n\nCitation: Aloka Fernando and Gihan Dias (2021), “Building a Linguistic Resource: A Word Frequency List for Sinhala,” ICON 2021, pages 606–610.</string>
@@ -171,7 +183,9 @@
     <string name="developer_welcome">welcome to the අක්ෂර 🇱🇰</string>
     <string name="link_website">https://akshara.org.lk</string>
     <string name="link_github">https://github.com/AksharaOrg/akshara-android</string>
-    <string name="link_thimira">https://thimirathenuwara.com/</string>
+    <string name="link_research">https://srilals.github.io/Sinhala-Phonetic-Orthography/</string>
+    <string name="link_research_source">https://github.com/SrilalS/Sinhala-Phonetic-Orthography</string>
+    <string name="link_research_romanization">https://srilals.github.io/Sinhala-Phonetic-Orthography/research/phonetic-romanization</string>
     <string name="link_frequency">https://github.com/nlpcuom/Word-Frequency-List-for-Sinhala</string>
     <string name="link_corpus">https://huggingface.co/datasets/Remeinium/CleanSinhalaTextCorpus</string>
     <string name="link_corpus_doi">https://doi.org/10.57967/hf/6460</string>

@@ -57,6 +57,34 @@ class SettingsActivityTest {
         assertFalse(hasText(root(), activity.getString(R.string.v2_rakaransaya_u)))
     }
 
+    @Test fun contributorsPageListsEveryone() {
+        openPage(R.string.about_title)
+        rowWithTitle(root(), activity.getString(R.string.credits_title))!!.performClick()
+        val people = Contributor.load(activity)
+        assertEquals(listOf("Lahiru Himesh Madusanka", "Srilal Siriwardhana", "Thimira Thenuwara"), people.map { it.name })
+        people.forEach { assertTrue(it.name, rowWithTitle(root(), it.name) != null) }
+    }
+
+    @Test fun contributorLinkIsOptional() {
+        val people = Contributor.parse("""[{"name":"A","role":"r","link":null},{"name":"B","role":"r","link":"https://b"}]""")
+        assertEquals(listOf(null, "https://b"), people.map { it.link })
+    }
+
+    @Test fun noticesCreditTheResearch() {
+        openPage(R.string.about_title)
+        rowWithTitle(root(), activity.getString(R.string.notices_title))!!.performClick()
+        assertTrue(hasText(root(), activity.getString(R.string.notices_research_body)))
+    }
+
+    @Test fun themeSettingAppliesToSettings() {
+        val night = android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        for ((theme, mode) in listOf("dark" to android.content.res.Configuration.UI_MODE_NIGHT_YES, "light" to android.content.res.Configuration.UI_MODE_NIGHT_NO)) {
+            KeyboardPreferences(activity).theme = theme
+            val themed = Robolectric.buildActivity(SettingsActivity::class.java).setup().get()
+            assertEquals(theme, mode, themed.resources.configuration.uiMode and night)
+        }
+    }
+
     @Test fun backReturnsToThePreviousPage() {
         openPage(R.string.category_privacy)
         rowWithTitle(root(), activity.getString(R.string.privacy_title))!!.performClick()
