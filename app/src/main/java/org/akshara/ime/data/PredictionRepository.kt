@@ -138,8 +138,9 @@ class PredictionRepository(private val context: Context, private val learning: L
         val lexicon = sounds ?: return emptyList()
         if (roman.isEmpty() || max <= 0) return emptyList()
         val context = ContextScore(preceding)
-        val completions = lexicon.candidates(roman, PHONETIC_POOL, partial = true)
-            .sortedByDescending { context.score(it, lexicon.count[it] ?: 0, 1.0) }
+        val options = SinhalaEngine.smartPhoneticOptions
+        val completions = lexicon.candidates(roman, PHONETIC_POOL, partial = true, options = options)
+            .sortedByDescending { context.score(it, countOf(lexicon, it, options), 1.0) }
         return (phoneticWords(lexicon, roman, context) + completions).distinct().take(max)
     }
 
@@ -151,14 +152,21 @@ class PredictionRepository(private val context: Context, private val learning: L
     }
 
     /** Whole words that sound like [roman]. An explicit spelling (`kazda`, `aa` …) that is a word stays first. */
+    /** Frequency of a word as shown in the options' style: the most frequent dictionary spelling that restyles to it. */
+    private fun countOf(lexicon: SoundLexicon, word: String, options: SmartPhoneticV2.Options): Int =
+        lexicon.count[word] ?: lexicon.exact(SoundLexicon.soundKey(word))
+            .filter { SoundLexicon.restyle(it, options) == word }
+            .maxOfOrNull { lexicon.count[it] ?: 0 } ?: 0
+
     private fun phoneticWords(lexicon: SoundLexicon, roman: String, context: ContextScore): List<String> {
         val options = SinhalaEngine.smartPhoneticOptions
-        val exact = lexicon.candidates(roman, PHONETIC_POOL, options = options).filter { it in lexicon.count }
+        // Candidates come back in the style of the options; keep those whose dictionary spelling is a word.
+        val exact = lexicon.candidates(roman, PHONETIC_POOL, options = options).filter { countOf(lexicon, it, options) > 0 }
         val spelled = SmartPhoneticV2.transliterate(roman, options)
         val pinned = exact.firstOrNull()?.takeIf { it == spelled && SoundLexicon.isExplicit(roman) }
         val key = SoundLexicon.soundKey(spelled)
         val learned = context.learned.keys.filter { SoundLexicon.soundKey(it) == key }
-        val ranked = (exact + learned).distinct().sortedByDescending { context.score(it, lexicon.count[it] ?: 0, 1.0) }
+        val ranked = (exact + learned).distinct().sortedByDescending { context.score(it, countOf(lexicon, it, options), 1.0) }
         return listOfNotNull(pinned) + ranked.filter { it != pinned }
     }
 

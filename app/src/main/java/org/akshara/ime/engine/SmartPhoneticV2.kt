@@ -33,7 +33,7 @@ object SmartPhoneticV2 {
     private val FRONT = setOf("i", "ii", "e", "ee", "ae", "aee", "ai")
     private val BACK = setOf("u", "uu", "o", "oo", "au")
     private val GAETTA = mapOf("u" to "ෘ", "uu" to "ෲ")                       // R-06: C + r + u/uu (G-VS-15)
-    private val BANDI = setOf(                                                 // G-HC-15, R-10
+    internal val BANDI = setOf(                                                // G-HC-15, R-10
         "ක" to "ෂ", "ක" to "ව", "ග" to "ධ", "ට" to "ඨ", "ත" to "ථ", "ත" to "ව", "ද" to "ධ",
         "ද" to "ව", "න" to "ථ", "න" to "ද", "න" to "ධ", "න" to "ව", "ඤ" to "ච"
     )

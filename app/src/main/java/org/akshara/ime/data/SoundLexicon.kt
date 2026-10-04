@@ -7,6 +7,8 @@ import org.akshara.ime.engine.SmartPhoneticV2
  * sinhala-phonetic-orthography research repo. Words are indexed by a sound key that erases the
  * distinctions speakers don't hear or don't write in Latin script (aspiration, ණ/න, ළ/ල, ශ/ෂ/ස,
  * ද/ඩ, vowel length, sanyaka vs cluster …), so "honda" finds හොඳ although the rules spell හොන්ද.
+ * Words are returned in the style of the converter options ([restyle]), so a word list in the usual
+ * style (කෲර, කර්ම) doesn't undo the user's spelling options (ක්‍රූර, කර්‍ම).
  * Checked against the reference by `SmartPhoneticV2Test`.
  */
 class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
@@ -40,9 +42,9 @@ class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
         val key = soundKey(spelled)
         val byFrequency = compareByDescending<String> { count[it] ?: 0 }.thenBy { it }
         // An incomplete word: its last consonant may still take a vowel, so drop a trailing hal.
-        if (partial) return prefix(key.removeSuffix(HAL)).distinct().sortedWith(byFrequency).take(limit)
-        var ranked = exact(key).sortedWith(byFrequency)
-        if (spelled in count && isExplicit(roman)) ranked = listOf(spelled) + ranked.filter { it != spelled }   // explicit markers beat frequency
+        if (partial) return prefix(key.removeSuffix(HAL)).distinct().sortedWith(byFrequency).map { restyle(it, options) }.distinct().take(limit)
+        var ranked = exact(key).sortedWith(byFrequency).map { restyle(it, options) }.distinct()
+        if (spelled in ranked && isExplicit(roman)) ranked = listOf(spelled) + ranked.filter { it != spelled }   // explicit markers beat frequency
         else if (spelled !in ranked) ranked = ranked + spelled                                                  // the rule spelling is always included
         return ranked.take(limit)
     }
@@ -95,6 +97,29 @@ class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
         }
 
         fun isExplicit(roman: String) = EXPLICIT.containsMatchIn(roman)
+
+        private val GAETTA = Regex("([ක-ෆ])([ෘෲ])")
+        private val REPAYA = Regex("ර$HAL(?!$ZWJ)(?=[ක-ෆ])")
+        private val CLUSTER = Regex("([ක-ෆ])$HAL(?!$ZWJ)(?=([ක-ෆ]))")
+
+        /**
+         * Writes a word in the style the converter options choose, as [SmartPhoneticV2] would (`restyle()` in
+         * the reference): rakaransaya + u for C + ෘ/ෲ (R-06), ZWJ repaya (R-08), classical bandi akuru (R-10).
+         * With no options the word is unchanged.
+         */
+        fun restyle(word: String, options: SmartPhoneticV2.Options): String {
+            var out = word
+            if (options.rakaransayaU) out = GAETTA.replace(out) { m ->
+                val c = m.groupValues[1]
+                if (c == "ර") m.value else c + HAL + ZWJ + "ර" + (if (m.groupValues[2] == "ෘ") "ු" else "ූ")
+            }
+            if (options.repayaZwj) out = REPAYA.replace(out, "ර$HAL$ZWJ")
+            if (options.classical) out = CLUSTER.replace(out) { m ->
+                val c = m.groupValues[1]
+                c + HAL + (if ((c to m.groupValues[2]) in SmartPhoneticV2.BANDI) ZWJ else "")
+            }
+            return out
+        }
 
         /** Parses "word<TAB>count" lines like the reference: rows whose count isn't a number are skipped. */
         fun parse(lines: Sequence<String>): List<Pair<String, Int>> = lines.mapNotNull { line ->

@@ -18,9 +18,9 @@ import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
 class SmartPhoneticV2IntegrationTest {
-    private fun withEditor(block: (AksharaInputMethodService, EditText) -> Unit) {
+    private fun withEditor(settings: KeyboardPreferences.() -> Unit = {}, block: (AksharaInputMethodService, EditText) -> Unit) {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        KeyboardPreferences(context).apply { mode = InputMode.SMART_PHONETIC; smartPhoneticV2 = true }
+        KeyboardPreferences(context).apply { mode = InputMode.SMART_PHONETIC; smartPhoneticV2 = true; settings() }
         val controller = Robolectric.buildService(AksharaInputMethodService::class.java).create()
         val service = controller.get()
         try {
@@ -53,6 +53,16 @@ class SmartPhoneticV2IntegrationTest {
         service.type("kazda")
         service.onSpace()
         assertEquals("කඳ ", editor.text.toString())
+    }
+
+    @Test fun spaceKeepsTheChosenSpellingStyle() = withEditor({ v2RakaransayaU = true; v2RepayaZwj = true }) { service, editor ->
+        val z = "‍"
+        service.type("kruura")
+        assertEquals("ක්${z}රූර", editor.text.toString())
+        service.onSpace()
+        service.type("karma")
+        service.onSpace()
+        assertEquals("ක්${z}රූර කර්${z}ම ", editor.text.toString())   // the word list's කෲර / කර්ම don't undo the options
     }
 
     @Test fun rulesFollowTheResearchRepo() = withEditor { service, editor ->

@@ -33,6 +33,11 @@ class SmartPhoneticV2Test {
 
     @Test fun optionsMatchReference() = check("O", { SmartPhoneticV2.transliterate(it[2], option(it[1])) }, { it[3] })
 
+    @Test fun restyleMatchesReference() = check("R", { SoundLexicon.restyle(it[2], option(it[1])) }, { it[3] })
+
+    @Test fun candidatesWithOptionsMatchReference() =
+        check("D", { lexicon.candidates(it[2], partial = it[3] == "1", options = option(it[1])).joinToString("|") }, { it[4] })
+
     private fun option(name: String) = when (name) {
         "archaic" -> SmartPhoneticV2.Options(archaic = true)
         "repaya_zwj" -> SmartPhoneticV2.Options(repayaZwj = true)
