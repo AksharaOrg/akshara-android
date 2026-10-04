@@ -152,8 +152,9 @@ class PredictionRepository(private val context: Context, private val learning: L
 
     /** Whole words that sound like [roman]. An explicit spelling (`kazda`, `aa` …) that is a word stays first. */
     private fun phoneticWords(lexicon: SoundLexicon, roman: String, context: ContextScore): List<String> {
-        val exact = lexicon.candidates(roman, PHONETIC_POOL).filter { it in lexicon.count }
-        val spelled = SmartPhoneticV2.transliterate(roman)
+        val options = SinhalaEngine.smartPhoneticOptions
+        val exact = lexicon.candidates(roman, PHONETIC_POOL, options = options).filter { it in lexicon.count }
+        val spelled = SmartPhoneticV2.transliterate(roman, options)
         val pinned = exact.firstOrNull()?.takeIf { it == spelled && SoundLexicon.isExplicit(roman) }
         val key = SoundLexicon.soundKey(spelled)
         val learned = context.learned.keys.filter { SoundLexicon.soundKey(it) == key }
@@ -165,7 +166,7 @@ class PredictionRepository(private val context: Context, private val learning: L
     fun phoneticPrefixEvidence(roman: String): Float {
         if (!loaded || roman.isEmpty()) return 0f
         val lexicon = sounds ?: return 0f
-        val key = SoundLexicon.soundKey(SmartPhoneticV2.transliterate(roman))
+        val key = SoundLexicon.soundKey(SmartPhoneticV2.transliterate(roman, SinhalaEngine.smartPhoneticOptions))
         lexicon.exact(key).maxOfOrNull { lexicon.count[it] ?: 0 }?.let { return ln(it + 1.0).toFloat() }
         val longer = lexicon.prefix(key.removeSuffix(SoundLexicon.HAL), 1).maxOfOrNull { lexicon.count[it] ?: 0 } ?: return 0f
         return ln(longer + 1.0).toFloat() * 0.4f

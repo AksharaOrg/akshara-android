@@ -153,6 +153,21 @@ class SettingsActivity : Activity() {
                 }
                 toggle(R.string.smart_phonetic_v2, R.string.smart_phonetic_v2_summary, R.drawable.ic_language, R.color.settings_icon_blue, prefs.smartPhoneticV2) {
                     prefs.smartPhoneticV2 = it
+                    render()
+                }
+                if (prefs.smartPhoneticV2) {
+                    toggle(R.string.v2_rakaransaya_u, R.string.v2_rakaransaya_u_summary, R.drawable.ic_language, R.color.settings_icon_indigo, prefs.v2RakaransayaU) {
+                        prefs.v2RakaransayaU = it
+                    }
+                    toggle(R.string.v2_repaya_zwj, R.string.v2_repaya_zwj_summary, R.drawable.ic_language, R.color.settings_icon_indigo, prefs.v2RepayaZwj) {
+                        prefs.v2RepayaZwj = it
+                    }
+                    toggle(R.string.v2_classical, R.string.v2_classical_summary, R.drawable.ic_language, R.color.settings_icon_indigo, prefs.v2Classical) {
+                        prefs.v2Classical = it
+                    }
+                    toggle(R.string.v2_archaic, R.string.v2_archaic_summary, R.drawable.ic_language, R.color.settings_icon_indigo, prefs.v2Archaic) {
+                        prefs.v2Archaic = it
+                    }
                 }
             }
             toggle(R.string.persistent_english, R.string.persistent_english_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.persistentEnglish) {

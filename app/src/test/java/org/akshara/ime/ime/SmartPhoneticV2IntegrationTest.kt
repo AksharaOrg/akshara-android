@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import org.akshara.ime.data.PredictionRepository
 import org.akshara.ime.engine.InputMode
 import org.akshara.ime.engine.SinhalaEngine
+import org.akshara.ime.engine.SmartPhoneticV2
 import org.akshara.ime.settings.KeyboardPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -32,7 +33,8 @@ class SmartPhoneticV2IntegrationTest {
         } finally {
             controller.destroy()
             KeyboardPreferences(context).reset()
-            SinhalaEngine.smartPhoneticV2 = false
+            SinhalaEngine.smartPhoneticV2 = true
+            SinhalaEngine.smartPhoneticOptions = SmartPhoneticV2.Options()
         }
     }
 

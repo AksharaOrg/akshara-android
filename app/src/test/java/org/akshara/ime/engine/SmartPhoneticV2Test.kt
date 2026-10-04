@@ -31,6 +31,16 @@ class SmartPhoneticV2Test {
 
     @Test fun transliterationMatchesReference() = check("T", { SmartPhoneticV2.transliterate(it[1]) }, { it[2] })
 
+    @Test fun optionsMatchReference() = check("O", { SmartPhoneticV2.transliterate(it[2], option(it[1])) }, { it[3] })
+
+    private fun option(name: String) = when (name) {
+        "archaic" -> SmartPhoneticV2.Options(archaic = true)
+        "repaya_zwj" -> SmartPhoneticV2.Options(repayaZwj = true)
+        "classical" -> SmartPhoneticV2.Options(classical = true)
+        "rakaransaya_u" -> SmartPhoneticV2.Options(rakaransayaU = true)
+        else -> error("unknown option $name")
+    }
+
     @Test fun soundKeyMatchesReference() = check("K", { SoundLexicon.soundKey(it[1]) }, { it[2] })
 
     @Test fun normalizeMatchesReference() = check("N", { SoundLexicon.normalize(it[1]) }, { it[2] })
@@ -48,14 +58,27 @@ class SmartPhoneticV2Test {
         assertEquals("ක්${z}රමය", lexicon.candidates("kramaya").first())
     }
 
-    @Test fun engineSwitchesToV2ForSmartPhoneticOnly() {
+    @Test fun engineUsesV2ForSmartPhoneticByDefault() {
+        assertTrue(SinhalaEngine.smartPhoneticV2)
+        assertEquals("ද්", SinhalaEngine.transliterate("d", InputMode.SMART_PHONETIC))
+        assertEquals("ඩ්", SinhalaEngine.transliterate("d", InputMode.PHONETIC))
         try {
-            SinhalaEngine.smartPhoneticV2 = true
-            assertEquals("ද්", SinhalaEngine.transliterate("d", InputMode.SMART_PHONETIC))
-            assertEquals("ඩ්", SinhalaEngine.transliterate("d", InputMode.PHONETIC))
+            SinhalaEngine.smartPhoneticV2 = false   // the classic (v1) Smart Phonetic
+            assertEquals("ඩ්", SinhalaEngine.transliterate("d", InputMode.SMART_PHONETIC))
         } finally {
-            SinhalaEngine.smartPhoneticV2 = false
+            SinhalaEngine.smartPhoneticV2 = true
         }
-        assertEquals("ඩ්", SinhalaEngine.transliterate("d", InputMode.SMART_PHONETIC))
+    }
+
+    @Test fun engineAppliesTheV2Options() {
+        val z = "‍"
+        try {
+            SinhalaEngine.smartPhoneticOptions = SmartPhoneticV2.Options(rakaransayaU = true, repayaZwj = true)
+            assertEquals("ක්${z}රූර", SinhalaEngine.transliterate("kruura", InputMode.SMART_PHONETIC))
+            assertEquals("කර්${z}ම", SinhalaEngine.transliterate("karma", InputMode.SMART_PHONETIC))
+        } finally {
+            SinhalaEngine.smartPhoneticOptions = SmartPhoneticV2.Options()
+        }
+        assertEquals("කෲර", SinhalaEngine.transliterate("kruura", InputMode.SMART_PHONETIC))
     }
 }

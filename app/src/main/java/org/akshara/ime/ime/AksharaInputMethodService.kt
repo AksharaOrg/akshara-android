@@ -85,6 +85,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onCreate() {
         super.onCreate(); prefs = KeyboardPreferences(this); learning = LocalLearningStore(this)
         SinhalaEngine.smartPhoneticV2 = prefs.smartPhoneticV2
+        SinhalaEngine.smartPhoneticOptions = prefs.smartPhoneticOptions
         prediction = PredictionRepository(this, learning); autocorrection = SinhalaAutocorrection(this); englishPrediction = EnglishPredictionRepository(this, learning); emoji = EmojiRepository(this); clipboardHistory = ClipboardHistoryStore(this); recentEmojiStore = RecentEmojiStore(this); clipboardImageCache = ClipboardImageCache(this)
         recentEmoji = recentEmojiStore.items().toMutableList()
         prefs.register(preferenceListener)
@@ -113,6 +114,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         inputViewActive = true
         prefs = KeyboardPreferences(this); restricted = info?.let(::isRestrictedEditor) ?: true
         SinhalaEngine.smartPhoneticV2 = prefs.smartPhoneticV2
+        SinhalaEngine.smartPhoneticOptions = prefs.smartPhoneticOptions
         secureEditor = info?.let(::isSecureEditor) ?: true
         clipboardEligible = info?.let(::isClipboardEditor) ?: false
         editorLayout = editorLayout(info)
@@ -895,6 +897,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private fun applyPreferenceChange(key: String?) {
         prefs = KeyboardPreferences(this)
         SinhalaEngine.smartPhoneticV2 = prefs.smartPhoneticV2
+        SinhalaEngine.smartPhoneticOptions = prefs.smartPhoneticOptions
         if (key == null || key == KeyboardPreferences.SHOW_WITH_HARDWARE_KEYBOARD) updateInputViewShown()
         if (!::keyboard.isInitialized) return
         if (key == "persistent_english" && persistentEnglish == prefs.persistentEnglish) return

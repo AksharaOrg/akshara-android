@@ -33,8 +33,10 @@ class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
     fun hasPrefix(key: String): Boolean = firstKeyAtOrAfter(key).let { it < keys.size && keys[it].startsWith(key) }
 
     /** Ranked Sinhala spellings for a romanized word, or for a word prefix with [partial]. */
-    fun candidates(roman: String, limit: Int = 5, partial: Boolean = false): List<String> {
-        val spelled = SmartPhoneticV2.transliterate(roman)
+    fun candidates(
+        roman: String, limit: Int = 5, partial: Boolean = false, options: SmartPhoneticV2.Options = SmartPhoneticV2.Options()
+    ): List<String> {
+        val spelled = SmartPhoneticV2.transliterate(roman, options)
         val key = soundKey(spelled)
         val byFrequency = compareByDescending<String> { count[it] ?: 0 }.thenBy { it }
         // An incomplete word: its last consonant may still take a vowel, so drop a trailing hal.

@@ -3,6 +3,7 @@ package org.akshara.ime.settings
 import android.content.Context
 import android.content.SharedPreferences
 import org.akshara.ime.engine.InputMode
+import org.akshara.ime.engine.SmartPhoneticV2
 
 class KeyboardPreferences(context: Context) {
     private val store = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -50,7 +51,17 @@ class KeyboardPreferences(context: Context) {
     var inlineAutofill: Boolean by bool(INLINE_AUTOFILL, true)
     var keyHints: Boolean by bool(KEY_HINTS, true)
     var showWithHardwareKeyboard: Boolean by bool(SHOW_WITH_HARDWARE_KEYBOARD, true)
-    var smartPhoneticV2: Boolean by bool(SMART_PHONETIC_V2, false)
+    /** On by default: the grammar-correct v2 romanization. Off is the classic (v1) Smart Phonetic. */
+    var smartPhoneticV2: Boolean by bool(SMART_PHONETIC_V2, true)
+    var v2RepayaZwj: Boolean by bool(V2_REPAYA_ZWJ, false)
+    var v2Classical: Boolean by bool(V2_CLASSICAL, false)
+    var v2RakaransayaU: Boolean by bool(V2_RAKARANSAYA_U, false)
+    var v2Archaic: Boolean by bool(V2_ARCHAIC, false)
+
+    val smartPhoneticOptions: SmartPhoneticV2.Options
+        get() = SmartPhoneticV2.Options(
+            archaic = v2Archaic, repayaZwj = v2RepayaZwj, classical = v2Classical, rakaransayaU = v2RakaransayaU
+        )
 
     fun register(listener: SharedPreferences.OnSharedPreferenceChangeListener) =
         store.registerOnSharedPreferenceChangeListener(listener)
@@ -89,5 +100,9 @@ class KeyboardPreferences(context: Context) {
         const val KEY_HINTS = "key_hints"
         const val SHOW_WITH_HARDWARE_KEYBOARD = "show_with_hardware_keyboard"
         const val SMART_PHONETIC_V2 = "smart_phonetic_v2"
+        const val V2_REPAYA_ZWJ = "smart_phonetic_v2_repaya_zwj"
+        const val V2_CLASSICAL = "smart_phonetic_v2_classical"
+        const val V2_RAKARANSAYA_U = "smart_phonetic_v2_rakaransaya_u"
+        const val V2_ARCHAIC = "smart_phonetic_v2_archaic"
     }
 }
