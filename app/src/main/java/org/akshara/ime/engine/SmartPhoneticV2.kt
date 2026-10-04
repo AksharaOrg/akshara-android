@@ -20,6 +20,7 @@ object SmartPhoneticV2 {
     private val VELARS = setOf("ක", "ඛ", "ග", "ඝ")                             // R-11
     private val FRONT = setOf("i", "ii", "e", "ee", "ae", "aee", "ai")
     private val BACK = setOf("u", "uu", "o", "oo", "au")
+    private val GAETTA = mapOf("u" to "ෘ", "uu" to "ෲ")                       // R-06: C + r + u/uu (G-VS-15)
 
     private sealed interface Token
     private data class Consonant(val letter: String, val seq: String) : Token
@@ -114,6 +115,10 @@ object SmartPhoneticV2 {
                             val nextLetter = next.letter
                             if (letter in NO_HAL || nextLetter in SANYAKA) {
                                 state = State.VOWEL; previousVowel = "a"                // no hal here: keep inherent a
+                            } else if (letter != NGA && letter != "ර" && nextLetter == "ර" && after is Vowel && after.id in GAETTA) {
+                                out += GAETTA.getValue(after.id)                          // G-VS-15, R-06: C + r + u/uu → ෘ/ෲ
+                                state = State.VOWEL; previousVowel = after.id
+                                j += 2
                             } else {
                                 out += when {
                                     letter == NGA -> HAL

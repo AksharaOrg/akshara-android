@@ -41,7 +41,7 @@ class SmartPhoneticV2Test {
     @Test fun everydayWords() {
         val z = "‍"
         mapOf(
-            "lankaava" to "ලංකාව", "kruura" to "ක්${z}රූර", "lait" to "ලයිට්", "kramaya" to "ක්${z}රමය",
+            "lankaava" to "ලංකාව", "kruura" to "කෲර", "lait" to "ලයිට්", "kramaya" to "ක්${z}රමය",
             "d" to "ද්", "D" to "ඩ්", "ee" to "ඒ", "ai" to "අයි", "Au" to "ඖ", "kaaryaya" to "කාර්යය"
         ).forEach { (roman, expected) -> assertEquals(roman, expected, SmartPhoneticV2.transliterate(roman)) }
         assertEquals("හොඳ", lexicon.candidates("honda").first())
