@@ -401,6 +401,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     /** Avoid Android's landscape extract UI, which can make the IME appear detached. */
     override fun onEvaluateFullscreenMode() = false
 
+    /** Android hides the input view while a hardware keyboard is attached unless the IME opts in. */
+    override fun onEvaluateInputViewShown() = super.onEvaluateInputViewShown() || prefs.showWithHardwareKeyboard
+
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || restricted || !prefs.inlineAutofill) return null
         val height = (KeyboardGeometry.railHeightPx(false, resources.displayMetrics.density)).toInt()
@@ -865,10 +868,11 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
 
     private fun applyPreferenceChange(key: String?) {
         prefs = KeyboardPreferences(this)
+        if (key == null || key == KeyboardPreferences.SHOW_WITH_HARDWARE_KEYBOARD) updateInputViewShown()
         if (!::keyboard.isInitialized) return
         if (key == "persistent_english" && persistentEnglish == prefs.persistentEnglish) return
         commitComposition()
-        val recreate = key == null || key == KeyboardPreferences.THEME || key == "high_contrast"
+        val recreate = key == null || key == KeyboardPreferences.THEME || key == "high_contrast" || key == KeyboardPreferences.KEY_HINTS
         if (recreate) {
             keyboard = KeyboardView(this, this, prefs)
             setInputView(keyboard)

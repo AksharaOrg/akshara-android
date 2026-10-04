@@ -468,7 +468,8 @@ internal object KeyboardLayoutFactory {
         id == "rakaranshaya" -> if (shifted || caps) "ZWJ" else "්‍ර"
         id == "h" && wijesekara && (shifted || caps) -> "්‍ය"
         wijesekara -> SinhalaEngine.slsKeyLabel(id.single(), shifted || caps)
-        else -> id.uppercase()
+        shifted || caps -> id.uppercase()
+        else -> id
     }
 
     fun phoneticHint(id: String, mode: InputMode, wijesekara: Boolean, shifted: Boolean, caps: Boolean): String? {

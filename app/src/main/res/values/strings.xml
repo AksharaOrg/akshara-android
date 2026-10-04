@@ -51,6 +51,10 @@
     <string name="space_punctuation_keys_summary">Keep comma on the left and period on the right of the space bar</string>
     <string name="inline_autofill">Inline autofill</string>
     <string name="inline_autofill_summary">Show password-manager and form-fill suggestions in the keyboard bar</string>
+    <string name="key_hints">Sinhala key hints</string>
+    <string name="key_hints_summary">Show the Sinhala letter each key types in its corner</string>
+    <string name="show_with_hardware_keyboard">Show on-screen keyboard</string>
+    <string name="show_with_hardware_keyboard_summary">Keep the keyboard on screen while a physical keyboard is connected</string>
     <string name="theme">Theme</string>
     <string name="key_spacing">Key spacing</string>
     <string name="keyboard_size">Keyboard height</string>
