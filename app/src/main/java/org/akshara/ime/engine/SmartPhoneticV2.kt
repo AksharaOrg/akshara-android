@@ -16,7 +16,7 @@ object SmartPhoneticV2 {
         val archaic: Boolean = false,
         /** Write repaya as ර්‍ + C instead of plain ර් + C (R-08). */
         val repayaZwj: Boolean = false,
-        /** ZWJ conjuncts for the classical bandi akuru pairs (R-10). */
+        /** ZWJ conjuncts for the classical bandi akuru pairs (R-10), and rakaransaya after ම න ල (R-07). */
         val classical: Boolean = false,
         /** Write C + r + u/uu as rakaransaya + ු/ූ (ක්‍රූර) instead of the usual ෘ/ෲ (කෲර) (R-06). */
         val rakaransayaU: Boolean = false,
@@ -29,6 +29,7 @@ object SmartPhoneticV2 {
     private val SANYAKA = setOf("ඟ", "ඦ", "ඬ", "ඳ", "ඹ")
     private val NO_HAL = SANYAKA + "ළ"                                         // G-HC-06, G-HC-07
     private val PLAIN = mapOf("ඟ" to "ග", "ඦ" to "ජ", "ඬ" to "ඩ", "ඳ" to "ද", "ඹ" to "බ")  // G-PH-01
+    private val PLAIN_BEFORE_RA = setOf("ම", "න", "ල")                        // R-07: C ් ර after ම න ල is plain hal (දුම්රිය)
     private val VELARS = setOf("ක", "ඛ", "ග", "ඝ")                             // R-11
     private val FRONT = setOf("i", "ii", "e", "ee", "ae", "aee", "ai")
     private val BACK = setOf("u", "uu", "o", "oo", "au")
@@ -159,7 +160,11 @@ object SmartPhoneticV2 {
                                 out += when {
                                     letter == NGA -> HAL
                                     nextLetter == "ය" -> if (letter != "ර" || options.repayaZwj) HAL + ZWJ else HAL  // G-HC-11, G-HC-14, R-09
-                                    nextLetter == "ර" -> if (letter == "ර") HAL else HAL + ZWJ    // G-HC-12, R-07
+                                    nextLetter == "ර" -> {                                    // G-HC-12, R-07
+                                        val plain = letter == "ර" || (letter in PLAIN_BEFORE_RA && !options.classical &&
+                                            !(options.rakaransayaU && after is Vowel && after.id in GAETTA))
+                                        if (plain) HAL else HAL + ZWJ
+                                    }
                                     letter == "ර" -> if (options.repayaZwj) HAL + ZWJ else HAL    // R-08
                                     options.classical && (letter to nextLetter) in BANDI -> HAL + ZWJ   // R-10
                                     else -> HAL

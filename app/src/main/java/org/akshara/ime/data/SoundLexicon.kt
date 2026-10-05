@@ -62,7 +62,7 @@ class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
     companion object {
         const val HAL = "්"
         private const val ZWJ = "‍"
-        private val JOIN = Regex("([ක-ෆ])$HAL(?!$ZWJ)(?=[යර])")   // lookahead: ය/ර may start the next join
+        private val JOIN = Regex("([ක-ෆ])$HAL(?!$ZWJ)(?=([යර]))")   // lookahead: ය/ර may start the next join
 
         // Romanization markers that pin down a distinction the sound key erases.
         private val EXPLICIT = Regex("[KCGJTDNLPBSWVUIEOAXRMH]|z[a-zA-Z]|aa|ii|uu|ee|oo|ae|thh|dh|kh|gh|chh|jh|ph|bh|x")
@@ -84,9 +84,12 @@ class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
             '‍' to ""
         )
 
-        /** Restores the mandatory ZWJ in C ් ය / C ් ර (never after ර: G-HC-14, R-09). */
+        /** C ් ය / C ් ර takes ZWJ, except after ර (G-HC-14, R-09) and C ් ර after ම න ල (R-07). */
+        private fun joins(c: String, next: String) = c != "ර" && !(next == "ර" && c in "මනල")
+
+        /** Restores the mandatory ZWJ in yansaya and rakaransaya, for word lists that dropped it. */
         fun normalize(word: String): String =
-            JOIN.replace(word) { it.groupValues[1] + HAL + (if (it.groupValues[1] != "ර") ZWJ else "") }
+            JOIN.replace(word) { it.groupValues[1] + HAL + (if (joins(it.groupValues[1], it.groupValues[2])) ZWJ else "") }
 
         fun soundKey(text: String): String {
             var folded = text

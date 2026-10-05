@@ -63,6 +63,16 @@ class SmartPhoneticV2Test {
         assertEquals("ක්${z}රමය", lexicon.candidates("kramaya").first())
     }
 
+    /** R-07: after ම න ල, ර takes plain hal (දුම්රිය, not දුම්‍රිය); `classical` keeps ම්‍ර. */
+    @Test fun noRakaransayaAfterMaNaLa() {
+        val z = "‍"
+        assertEquals("දුම්රිය", SmartPhoneticV2.transliterate("dumriya"))
+        assertEquals("හෙන්රි", SmartPhoneticV2.transliterate("henri"))
+        assertEquals("තාම්${z}ර", SmartPhoneticV2.transliterate("thaamra", SmartPhoneticV2.Options(classical = true)))
+        assertEquals("දුම්රිය", SoundLexicon.normalize("දුම්රිය"))
+        assertEquals("දුම්රිය", lexicon.candidates("dumriya").first())
+    }
+
     @Test fun engineUsesV2ForSmartPhoneticByDefault() {
         assertTrue(SinhalaEngine.smartPhoneticV2)
         assertEquals("ද්", SinhalaEngine.transliterate("d", InputMode.SMART_PHONETIC))
