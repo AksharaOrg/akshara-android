@@ -68,6 +68,9 @@ class SmartPhoneticV2Test {
         val z = "‍"
         assertEquals("දුම්රිය", SmartPhoneticV2.transliterate("dumriya"))
         assertEquals("හෙන්රි", SmartPhoneticV2.transliterate("henri"))
+        assertEquals("දිල්රුක්ශි", SmartPhoneticV2.transliterate("dilrukshi"))
+        assertEquals("මෘදු", SmartPhoneticV2.transliterate("mrudu"))
+        assertEquals("සමෘද්ධි", SmartPhoneticV2.transliterate("samruddhi"))
         assertEquals("තාම්${z}ර", SmartPhoneticV2.transliterate("thaamra", SmartPhoneticV2.Options(classical = true)))
         assertEquals("දුම්රිය", SoundLexicon.normalize("දුම්රිය"))
         assertEquals("දුම්රිය", lexicon.candidates("dumriya").first())

@@ -30,6 +30,12 @@ object SmartPhoneticV2 {
     private val NO_HAL = SANYAKA + "ළ"                                         // G-HC-06, G-HC-07
     private val PLAIN = mapOf("ඟ" to "ග", "ඦ" to "ජ", "ඬ" to "ඩ", "ඳ" to "ද", "ඹ" to "බ")  // G-PH-01
     private val PLAIN_BEFORE_RA = setOf("ම", "න", "ල")                        // R-07: C ් ර after ම න ල is plain hal (දුම්රිය)
+
+    /** C-13: ෘ / ෲ only after the consonants where the form is attested (validity.json: valid, loan or rare). */
+    private val GAETTA_AFTER = mapOf(
+        "u" to "කගඝජටඩතදධනපබභමවශසහෆ".map { it.toString() }.toSet(),
+        "uu" to "කගටඩතදපබම".map { it.toString() }.toSet()
+    )
     private val VELARS = setOf("ක", "ඛ", "ග", "ඝ")                             // R-11
     private val FRONT = setOf("i", "ii", "e", "ee", "ae", "aee", "ai")
     private val BACK = setOf("u", "uu", "o", "oo", "au")
@@ -151,7 +157,7 @@ object SmartPhoneticV2 {
                             if (letter in NO_HAL || nextLetter in SANYAKA) {
                                 state = State.VOWEL; previousVowel = "a"                // no hal here: keep inherent a
                             } else if (letter != NGA && letter != "ර" && nextLetter == "ර" && after is Vowel &&
-                                after.id in GAETTA && !options.rakaransayaU
+                                after.id in GAETTA && letter in GAETTA_AFTER.getValue(after.id) && !options.rakaransayaU
                             ) {
                                 out += GAETTA.getValue(after.id)                          // G-VS-15, R-06: C + r + u/uu → ෘ/ෲ
                                 state = State.VOWEL; previousVowel = after.id
@@ -161,8 +167,11 @@ object SmartPhoneticV2 {
                                     letter == NGA -> HAL
                                     nextLetter == "ය" -> if (letter != "ර" || options.repayaZwj) HAL + ZWJ else HAL  // G-HC-11, G-HC-14, R-09
                                     nextLetter == "ර" -> {                                    // G-HC-12, R-07
-                                        val plain = letter == "ර" || (letter in PLAIN_BEFORE_RA && !options.classical &&
-                                            !(options.rakaransayaU && after is Vowel && after.id in GAETTA))
+                                        // R-07: plain hal after ම න ල (දුම්රිය, දිල්රුක්ෂි), except a rakaransaya that stands
+                                        // for an attested ෘ (rakaransayaU: ම්‍රුදු) or, without u, under classical (තාම්‍ර)
+                                        val ru = after is Vowel && after.id in GAETTA
+                                        val attested = ru && letter in GAETTA_AFTER.getValue((after as Vowel).id)
+                                        val plain = letter == "ර" || (letter in PLAIN_BEFORE_RA && !attested && !(options.classical && !ru))
                                         if (plain) HAL else HAL + ZWJ
                                     }
                                     letter == "ර" -> if (options.repayaZwj) HAL + ZWJ else HAL    // R-08
