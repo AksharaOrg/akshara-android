@@ -9,6 +9,8 @@ import org.akshara.ime.engine.SmartPhoneticV2
  * ද/ඩ, vowel length, sanyaka vs cluster …), so "honda" finds හොඳ although the rules spell හොන්ද.
  * Words are returned in the style of the converter options ([restyle]), so a word list in the usual
  * style (කෲර, කර්ම) doesn't undo the user's spelling options (ක්‍රූර, කර්‍ම).
+ * A list with no ZWJ at all is repaired with [normalize]; one that has ZWJ is used as written, since
+ * [normalize] would also join across word boundaries (බවත්ය).
  * Checked against the reference by `SmartPhoneticV2Test`.
  */
 class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
@@ -17,7 +19,9 @@ class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
     private val keys: List<String>
 
     init {
-        rows.forEach { (word, n) -> if (word.isNotEmpty()) normalize(word).let { count[it] = (count[it] ?: 0) + n } }
+        val list = rows.filter { it.first.isNotEmpty() }
+        val repair = list.none { ZWJ in it.first }
+        list.forEach { (word, n) -> (if (repair) normalize(word) else word).let { count[it] = (count[it] ?: 0) + n } }
         count.keys.forEach { byKey.getOrPut(soundKey(it)) { ArrayList(1) }.add(it) }
         keys = byKey.keys.sorted()
     }

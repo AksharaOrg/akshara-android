@@ -9,7 +9,7 @@
     "kind": "lowest_frequency_rank",
     "maximumVerifiedWords": 8000
   },
-  "sha256": "2a08e6b29f8f347b93f904a4ab230c7556886ff766e24139ae0ad119376cecdc",
+  "sha256": "dffaba6b2641cf7af187c82659c2dd2f7715f42143d72b5680a5d43d2368bc72",
   "sources": [
     {
       "definitions_redistributable": "false",
@@ -27,5 +27,5 @@
       "url": "https://raw.githubusercontent.com/nlpcuom/Word-Frequency-List-for-Sinhala/main/verified_word_list_200K.si"
     }
   ],
-  "wordCount": 8000
+  "wordCount": 7994
 }
