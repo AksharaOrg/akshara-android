@@ -48,7 +48,7 @@ class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
         // An incomplete word: its last consonant may still take a vowel, so drop a trailing hal.
         if (partial) return prefix(key.removeSuffix(HAL)).distinct().sortedWith(byFrequency).map { restyle(it, options) }.distinct().take(limit)
         var ranked = exact(key).sortedWith(byFrequency).map { restyle(it, options) }.distinct()
-        if (spelled in ranked && isExplicit(roman)) ranked = listOf(spelled) + ranked.filter { it != spelled }   // explicit markers beat frequency
+        if (isExplicit(roman) && (spelled in ranked || isLoneVowel(spelled))) ranked = listOf(spelled) + ranked.filter { it != spelled }   // explicit markers beat frequency
         else if (spelled !in ranked) ranked = ranked + spelled                                                  // the rule spelling is always included
         return ranked.take(limit)
     }
@@ -104,6 +104,9 @@ class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
         }
 
         fun isExplicit(roman: String) = EXPLICIT.containsMatchIn(roman)
+
+        /** One independent vowel letter (අ … ඖ): a list has no such words, yet a letter typed on its own is meant as that letter. */
+        fun isLoneVowel(spelling: String) = spelling.length == 1 && spelling[0] in 'අ'..'ඖ'
 
         private val GAETTA = Regex("([ක-ෆ])([ෘෲ])")
         private val REPAYA = Regex("ර$HAL(?!$ZWJ)(?=[ක-ෆ])")

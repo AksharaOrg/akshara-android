@@ -55,6 +55,16 @@ class SmartPhoneticV2IntegrationTest {
         assertEquals("කඳ ", editor.text.toString())
     }
 
+    @Test fun loneVowelLetterTypedWithAMarkerIsKept() = withEditor { service, editor ->
+        service.type("R")
+        service.onSpace()
+        service.type("E")
+        service.onSpace()
+        service.type("e")
+        service.onSpace()
+        assertEquals("ඍ ඓ ඒ ", editor.text.toString())   // unmarked e is still matched by sound
+    }
+
     @Test fun spaceKeepsTheChosenSpellingStyle() = withEditor({ v2RakaransayaU = true; v2RepayaZwj = true }) { service, editor ->
         val z = "‍"
         service.type("kruura")

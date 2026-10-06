@@ -160,10 +160,12 @@ class PredictionRepository(private val context: Context, private val learning: L
 
     private fun phoneticWords(lexicon: SoundLexicon, roman: String, context: ContextScore): List<String> {
         val options = SinhalaEngine.smartPhoneticOptions
-        // Candidates come back in the style of the options; keep those whose dictionary spelling is a word.
-        val exact = lexicon.candidates(roman, PHONETIC_POOL, options = options).filter { countOf(lexicon, it, options) > 0 }
+        val all = lexicon.candidates(roman, PHONETIC_POOL, options = options)
         val spelled = SmartPhoneticV2.transliterate(roman, options)
-        val pinned = exact.firstOrNull()?.takeIf { it == spelled && SoundLexicon.isExplicit(roman) }
+        // The reference puts an explicit spelling first when it is a word or a lone vowel letter (R ඍ).
+        val pinned = all.firstOrNull()?.takeIf { it == spelled && SoundLexicon.isExplicit(roman) }
+        // Candidates come back in the style of the options; keep those whose dictionary spelling is a word.
+        val exact = all.filter { countOf(lexicon, it, options) > 0 }
         val key = SoundLexicon.soundKey(spelled)
         val learned = context.learned.keys.filter { SoundLexicon.soundKey(it) == key }
         val ranked = (exact + learned).distinct().sortedByDescending { context.score(it, countOf(lexicon, it, options), 1.0) }
