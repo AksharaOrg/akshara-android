@@ -1,5 +1,6 @@
 package org.akshara.ime.settings
 
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ComponentName
@@ -16,10 +17,18 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
+import android.transition.Fade
+import android.transition.Slide
+import android.transition.Transition
+import android.transition.TransitionManager
+import android.transition.TransitionSet
+import android.transition.Visibility
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
+import android.view.animation.AnimationUtils
 import android.view.inputmethod.InputMethodManager
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
@@ -34,6 +43,7 @@ import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnLayout
 import org.akshara.ime.BuildConfig
 import org.akshara.ime.R
 import org.akshara.ime.data.ClipboardHistoryStore
@@ -44,6 +54,7 @@ import org.akshara.ime.ime.TouchPersonalizationStore
 
 class SettingsActivity : Activity() {
     private lateinit var prefs: KeyboardPreferences
+    private lateinit var pages: ViewGroup
     private lateinit var scroll: ScrollView
     private lateinit var container: LinearLayout
     private var page = Page.HOME
@@ -73,9 +84,10 @@ class SettingsActivity : Activity() {
         prefs = KeyboardPreferences(this)
         page = state?.getString(STATE_PAGE)?.let { runCatching { Page.valueOf(it) }.getOrNull() } ?: Page.HOME
         setContentView(R.layout.activity_settings)
+        pages = findViewById(R.id.settings_pages)
         scroll = findViewById(R.id.settings_scroll)
         container = findViewById(R.id.settings_container)
-        ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
+        ViewCompat.setOnApplyWindowInsetsListener(pages) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
@@ -92,6 +104,11 @@ class SettingsActivity : Activity() {
         render()
     }
 
+    override fun onStop() {
+        TransitionManager.endTransitions(pages)
+        super.onStop()
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (page != Page.HOME) {
@@ -104,19 +121,27 @@ class SettingsActivity : Activity() {
 
     /** Back to the page this one was opened from (after a restart, to its parent). */
     private fun navigateUp() {
+        scrollByPage[page] = scroll.scrollY
         page = backStack.removeLastOrNull() ?: page.parent ?: Page.HOME
-        render(scrollByPage[page] ?: 0)
+        render(scrollByPage[page] ?: 0, forward = false)
     }
 
     private fun open(next: Page) {
         scrollByPage[page] = scroll.scrollY
         backStack.addLast(page)
         page = next
-        render(0)
+        render(scrollByPage[next] ?: 0, forward = true)
     }
 
     /** Redraws the current page; a toggle that shows or hides rows keeps the scroll position. */
-    private fun render(y: Int = scroll.scrollY) {
+    private fun render(y: Int = scroll.scrollY, forward: Boolean? = null) {
+        // Finish an interrupted navigation before capturing another pair of pages.
+        TransitionManager.endTransitions(pages)
+        val outgoing = scroll
+        if (forward != null) {
+            scroll = layoutInflater.inflate(R.layout.settings_page, pages, false) as ScrollView
+            container = scroll.findViewById(R.id.settings_container)
+        }
         updateBackCallback()
         container.removeAllViews()
         when (page) {
@@ -135,7 +160,35 @@ class SettingsActivity : Activity() {
             Page.DIAGNOSTICS -> renderDiagnostics()
             Page.DEVELOPER -> renderDeveloper()
         }
-        scroll.post { scroll.scrollTo(0, y) }
+        val incoming = scroll
+        incoming.doOnLayout { incoming.scrollTo(0, y) }
+        if (forward != null) {
+            if (pages.isLaidOut && ValueAnimator.areAnimatorsEnabled()) {
+                TransitionManager.beginDelayedTransition(pages, pageTransition(outgoing, incoming, forward))
+            }
+            pages.removeView(outgoing)
+            pages.addView(incoming)
+        }
+    }
+
+    private fun pageTransition(outgoing: View, incoming: View, forward: Boolean): Transition = TransitionSet().apply {
+        ordering = TransitionSet.ORDERING_TOGETHER
+        duration = 250L
+        interpolator = AnimationUtils.loadInterpolator(this@SettingsActivity, android.R.interpolator.fast_out_slow_in)
+        // Both layouts reuse resource IDs; match instances so they remain separate entering/exiting pages.
+        setMatchOrder(Transition.MATCH_INSTANCE)
+        addTransition(Slide(if (forward) Gravity.END else Gravity.START).apply {
+            mode = Visibility.MODE_IN
+            addTarget(incoming)
+        })
+        addTransition(Slide(if (forward) Gravity.START else Gravity.END).apply {
+            mode = Visibility.MODE_OUT
+            addTarget(outgoing)
+        })
+        addTransition(Fade().apply {
+            addTarget(outgoing)
+            addTarget(incoming)
+        })
     }
 
     private fun updateBackCallback() {

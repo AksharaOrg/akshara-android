@@ -3,6 +3,7 @@ package org.akshara.ime.settings
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Switch
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import org.akshara.ime.R
@@ -142,6 +143,61 @@ class SettingsActivityTest {
         }
         @Suppress("DEPRECATION") activity.onBackPressed()
         assertTrue(hasText(root(), activity.getString(R.string.enable_keyboard)))
+    }
+
+    @Test fun navigatingBackRestoresScrollAndKeepsOnlyTheCurrentPage() {
+        layoutPage()
+        activity.findViewById<ScrollView>(R.id.settings_scroll).scrollTo(0, 160)
+        val homeY = activity.findViewById<ScrollView>(R.id.settings_scroll).scrollY
+        assertTrue(homeY > 0)
+        openPage(R.string.page_preferences)
+        layoutPage()
+        activity.findViewById<ScrollView>(R.id.settings_scroll).scrollTo(0, 100)
+        val preferencesY = activity.findViewById<ScrollView>(R.id.settings_scroll).scrollY
+        assertTrue(preferencesY > 0)
+        @Suppress("DEPRECATION") activity.onBackPressed()
+        layoutPage()
+        assertEquals(homeY, activity.findViewById<ScrollView>(R.id.settings_scroll).scrollY)
+        openPage(R.string.page_preferences)
+        layoutPage()
+        assertEquals(preferencesY, activity.findViewById<ScrollView>(R.id.settings_scroll).scrollY)
+        assertEquals(1, activity.findViewById<ViewGroup>(R.id.settings_pages).childCount)
+    }
+
+    @Test fun rapidBackAndOpenDoesNotLeaveAnOldPageOrDisableControls() {
+        layoutPage()
+        openPage(R.string.page_sinhala)
+        layoutPage()
+        @Suppress("DEPRECATION") activity.onBackPressed()
+        openPage(R.string.page_correction)
+        layoutPage()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper())
+            .idleFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+        assertEquals(1, activity.findViewById<ViewGroup>(R.id.settings_pages).childCount)
+        assertFalse(hasText(root(), activity.getString(R.string.v2_archaic)))
+        rowWithTitle(root(), activity.getString(R.string.suggestions))!!.performClick()
+        assertFalse(KeyboardPreferences(activity).suggestions)
+    }
+
+    @Test fun forwardAndBackPagesAnimateFromOppositeEdges() {
+        layoutPage()
+        openPage(R.string.page_correction)
+        layoutPage()
+        assertTrue(activity.findViewById<ScrollView>(R.id.settings_scroll).translationX > 0f)
+        @Suppress("DEPRECATION") activity.onBackPressed()
+        layoutPage()
+        val home = activity.findViewById<ScrollView>(R.id.settings_scroll)
+        assertTrue(home.translationX < 0f)
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper())
+            .idleFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+        assertEquals(0f, home.translationX, 0.01f)
+    }
+
+    private fun layoutPage() {
+        root().measure(View.MeasureSpec.makeMeasureSpec(480, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(640, View.MeasureSpec.EXACTLY))
+        root().layout(0, 0, 480, 640)
+        root().viewTreeObserver.dispatchOnPreDraw()
     }
 
     private fun root(): View = activity.findViewById(android.R.id.content)
