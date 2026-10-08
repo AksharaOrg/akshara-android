@@ -5,6 +5,7 @@ import android.text.InputType
 import android.view.inputmethod.EditorInfo
 import androidx.autofill.inline.Renderer
 import androidx.autofill.inline.UiVersions
+import androidx.autofill.inline.v1.InlineSuggestionUi
 import androidx.test.core.app.ApplicationProvider
 import org.akshara.ime.settings.KeyboardPreferences
 import org.junit.Assert.assertEquals
@@ -37,6 +38,10 @@ class InlineAutofillTest {
                 assertEquals(3, request!!.maxSuggestionCount)
                 val style = request.inlinePresentationSpecs.single().style
                 assertEquals(listOf(UiVersions.INLINE_UI_VERSION_1), UiVersions.getVersions(style))
+                val chipStyle = InlineSuggestionUi.fromBundle(style.getBundle(UiVersions.INLINE_UI_VERSION_1)!!)
+                assertNotNull(chipStyle?.chipStyle)
+                assertNotNull(chipStyle?.singleIconChipStyle)
+                assertNotNull(chipStyle?.titleStyle)
                 assertFalse("A renderer capability bundle is not a chip style", style.keySet() == rendererExtras.keySet())
             }
             prefs.inlineAutofill = false

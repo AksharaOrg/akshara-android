@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -26,11 +27,15 @@ import android.view.inputmethod.InlineSuggestion
 import android.widget.inline.InlinePresentationSpec
 import android.util.Size
 import androidx.autofill.inline.UiVersions
+import androidx.autofill.inline.common.TextViewStyle
+import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
+import androidx.core.graphics.ColorUtils
 import androidx.core.view.WindowCompat
 import androidx.core.view.inputmethod.EditorInfoCompat
 import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
+import org.akshara.ime.R
 import org.akshara.ime.data.*
 import org.akshara.ime.engine.*
 import org.akshara.ime.settings.KeyboardPreferences
@@ -449,13 +454,31 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !prefs.inlineAutofill) return null
         if (UiVersions.INLINE_UI_VERSION_1 !in UiVersions.getVersions(uiExtras)) return null
+        val palette = KeyboardPaletteResolver.resolve(this, prefs.theme, prefs.highContrast)
+        val chipBackground = Icon.createWithResource(this, R.drawable.inline_autofill_chip)
+            .setTint(palette.key)
+        val chip = ViewStyle.Builder()
+            .setBackground(chipBackground)
+            .setLayoutMargin(0, (2 * resources.displayMetrics.density).toInt(), 0,
+                (2 * resources.displayMetrics.density).toInt())
+            .build()
+        val title = TextViewStyle.Builder().setTextColor(palette.ink).setTextSize(14f).build()
+        val subtitle = TextViewStyle.Builder()
+            .setTextColor(ColorUtils.setAlphaComponent(palette.ink, 190))
+            .setTextSize(12f)
+            .build()
         val styles = UiVersions.newStylesBuilder()
-            .addStyle(InlineSuggestionUi.newStyleBuilder().build())
+            .addStyle(InlineSuggestionUi.newStyleBuilder()
+                .setChipStyle(chip)
+                .setSingleIconChipStyle(chip)
+                .setTitleStyle(title)
+                .setSubtitleStyle(subtitle)
+                .build())
             .build()
         val landscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         val height = KeyboardGeometry.railHeightPx(landscape, resources.displayMetrics.density).toInt()
         val spec = InlinePresentationSpec.Builder(
-            Size((64 * resources.displayMetrics.density).toInt(), height),
+            Size((48 * resources.displayMetrics.density).toInt(), height),
             Size(resources.displayMetrics.widthPixels, height)
         ).setStyle(styles).build()
         return InlineSuggestionsRequest.Builder(listOf(spec))

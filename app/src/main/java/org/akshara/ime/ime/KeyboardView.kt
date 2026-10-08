@@ -146,8 +146,14 @@ class KeyboardView(
     }
     private val inlineRow = LinearLayout(context).apply {
         orientation = HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
+        gravity = Gravity.CENTER
         setPadding(dp(8), 0, dp(8), 0)
+    }
+    private val inlinePinned = LinearLayout(context).apply {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, 0, dp(8), 0)
+        visibility = GONE
     }
     private var inlineAutofillGeneration = 0
     private val clipboardHandle = View(context).apply {
@@ -240,6 +246,7 @@ class KeyboardView(
         railHost.addView(rail, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         inlineAutofill.addView(inlineRow, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
         railHost.addView(inlineAutofill, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        railHost.addView(inlinePinned, FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT, Gravity.END))
         addView(railHost, LayoutParams(LayoutParams.MATCH_PARENT, suggestionRailHeight()))
         body.orientation = VERTICAL
         body.clipChildren = true
@@ -410,31 +417,45 @@ class KeyboardView(
     fun setInlineAutofillSuggestions(suggestions: List<InlineSuggestion>) {
         val generation = ++inlineAutofillGeneration
         inlineRow.removeAllViews()
+        inlinePinned.removeAllViews()
         inlineAutofill.visibility = GONE
+        inlinePinned.visibility = GONE
         updateRailHeight()
         bindRail(false)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || suggestions.isEmpty()) {
             return
         }
-        // Leave room for the row padding and spacing so two autofill chips fit at once.
-        val chipWidth = ((resources.displayMetrics.widthPixels - dp(32)) / 2).coerceAtLeast(dp(64))
-        val size = android.util.Size(chipWidth, suggestionRailHeight())
+        val visible = suggestions.take(3)
+        val pinned = visible.filter { it.info.isPinned }
+        val regular = visible.filterNot { it.info.isPinned }
+        val pinnedSpace = if (pinned.isEmpty()) 0 else pinned.size * dp(56) + dp(8)
+        (inlineAutofill.layoutParams as FrameLayout.LayoutParams).apply {
+            marginEnd = pinnedSpace
+            inlineAutofill.layoutParams = this
+        }
+        val regularSpace = resources.displayMetrics.widthPixels - pinnedSpace
+        inlineRow.minimumWidth = if (regular.size == 1) regularSpace else 0
+        val regularWidth = minOf(dp(200), regularSpace - dp(16)).coerceAtLeast(dp(48))
+        val height = suggestionRailHeight()
         val executor = java.util.concurrent.Executor { handler.post(it) }
-        suggestions.take(3).forEach { suggestion ->
+        fun inflateInto(suggestion: InlineSuggestion, row: LinearLayout, width: Int, isPinned: Boolean) {
+            val size = android.util.Size(width, height)
             // Inflation is asynchronous, so reserve each suggestion's place before callbacks arrive.
             val slot = FrameLayout(context)
-            inlineRow.addView(slot, LinearLayout.LayoutParams(size.width, size.height).apply {
-                marginEnd = dp(8)
+            row.addView(slot, LinearLayout.LayoutParams(width, height).apply {
+                if (isPinned) marginStart = dp(8) else marginEnd = dp(8)
             })
             suggestion.inflate(context, size, executor) { view ->
                 if (generation != inlineAutofillGeneration || view == null) return@inflate
                 // The inflated surface reports no intrinsic width on some Android builds.
-                slot.addView(view, FrameLayout.LayoutParams(size.width, size.height))
-                inlineAutofill.visibility = VISIBLE
+                slot.addView(view, FrameLayout.LayoutParams(width, height))
+                if (isPinned) inlinePinned.visibility = VISIBLE else inlineAutofill.visibility = VISIBLE
                 updateRailHeight()
                 bindRail(false)
             }
         }
+        regular.forEach { inflateInto(it, inlineRow, regularWidth, false) }
+        pinned.forEach { inflateInto(it, inlinePinned, dp(48), true) }
     }
     fun setClipboardItems(recent: List<String>, pinned: List<String> = emptyList()) {
         clipboardRecent = recent
@@ -501,7 +522,7 @@ class KeyboardView(
     private fun bindRail(animated: Boolean) {
         val show = layer == KeyboardLayer.LETTERS && editorLayout == EditorLayout.TEXT
         // The collapsed rail does not clip, so its pinned actions would draw over the emoji board.
-        if (inlineAutofill.visibility == VISIBLE || !keepSuggestionRail()) {
+        if (inlineAutofill.visibility == VISIBLE || inlinePinned.visibility == VISIBLE || !keepSuggestionRail()) {
             rail.visibility = GONE
             return
         }
@@ -528,7 +549,7 @@ class KeyboardView(
         }
     }
 
-    private fun keepSuggestionRail() = inlineAutofill.visibility == VISIBLE ||
+    private fun keepSuggestionRail() = inlineAutofill.visibility == VISIBLE || inlinePinned.visibility == VISIBLE ||
         editorLayout in setOf(EditorLayout.TEXT, EditorLayout.URI, EditorLayout.EMAIL) && layer in setOf(
             KeyboardLayer.LETTERS, KeyboardLayer.NUMBERS, KeyboardLayer.SYMBOLS, KeyboardLayer.CLIPBOARD
         )
