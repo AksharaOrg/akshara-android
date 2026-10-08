@@ -122,7 +122,7 @@ class KeyboardView(
     private val rail = SuggestionRail(
         context,
         ink,
-        { actions.onCandidate(it) },
+        { acceptCandidate(it) },
         {
             actions.onClipboardOpen()
             leaveClipboardOrToggle()
@@ -189,7 +189,7 @@ class KeyboardView(
                 if (layer == KeyboardLayer.LETTERS) actions.onSpaceSwipe(up)
             }
             override fun onEnter() = actions.onEnter()
-            override fun onCandidate(value: String) = actions.onCandidate(value)
+            override fun onCandidate(value: String) = acceptCandidate(value)
             override fun onGlobe() = actions.onGlobe()
             override fun onModeRequested(mode: InputMode) = actions.onModeRequested(mode)
             override fun onHide() = actions.onHide()
@@ -1036,6 +1036,14 @@ class KeyboardView(
         }
         shiftLatch.tap(android.os.SystemClock.elapsedRealtime())
         bindTyping()
+    }
+
+    private fun acceptCandidate(value: String) {
+        actions.onCandidate(value)
+        if (shiftLatch.shifted && !shiftLatch.capsLock) {
+            shiftLatch.consumeOneShot()
+            if (layer == KeyboardLayer.LETTERS) bindTyping()
+        }
     }
     private fun backspaceButton(): ImageButton {
         val b = iconButton(org.akshara.ime.R.drawable.ic_key_backspace, utility, "Delete") { }

@@ -1,8 +1,10 @@
 package org.akshara.ime.ime
 
 import android.content.Context
+import android.os.Looper
 import android.text.InputType
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnectionWrapper
 import android.widget.EditText
@@ -13,7 +15,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import org.robolectric.util.ReflectionHelpers
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 class EnglishTypingIntegrationTest {
@@ -74,6 +78,83 @@ class EnglishTypingIntegrationTest {
             panel.onTouchEvent(event)
             event.recycle()
         }
+    }
+
+    private fun suggestion(view: View, value: String): View? {
+        if (view.isClickable && view.contentDescription == "Suggestion $value") return view
+        if (view is ViewGroup) for (index in 0 until view.childCount) {
+            suggestion(view.getChildAt(index), value)?.let { return it }
+        }
+        return null
+    }
+
+    @Test fun acceptingSuggestionConsumesOneShotShiftButKeepsCapsLock() = withEditor { service, editor, view, _ ->
+        service.onCharacter("x ")
+        layout(view)
+        val panel = ReflectionHelpers.getField<KeyboardPanel>(view, "panel")
+        tap(panel, "shift")
+        assertEquals("A", view.typingLayout()!!.keyById("a")!!.output)
+        view.setCandidates(listOf("hello"))
+        suggestion(view, "hello")!!.performClick()
+        assertEquals("x hello ", editor.text.toString())
+        assertEquals("a", view.typingLayout()!!.keyById("a")!!.output)
+        tap(panel, "a")
+        assertEquals("x hello a", editor.text.toString())
+
+        tap(panel, "shift"); tap(panel, "shift")
+        view.setCandidates(listOf("world"))
+        suggestion(view, "world")!!.performClick()
+        assertEquals("A", view.typingLayout()!!.keyById("a")!!.output)
+    }
+
+    @Test fun acceptingSuggestionWithinExistingWordDoesNotAddSpace() = withEditor { service, editor, _, _ ->
+        editor.setText("teh world")
+        editor.setSelection(1)
+        service.onCandidate("the")
+        assertEquals("the world", editor.text.toString())
+
+        editor.setText("teh, world")
+        editor.setSelection(3)
+        service.onCandidate("the")
+        assertEquals("the, world", editor.text.toString())
+    }
+
+    @Test fun acceptingSuggestionDoesNotUndoAnEarlierAutocorrection() = withEditor { service, editor, _, _ ->
+        "teh".forEach { service.onCharacter(it.toString()) }
+        service.onSpace()
+        assertEquals("the ", editor.text.toString())
+        service.onCandidate("the")
+        assertEquals("the the ", editor.text.toString())
+        service.onBackspace(false)
+        assertEquals("the the", editor.text.toString())
+    }
+
+    @Test fun movingCursorIntoWordRefreshesSuggestions() = withEditor { service, editor, view, _ ->
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
+        ReflectionHelpers.getField<java.util.concurrent.ExecutorService>(service, "executor")
+            .submit {}.get(5, TimeUnit.SECONDS)
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        editor.setText("hello teh")
+        view.setCandidates(listOf("stale"))
+        editor.setSelection(7)
+        service.onUpdateSelection(9, 9, 7, 7, -1, -1)
+        repeat(150) {
+            Shadows.shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
+            if (ReflectionHelpers.getField<List<String>>(view, "candidates").contains("the")) return@withEditor
+            Thread.sleep(10)
+        }
+        fail("Suggestions did not refresh for the word under the cursor")
+    }
+
+    @Test fun englishPunctuationRemovesSpaceBeforeClosingMark() = withEditor { service, editor, _, _ ->
+        service.onCandidate("hello")
+        service.onCharacter(",")
+        assertEquals("hello,", editor.text.toString())
+
+        editor.setText("hello ")
+        editor.setSelection(editor.text.length)
+        service.onCharacter(".")
+        assertEquals("hello.", editor.text.toString())
     }
 
     @Test fun fastTypingHonorsManualShiftAndCapsLock() = withEditor { service, editor, view, _ ->

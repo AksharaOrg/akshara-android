@@ -5,10 +5,11 @@ import java.text.BreakIterator
 
 /** Grapheme runs used by the suggestion-rail morph, matching iOS CandidateMorphLabel. */
 internal object SuggestionMorph {
-    const val APPEAR_MS = 280L
-    const val DISAPPEAR_MS = 160L
-    const val SHIFT_MS = 220L
-    const val STAGGER_MS = 22L
+    const val APPEAR_MS = 140L
+    const val DISAPPEAR_MS = 80L
+    const val SHIFT_MS = 140L
+    const val STAGGER_MS = 6L
+    const val MAX_STAGGER_MS = 36L
     const val APPEAR_SCALE = 0.28f
     const val TEXT_SP = 17f
     const val INSET_DP = 4f

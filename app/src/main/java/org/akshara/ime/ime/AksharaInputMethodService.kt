@@ -169,8 +169,10 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         }
         if (oldSelStart != newSelStart || oldSelEnd != newSelEnd) {
             precedingDirty = true
+            updateSuggestions()
+        } else {
+            updateEnglishCapitalization()
         }
-        updateEnglishCapitalization()
     }
 
     override fun onCharacter(value: String) {
@@ -306,6 +308,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onCandidate(value: String) {
         validatePreview()
         feedback()
+        pendingAutocorrection = null
         if (value == AksharaEasterEgg.TRUE_NAME_DISPLAY) {
             writePreview(AksharaEasterEgg.TRUE_NAME_INSERT, true); preview.clear()
             composition.clear(); slsSource.clear(); updateSuggestions(); return
@@ -314,6 +317,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             val editedWord = currentWordAtCursor()
             val editing = isEditingExistingWord(editedWord)
             val typed = if (editing) editedWord.text else currentLatinPrefix()
+            val nextCharacter = currentInputConnection?.getTextAfterCursor(editedWord.suffix.length + 1, 0)
+                ?.getOrNull(editedWord.suffix.length)
+            val separator = if (editedWord.suffix.isEmpty() && nextCharacter == null) " " else ""
             currentInputConnection?.beginBatchEdit()
             try {
                 if (typed.isNotEmpty()) {
@@ -322,7 +328,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
                         if (editing) editedWord.suffix.length else 0
                     )
                 }
-                currentInputConnection?.commitText("$value ", 1)
+                currentInputConnection?.commitText(value + separator, 1)
             } finally { currentInputConnection?.endBatchEdit() }
             learn(value)
             precedingDirty = true
@@ -505,9 +511,10 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             val previous = ic.getTextBeforeCursor(1, 0)?.toString()?.lastOrNull()
             SmartPunctuationSpacing.smartQuote(value, previous)
         } else value
-        if (!persistentEnglish && editorLayout == EditorLayout.TEXT && prefs.smartPunctuation && quoted.isNotEmpty() && quoted != " " && !quoted.startsWith("\n")) {
+        if (editorLayout == EditorLayout.TEXT && prefs.smartPunctuation && quoted.isNotEmpty() && quoted != " " && !quoted.startsWith("\n")) {
             val before = ic.getTextBeforeCursor(8, 0)?.toString().orEmpty()
-            val change = SmartPunctuationSpacing.adjustment(quoted, before, punctuationField())
+            val field = if (persistentEnglish) SmartPunctuationSpacing.FieldKind.SUPPRESSES_SENTENCE_SPACING else punctuationField()
+            val change = SmartPunctuationSpacing.adjustment(quoted, before, field)
             if (change.deletePrecedingCount > 0) ic.deleteSurroundingText(change.deletePrecedingCount, 0)
             ic.commitText(change.text, 1)
         } else {
@@ -964,7 +971,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     companion object {
-        private const val SUGGESTION_DEBOUNCE_MS = 24L
+        private const val SUGGESTION_DEBOUNCE_MS = 12L
         private const val CLIPBOARD_PREVIEW_MAX_AGE_MS = 5 * 60 * 1000L
         fun enterAction(info: EditorInfo?): Int {
             if (info == null) return EditorInfo.IME_ACTION_NONE

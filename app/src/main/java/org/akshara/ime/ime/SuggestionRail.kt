@@ -520,7 +520,7 @@ internal class MorphLabel(context: Context, color: Int) : ViewGroup(context) {
             view.pivotX = view.width / 2f
             view.pivotY = view.height / 2f
             nextViews[index] = view
-            val delay = SuggestionMorph.STAGGER_MS * appearOrder
+            val delay = (SuggestionMorph.STAGGER_MS * appearOrder).coerceAtMost(SuggestionMorph.MAX_STAGGER_MS)
             appearOrder += 1
             beginMotion()
             view.animate()
