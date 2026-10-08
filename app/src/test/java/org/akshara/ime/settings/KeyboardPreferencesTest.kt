@@ -17,6 +17,14 @@ class KeyboardPreferencesTest {
         assertTrue(p.doubleSpacePeriod); assertTrue(p.smartQuotes); assertTrue(p.smartPunctuation); assertFalse(p.englishForOneWord)
         assertFalse(p.clipboardPreview); assertTrue(p.spacePunctuationKeys); assertTrue(p.emojiPicker)
     }
+    @Test fun emojiPlacementMigratesLegacyDisabledAndPersistsNewChoice() {
+        context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().putBoolean("emoji_picker", false).commit()
+        assertEquals(EmojiButtonPlacement.DISABLED, KeyboardPreferences(context).emojiButtonPlacement)
+        KeyboardPreferences(context).emojiButtonPlacement = EmojiButtonPlacement.KEYBOARD
+        assertEquals(EmojiButtonPlacement.KEYBOARD, KeyboardPreferences(context).emojiButtonPlacement)
+        KeyboardPreferences(context).reset()
+        assertEquals(EmojiButtonPlacement.TOOLBAR, KeyboardPreferences(context).emojiButtonPlacement)
+    }
     @Test fun valuesPersistAndReset() {
         KeyboardPreferences(context).apply { mode = InputMode.WIJESEKARA; highContrast = true }
         KeyboardPreferences(context).apply { assertEquals(InputMode.WIJESEKARA, mode); assertTrue(highContrast); reset() }

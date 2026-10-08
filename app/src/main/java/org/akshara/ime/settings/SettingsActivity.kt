@@ -82,7 +82,12 @@ class SettingsActivity : Activity() {
     }
 
     private fun navigateUp() {
-        page = if (page == Page.ABOUT) Page.HOME else Page.ABOUT
+        page = when (page) {
+            Page.KEYBOARD, Page.ABOUT -> Page.HOME
+            Page.CLIPBOARD, Page.FEEDBACK -> Page.KEYBOARD
+            else -> Page.ABOUT
+        }
+        scroll.scrollTo(0, 0)
         render()
     }
 
@@ -93,10 +98,13 @@ class SettingsActivity : Activity() {
     }
 
     private fun render() {
-        val y = if (page == Page.HOME) scroll.scrollY else 0
+        val y = scroll.scrollY
         container.removeAllViews()
         when (page) {
             Page.HOME -> renderHome()
+            Page.KEYBOARD -> renderKeyboardSettings()
+            Page.CLIPBOARD -> renderClipboardSettings()
+            Page.FEEDBACK -> renderFeedbackSettings()
             Page.ABOUT -> renderAbout()
             Page.PRIVACY -> renderPrivacy()
             Page.NOTICES -> renderNotices()
@@ -125,93 +133,8 @@ class SettingsActivity : Activity() {
                 if (selected) R.color.settings_icon_green else R.color.settings_icon_blue
             ) { (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker() }
         }
-        section(R.string.category_typing) {
-            toggle(R.string.auto_capitalization, R.string.auto_capitalization_summary, R.drawable.ic_key_caps, R.color.settings_icon_blue, prefs.autoCapitalization) {
-                prefs.autoCapitalization = it
-            }
-            toggle(R.string.english_autocorrect, R.string.english_autocorrect_summary, R.drawable.ic_suggestions, R.color.settings_icon_teal, prefs.englishAutocorrect) {
-                prefs.englishAutocorrect = it
-            }
-            choice(R.string.input_mode, R.drawable.ic_language, R.color.settings_icon_blue, R.array.input_mode_entries, R.array.input_mode_values, prefs.mode.name) {
-                prefs.mode = runCatching { InputMode.valueOf(it) }.getOrDefault(InputMode.SMART_PHONETIC)
-            }
-            choice(R.string.top_row, R.drawable.ic_numbers, R.color.settings_icon_indigo, R.array.top_row_entries, R.array.top_row_values, prefs.topRow) {
-                prefs.topRow = it
-            }
-            toggle(R.string.double_space_period, R.string.double_space_period_summary, R.drawable.ic_language, R.color.settings_icon_gray, prefs.doubleSpacePeriod) {
-                prefs.doubleSpacePeriod = it
-            }
-            toggle(R.string.smart_quotes, R.string.smart_quotes_summary, R.drawable.ic_language, R.color.settings_icon_mint, prefs.smartQuotes) {
-                prefs.smartQuotes = it
-            }
-            toggle(R.string.smart_punctuation, R.string.smart_punctuation_summary, R.drawable.ic_language, R.color.settings_icon_pink, prefs.smartPunctuation) {
-                prefs.smartPunctuation = it
-            }
-            if (prefs.mode == InputMode.SMART_PHONETIC) {
-                toggle(R.string.english_one_word, R.string.english_one_word_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.englishForOneWord) {
-                    prefs.englishForOneWord = it
-                }
-            }
-            toggle(R.string.persistent_english, R.string.persistent_english_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.persistentEnglish) {
-                prefs.persistentEnglish = it
-            }
-            toggle(R.string.space_punctuation_keys, R.string.space_punctuation_keys_summary, R.drawable.ic_language, R.color.settings_icon_gray, prefs.spacePunctuationKeys) {
-                prefs.spacePunctuationKeys = it
-            }
-        }
-        section(R.string.category_tools) {
-            toggle(R.string.suggestions, R.string.suggestions_summary, R.drawable.ic_suggestions, R.color.settings_icon_orange, prefs.suggestions) {
-                prefs.suggestions = it
-                render()
-            }
-            toggle(R.string.autocorrect, R.string.autocorrect_summary, R.drawable.ic_suggestions, R.color.settings_icon_teal, prefs.autocorrect) {
-                prefs.autocorrect = it
-            }
-            toggle(R.string.emoji_suggestions, R.string.emoji_suggestions_summary, R.drawable.ic_emoji, R.color.settings_icon_yellow, prefs.emojiSuggestions, enabled = prefs.suggestions) {
-                prefs.emojiSuggestions = it
-            }
-            toggle(R.string.emoji_picker, R.string.emoji_picker_summary, R.drawable.ic_emoji, R.color.settings_icon_yellow, prefs.emojiPicker) {
-                prefs.emojiPicker = it
-            }
-            choice(R.string.skin_tone, R.drawable.ic_emoji, R.color.settings_icon_pink, R.array.skin_tone_entries, R.array.skin_tone_values, prefs.skinTone) {
-                prefs.skinTone = it
-            }
-            toggle(R.string.clipboard_history, R.string.clipboard_summary, R.drawable.ic_clipboard, R.color.settings_icon_teal, prefs.clipboardHistory) {
-                prefs.clipboardHistory = it
-            }
-            toggle(R.string.clipboard_preview, R.string.clipboard_preview_summary, R.drawable.ic_clipboard, R.color.settings_icon_teal, prefs.clipboardPreview) {
-                prefs.clipboardPreview = it
-            }
-            toggle(R.string.inline_autofill, R.string.inline_autofill_summary, R.drawable.ic_key_caps, R.color.settings_icon_blue, prefs.inlineAutofill) {
-                prefs.inlineAutofill = it
-            }
-        }
-        section(R.string.category_appearance) {
-            choice(R.string.theme, R.drawable.ic_palette, R.color.settings_icon_purple, R.array.theme_entries, R.array.theme_values, prefs.theme) {
-                prefs.theme = it
-            }
-            choice(R.string.key_spacing, R.drawable.ic_keyboard, R.color.settings_icon_gray, R.array.spacing_entries, R.array.spacing_values, prefs.keySpacing) {
-                prefs.keySpacing = it
-            }
-            choice(R.string.keyboard_size, R.drawable.ic_keyboard, R.color.settings_icon_gray, R.array.keyboard_size_entries, R.array.keyboard_size_values, prefs.keyboardSize) {
-                prefs.keyboardSize = it
-            }
-            toggle(R.string.spatial_decoder, R.string.spatial_decoder_summary, R.drawable.ic_keyboard, R.color.settings_icon_blue, prefs.spatialDecoder) {
-                prefs.spatialDecoder = it
-            }
-            choice(R.string.one_handed, R.drawable.ic_keyboard, R.color.settings_icon_indigo, R.array.one_handed_entries, R.array.one_handed_values, prefs.oneHanded) {
-                prefs.oneHanded = it
-            }
-            toggle(R.string.haptics, 0, R.drawable.ic_vibration, R.color.settings_icon_pink, prefs.haptics) { prefs.haptics = it }
-            toggle(R.string.key_sounds, 0, R.drawable.ic_volume, R.color.settings_icon_orange, prefs.keySounds) { prefs.keySounds = it }
-            toggle(R.string.high_contrast, R.string.high_contrast_summary, R.drawable.ic_palette, R.color.settings_icon_gray, prefs.highContrast) {
-                prefs.highContrast = it
-            }
-            if (BuildConfig.DEBUG || prefs.developerUnlocked) {
-                toggle(R.string.debug_overlay, R.string.debug_overlay_summary, R.drawable.ic_bug, R.color.settings_icon_mint, prefs.debugOverlay) {
-                    prefs.debugOverlay = it
-                }
-            }
+        section(0) {
+            action(R.string.keyboard_settings, R.string.keyboard_settings_summary, R.drawable.ic_keyboard, R.color.settings_icon_blue) { open(Page.KEYBOARD) }
         }
         section(R.string.category_privacy) {
             action(R.string.clear_learning_title, R.string.clear_learning_summary, R.drawable.ic_delete, R.color.settings_icon_red) {
@@ -246,6 +169,121 @@ class SettingsActivity : Activity() {
                 R.color.settings_icon_teal,
                 summaryText = getString(R.string.about_summary, BuildConfig.VERSION_NAME)
             ) { open(Page.ABOUT) }
+        }
+    }
+
+    private fun renderKeyboardSettings() {
+        toolbar(R.string.keyboard_settings)
+        section(0) {
+            choice(R.string.input_mode, R.drawable.ic_language, R.color.settings_icon_blue, R.array.input_mode_entries, R.array.input_mode_values, prefs.mode.name) {
+                prefs.mode = runCatching { InputMode.valueOf(it) }.getOrDefault(InputMode.SMART_PHONETIC)
+            }
+        }
+        section(R.string.category_tools) {
+            toggle(R.string.persistent_english, R.string.persistent_english_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.persistentEnglish) {
+                prefs.persistentEnglish = it
+            }
+            choice(R.string.emoji_button, R.drawable.ic_emoji, R.color.settings_icon_yellow,
+                R.array.emoji_button_entries, R.array.emoji_button_values, prefs.emojiButtonPlacement.name) {
+                prefs.emojiButtonPlacement = EmojiButtonPlacement.valueOf(it)
+            }
+            if (prefs.emojiPicker) {
+            choice(R.string.skin_tone, R.drawable.ic_emoji, R.color.settings_icon_pink, R.array.skin_tone_entries, R.array.skin_tone_values, prefs.skinTone) {
+                prefs.skinTone = it
+            }
+            }
+            toggle(R.string.suggestions, R.string.suggestions_summary, R.drawable.ic_suggestions, R.color.settings_icon_orange, prefs.suggestions) {
+                prefs.suggestions = it
+                render()
+            }
+            toggle(R.string.autocorrect, R.string.autocorrect_summary, R.drawable.ic_suggestions, R.color.settings_icon_teal, prefs.autocorrect) {
+                prefs.autocorrect = it
+            }
+            toggle(R.string.english_autocorrect, R.string.english_autocorrect_summary, R.drawable.ic_suggestions, R.color.settings_icon_teal, prefs.englishAutocorrect) {
+                prefs.englishAutocorrect = it
+            }
+            toggle(R.string.emoji_suggestions, R.string.emoji_suggestions_summary, R.drawable.ic_emoji, R.color.settings_icon_yellow, prefs.emojiSuggestions, enabled = prefs.suggestions) {
+                prefs.emojiSuggestions = it
+            }
+            action(R.string.clipboard_history, R.string.clipboard_summary, R.drawable.ic_clipboard, R.color.settings_icon_teal) { open(Page.CLIPBOARD) }
+            action(R.string.feedback_title, R.string.feedback_summary, R.drawable.ic_vibration, R.color.settings_icon_pink) { open(Page.FEEDBACK) }
+        }
+        section(R.string.category_typing) {
+            toggle(R.string.auto_capitalization, R.string.auto_capitalization_summary, R.drawable.ic_key_caps, R.color.settings_icon_blue, prefs.autoCapitalization) {
+                prefs.autoCapitalization = it
+            }
+            choice(R.string.top_row, R.drawable.ic_numbers, R.color.settings_icon_indigo, R.array.top_row_entries, R.array.top_row_values, prefs.topRow) {
+                prefs.topRow = it
+            }
+            toggle(R.string.double_space_period, R.string.double_space_period_summary, R.drawable.ic_language, R.color.settings_icon_gray, prefs.doubleSpacePeriod) {
+                prefs.doubleSpacePeriod = it
+            }
+            toggle(R.string.smart_quotes, R.string.smart_quotes_summary, R.drawable.ic_language, R.color.settings_icon_mint, prefs.smartQuotes) {
+                prefs.smartQuotes = it
+            }
+            toggle(R.string.smart_punctuation, R.string.smart_punctuation_summary, R.drawable.ic_language, R.color.settings_icon_pink, prefs.smartPunctuation) {
+                prefs.smartPunctuation = it
+            }
+            if (prefs.mode == InputMode.SMART_PHONETIC) {
+                toggle(R.string.english_one_word, R.string.english_one_word_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.englishForOneWord) {
+                    prefs.englishForOneWord = it
+                }
+            }
+            toggle(R.string.inline_autofill, R.string.inline_autofill_summary, R.drawable.ic_key_caps, R.color.settings_icon_blue, prefs.inlineAutofill) {
+                prefs.inlineAutofill = it
+            }
+        }
+        section(R.string.category_layout) {
+            choice(R.string.key_spacing, R.drawable.ic_keyboard, R.color.settings_icon_gray, R.array.spacing_entries, R.array.spacing_values, prefs.keySpacing) {
+                prefs.keySpacing = it
+            }
+            choice(R.string.keyboard_size, R.drawable.ic_keyboard, R.color.settings_icon_gray, R.array.keyboard_size_entries, R.array.keyboard_size_values, prefs.keyboardSize) {
+                prefs.keyboardSize = it
+            }
+            choice(R.string.one_handed, R.drawable.ic_keyboard, R.color.settings_icon_indigo, R.array.one_handed_entries, R.array.one_handed_values, prefs.oneHanded) {
+                prefs.oneHanded = it
+            }
+            toggle(R.string.space_punctuation_keys, R.string.space_punctuation_keys_summary, R.drawable.ic_language, R.color.settings_icon_gray, prefs.spacePunctuationKeys) {
+                prefs.spacePunctuationKeys = it
+            }
+            toggle(R.string.spatial_decoder, R.string.spatial_decoder_summary, R.drawable.ic_keyboard, R.color.settings_icon_blue, prefs.spatialDecoder) {
+                prefs.spatialDecoder = it
+            }
+        }
+        section(R.string.category_appearance) {
+            choice(R.string.theme, R.drawable.ic_palette, R.color.settings_icon_purple, R.array.theme_entries, R.array.theme_values, prefs.theme) {
+                prefs.theme = it
+            }
+            toggle(R.string.high_contrast, R.string.high_contrast_summary, R.drawable.ic_palette, R.color.settings_icon_gray, prefs.highContrast) {
+                prefs.highContrast = it
+            }
+        }
+        if (BuildConfig.DEBUG || prefs.developerUnlocked) {
+            section(0) {
+                toggle(R.string.debug_overlay, R.string.debug_overlay_summary, R.drawable.ic_bug, R.color.settings_icon_mint, prefs.debugOverlay) {
+                    prefs.debugOverlay = it
+                }
+            }
+        }
+    }
+
+    private fun renderClipboardSettings() {
+        toolbar(R.string.clipboard_history)
+        section(R.string.category_tools) {
+            toggle(R.string.clipboard_history, R.string.clipboard_summary, R.drawable.ic_clipboard, R.color.settings_icon_teal, prefs.clipboardHistory) {
+                prefs.clipboardHistory = it
+            }
+            toggle(R.string.clipboard_preview, R.string.clipboard_preview_summary, R.drawable.ic_clipboard, R.color.settings_icon_teal, prefs.clipboardPreview) {
+                prefs.clipboardPreview = it
+            }
+        }
+    }
+
+    private fun renderFeedbackSettings() {
+        toolbar(R.string.feedback_title)
+        section(R.string.feedback_title) {
+            toggle(R.string.haptics, 0, R.drawable.ic_vibration, R.color.settings_icon_pink, prefs.haptics) { prefs.haptics = it }
+            toggle(R.string.key_sounds, 0, R.drawable.ic_volume, R.color.settings_icon_orange, prefs.keySounds) { prefs.keySounds = it }
         }
     }
 
@@ -598,7 +636,7 @@ class SettingsActivity : Activity() {
         return color
     }
 
-    private enum class Page { HOME, ABOUT, PRIVACY, NOTICES, CREDITS, DIAGNOSTICS, DEVELOPER }
+    private enum class Page { HOME, KEYBOARD, CLIPBOARD, FEEDBACK, ABOUT, PRIVACY, NOTICES, CREDITS, DIAGNOSTICS, DEVELOPER }
 
     companion object {
         private const val STATE_PAGE = "settings_page"

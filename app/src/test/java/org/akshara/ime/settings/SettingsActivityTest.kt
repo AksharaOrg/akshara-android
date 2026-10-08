@@ -31,14 +31,16 @@ class SettingsActivityTest {
 
     @Test fun usesPlatformSwitchesAndGroupedSections() {
         val root = activity.findViewById<View>(android.R.id.content)
+        assertTrue(hasText(root, activity.getString(R.string.website_title)))
+        rowWithTitle(root, activity.getString(R.string.keyboard_settings))!!.performClick()
         val switches = switches(root)
         assertTrue(switches.isNotEmpty())
         assertTrue(switches.all { it.javaClass == Switch::class.java })
         assertTrue(hasText(root, activity.getString(R.string.category_typing)))
-        assertTrue(hasText(root, activity.getString(R.string.app_name)))
+        assertTrue(hasText(root, activity.getString(R.string.keyboard_settings)))
         assertTrue(hasText(root, activity.getString(R.string.double_space_period)))
         assertTrue(hasText(root, activity.getString(R.string.english_one_word)))
-        assertTrue(hasText(root, activity.getString(R.string.website_title)))
+        assertTrue(hasText(root, activity.getString(R.string.category_layout)))
     }
 
     @Test fun aboutOpensIosMatchingPages() {
@@ -56,6 +58,7 @@ class SettingsActivityTest {
     }
 
     @Test fun togglingSuggestionsPersists() {
+        rowWithTitle(activity.findViewById(android.R.id.content), activity.getString(R.string.keyboard_settings))!!.performClick()
         val row = rowWithTitle(activity.findViewById(android.R.id.content), activity.getString(R.string.suggestions))!!
         assertTrue(KeyboardPreferences(activity).suggestions)
         row.performClick()
@@ -63,6 +66,7 @@ class SettingsActivityTest {
     }
 
     @Test fun listChoiceUpdatesSummary() {
+        rowWithTitle(activity.findViewById(android.R.id.content), activity.getString(R.string.keyboard_settings))!!.performClick()
         val root = activity.findViewById<View>(android.R.id.content)
         assertTrue(hasText(rowWithTitle(root, activity.getString(R.string.input_mode))!!, "Smart Phonetic"))
         KeyboardPreferences(activity).mode = InputMode.WIJESEKARA
@@ -70,6 +74,22 @@ class SettingsActivityTest {
         val updated = rowWithTitle(activity.findViewById(android.R.id.content), activity.getString(R.string.input_mode))!!
         assertTrue(hasText(updated, "Wijesekara"))
         assertEquals(InputMode.WIJESEKARA, KeyboardPreferences(activity).mode)
+    }
+
+    @Test fun emojiChoiceAndNestedPagesPersistAndNavigateBack() {
+        val root = activity.findViewById<View>(android.R.id.content)
+        rowWithTitle(root, activity.getString(R.string.keyboard_settings))!!.performClick()
+        rowWithTitle(root, activity.getString(R.string.emoji_button))!!.performClick()
+        val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+        dialog.listView.performItemClick(dialog.listView.getChildAt(1), 1, 1)
+        assertEquals(EmojiButtonPlacement.KEYBOARD, KeyboardPreferences(activity).emojiButtonPlacement)
+        assertTrue(hasText(root, "Before comma key"))
+        rowWithTitle(root, activity.getString(R.string.feedback_title))!!.performClick()
+        assertTrue(hasText(root, activity.getString(R.string.key_sounds)))
+        activity.onBackPressed()
+        assertTrue(hasText(root, activity.getString(R.string.emoji_button)))
+        activity.onBackPressed()
+        assertTrue(hasText(root, activity.getString(R.string.enable_keyboard)))
     }
 
     private fun switches(view: View): List<Switch> {

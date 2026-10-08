@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import org.akshara.ime.engine.InputMode
 
+enum class EmojiButtonPlacement { TOOLBAR, KEYBOARD, DISABLED }
+
 class KeyboardPreferences(context: Context) {
     private val store = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     var mode: InputMode
@@ -14,7 +16,15 @@ class KeyboardPreferences(context: Context) {
     var englishAutocorrect: Boolean by bool("english_autocorrect", true)
     var autoCapitalization: Boolean by bool("auto_capitalization", true)
     var emojiSuggestions: Boolean by bool(EMOJI_SUGGESTIONS, false)
-    var emojiPicker: Boolean by bool(EMOJI_PICKER, true)
+    var emojiButtonPlacement: EmojiButtonPlacement
+        get() = runCatching {
+            EmojiButtonPlacement.valueOf(store.getString("emoji_button_placement", null)
+                ?: if (store.getBoolean(EMOJI_PICKER, true)) "TOOLBAR" else "DISABLED")
+        }.getOrDefault(EmojiButtonPlacement.TOOLBAR)
+        set(value) = store.edit().putString("emoji_button_placement", value.name).apply()
+    var emojiPicker: Boolean
+        get() = emojiButtonPlacement != EmojiButtonPlacement.DISABLED
+        set(value) { emojiButtonPlacement = if (value) EmojiButtonPlacement.TOOLBAR else EmojiButtonPlacement.DISABLED }
     var haptics: Boolean by bool(HAPTICS, true)
     var keySounds: Boolean by bool(KEY_SOUNDS, false)
     var highContrast: Boolean by bool(HIGH_CONTRAST, false)

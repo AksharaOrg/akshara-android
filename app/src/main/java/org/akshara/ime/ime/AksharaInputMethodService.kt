@@ -72,7 +72,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private var persistentEnglish = false
     private var lastSpaceAt = 0L
     private var pendingAutocorrection: PendingAutocorrection? = null
-    private var rejectedCorrection: String? = null
+    private val rejectedCorrections = mutableSetOf<String>()
     private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         main.post { applyPreferenceChange(key) }
     }
@@ -97,8 +97,12 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting); cancelComposition(false)
-        pendingAutocorrection = null
-        rejectedCorrection = null
+        // Editors may restart input after an undo. Preserve the user's rejection
+        // until a new input session, including when they edit and restore the word.
+        if (!restarting) {
+            pendingAutocorrection = null
+            rejectedCorrections.clear()
+        }
         previousCommittedWord = null
         clearClipboardPreview()
         restricted = attribute?.let(::isRestrictedEditor) ?: true
@@ -167,7 +171,6 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
 
     override fun onCharacter(value: String) {
         if (latestClipboard != null) clearClipboardPreview()
-        rejectedCorrection = null
         validatePreview()
         if (persistentEnglish) {
             commitComposition()
@@ -538,7 +541,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
 
     private fun applyAutocorrection(word: String?, suffix: String): Boolean {
         if (!(if (persistentEnglish) prefs.englishAutocorrect else prefs.autocorrect) || restricted || editorLayout != EditorLayout.TEXT || word.isNullOrBlank()) return false
-        if (word == rejectedCorrection) return false
+        if (word.lowercase(java.util.Locale.ROOT) in rejectedCorrections) return false
         val editor = currentInputEditorInfo
         if (editor != null && editor.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS != 0) return false
         if (!currentInputConnection?.getSelectedText(0).isNullOrEmpty()) return false
@@ -571,7 +574,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             ic.commitText(pending.original, 1)
         } finally { ic.endBatchEdit() }
         pendingAutocorrection = null
-        rejectedCorrection = pending.original
+        rejectedCorrections.add(pending.original.lowercase(java.util.Locale.ROOT))
         precedingDirty = true
         return true
     }

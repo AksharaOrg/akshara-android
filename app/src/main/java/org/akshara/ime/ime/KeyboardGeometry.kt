@@ -90,7 +90,8 @@ internal object KeyboardGeometry {
 
     fun rowHeightPx(size: String, landscape: Boolean, density: Float, rows: Int = 4): Float {
         val area = keyAreaDp(size, landscape) * density
-        return area / rows.coerceAtLeast(1)
+        // Optional rows add height instead of reducing the four standard rows.
+        return area / rows.coerceIn(1, 4)
     }
 
     fun railHeightPx(landscape: Boolean, density: Float): Float {

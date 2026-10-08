@@ -26,10 +26,45 @@ class KeyboardInteractionTest {
         view.configure(InputMode.SMART_PHONETIC, false, "↵")
         findButton(view, "Emoji")!!.performClick()
         findButton(view, "Search emoji")!!.performClick()
+        findButton(view, "Switch keyboard language")!!.performClick()
         "heart".forEach { findButton(view, it.toString())!!.performClick() }
         assertEquals("", hostText)
         assertNotNull(findButton(view, "Back to emoji"))
     }
+    @Test fun emojiSearchReusesKeysAndGridWhileTypingAndClearing() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val prefs = KeyboardPreferences(context)
+        prefs.reset()
+        var hostLanguageSwitches = 0
+        val actions = object : KeyboardActions by idleActions() {
+            override fun onLanguageSwitch() { hostLanguageSwitches++ }
+        }
+        val view = KeyboardView(context, actions, prefs)
+        view.configure(InputMode.SMART_PHONETIC, false, "Enter")
+        findButton(view, "Emoji")!!.performClick()
+        findButton(view, "Search emoji")!!.performClick()
+        findButton(view, "Switch keyboard language")!!.performClick()
+        val key = findButton(view, "h")!!
+        val keyboard = key.parent
+        fun recycler(root: View): androidx.recyclerview.widget.RecyclerView? {
+            if (root is androidx.recyclerview.widget.RecyclerView) return root
+            if (root is ViewGroup) for (i in 0 until root.childCount) recycler(root.getChildAt(i))?.let { return it }
+            return null
+        }
+        val grid = recycler(view)!!
+        val adapter = grid.adapter
+        "heart".forEach { findButton(view, it.toString())!!.performClick() }
+        assertSame(key, findButton(view, "h"))
+        assertSame(keyboard, findButton(view, "h")!!.parent)
+        assertSame(grid, recycler(view))
+        assertSame(adapter, grid.adapter)
+        findButton(view, "Clear emoji search")!!.performClick()
+        assertSame(key, findButton(view, "h"))
+        assertEquals(0, hostLanguageSwitches)
+        findButton(view, "Back to emoji")!!.performClick()
+        prefs.reset()
+    }
+
     @Test fun auxiliaryPanelsKeepUsableHeightsIncludingTallAndOptionalRows() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val prefs = KeyboardPreferences(context)
@@ -109,6 +144,7 @@ class KeyboardInteractionTest {
         assertNotNull(findButton(view, "Smileys & People")); assertNotNull(findButton(view, "Search emoji"))
         assertNotNull(findButton(view, "Flags"))
         findButton(view, "Search emoji")!!.performClick()
+        findButton(view, "Switch keyboard language")!!.performClick()
         "heart".forEach { findButton(view, it.toString())!!.performClick() }
         view.measure(
             View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
@@ -239,6 +275,34 @@ class KeyboardInteractionTest {
         layoutKeyboard(closed)
         val hidden = findButton(closed, "Clipboard history")
         assertTrue(hidden == null || hidden.visibility != View.VISIBLE)
+    }
+
+    @Test fun optionalRowsGrowTheRenderedKeyboardInEveryLayout() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val prefs = KeyboardPreferences(context)
+        prefs.reset()
+        for (mode in InputMode.entries) for (english in listOf(false, true)) {
+            prefs.topRow = "none"
+            val view = KeyboardView(context, idleActions(), prefs)
+            fun measure() {
+                view.configure(mode, false, "Enter", english = english)
+                view.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                view.layout(0, 0, 1080, view.measuredHeight)
+            }
+            measure()
+            val baseHeight = view.measuredHeight
+            val keyHeight = view.typingLayout()!!.rowHeight
+            for (top in listOf("numbers", "emoji")) {
+                prefs.topRow = top
+                measure()
+                assertEquals(keyHeight, view.typingLayout()!!.rowHeight, 0.01f)
+                assertEquals(baseHeight + keyHeight, view.measuredHeight.toFloat(), 1f)
+                val space = view.typingLayout()!!.keyById("space")!!
+                assertTrue(space.visual.bottom <= view.typingLayout()!!.height)
+            }
+        }
+        prefs.reset()
     }
 
     @Test fun quickPastePreviewAndEmojiAreToolbarActions() {
