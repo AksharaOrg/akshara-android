@@ -8,7 +8,7 @@
     <string name="category_get_started">Setup</string>
     <string name="category_typing">Typing</string>
     <string name="category_tools">Keyboard features</string>
-    <string name="category_appearance">Appearance &amp; feedback</string>
+    <string name="category_appearance">Appearance</string>
     <string name="category_privacy">Privacy &amp; data</string>
     <string name="category_about">About</string>
     <string name="category_links">Links</string>
@@ -191,4 +191,19 @@
     <string name="link_corpus_doi">https://doi.org/10.57967/hf/6460</string>
     <string name="link_cc_by">https://creativecommons.org/licenses/by/4.0/</string>
     <string name="link_english_frequency">https://github.com/aparrish/wordfreq-en-25000</string>
+    <string name="keyboard_settings">Keyboard Settings</string>
+    <string name="keyboard_settings_summary">Layout, features, typing and appearance</string>
+    <string name="feedback_title">Sound &amp; Haptics</string>
+    <string name="feedback_summary">Key sounds and vibration feedback</string>
+    <string name="emoji_button">Emoji Button</string>
+    <string-array name="emoji_button_entries">
+        <item>Toolbar</item>
+        <item>Before comma key</item>
+        <item>Disabled</item>
+    </string-array>
+    <string-array name="emoji_button_values">
+        <item>TOOLBAR</item>
+        <item>KEYBOARD</item>
+        <item>DISABLED</item>
+    </string-array>
 </resources>

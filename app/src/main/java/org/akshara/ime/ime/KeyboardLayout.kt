@@ -238,7 +238,7 @@ internal object KeyboardLayoutFactory {
         spacePunctuationKeys: Boolean = false,
         english: Boolean = false
     ): List<RowDef> = when (layer) {
-        KeyboardLayer.LETTERS -> letterRows(mode, shifted, caps, editor, topRow, enterLabel, spaceLabel, offerGlobe, languageSwitchLabel, spacePunctuationKeys, english)
+        KeyboardLayer.LETTERS -> letterRows(mode, shifted, caps, editor, topRow, enterLabel, spaceLabel, offerGlobe, languageSwitchLabel, spacePunctuationKeys, english, emojiPicker)
         KeyboardLayer.NUMBERS -> symbolRows(KeyboardView.numbers, KeyboardLayer.SYMBOLS, "=\\<", enterLabel, spaceLabel)
         KeyboardLayer.SYMBOLS -> symbolRows(KeyboardView.symbols, KeyboardLayer.NUMBERS, "?123", enterLabel, spaceLabel)
         else -> emptyList()
@@ -255,7 +255,8 @@ internal object KeyboardLayoutFactory {
         offerGlobe: Boolean,
         languageSwitchLabel: String?,
         spacePunctuationKeys: Boolean,
-        english: Boolean
+        english: Boolean,
+        emojiPicker: Boolean
     ): List<RowDef> {
         val rows = ArrayList<RowDef>(6)
         val literal = english || editor !in setOf(EditorLayout.TEXT, EditorLayout.URI) || (editor == EditorLayout.URI && languageSwitchLabel == null)
@@ -308,7 +309,7 @@ internal object KeyboardLayoutFactory {
                     listOf(deleteDef().copy(widthFraction = KeyboardGeometry.DELETE))
             )
         }
-        rows += bottomRow(editor, enterLabel, spaceLabel, offerGlobe, ukComma = !wijesekara, languageSwitchLabel, spacePunctuationKeys)
+        rows += bottomRow(editor, enterLabel, spaceLabel, offerGlobe, ukComma = !wijesekara, languageSwitchLabel, spacePunctuationKeys, emojiPicker && editor == EditorLayout.TEXT)
         return rows
     }
 
@@ -356,7 +357,8 @@ internal object KeyboardLayoutFactory {
         offerGlobe: Boolean,
         ukComma: Boolean,
         languageSwitchLabel: String?,
-        spacePunctuationKeys: Boolean
+        spacePunctuationKeys: Boolean,
+        emojiPicker: Boolean
     ): RowDef {
         val keys = ArrayList<KeyDef>(8)
         keys += KeyDef("?123", "?123", "", KeyCode.LAYER, KeyboardGeometry.SYMBOLS, utility = true, payload = KeyboardLayer.NUMBERS.name)
@@ -369,7 +371,9 @@ internal object KeyboardLayoutFactory {
             else -> if (languageSwitchLabel != null) keys += languageSwitchDef(languageSwitchLabel)
         }
         val textLike = editor in setOf(EditorLayout.TEXT, EditorLayout.ASCII, EditorLayout.EMAIL, EditorLayout.URI)
-        if (spacePunctuationKeys && textLike) {
+        if (emojiPicker) keys += KeyDef("emoji", "Emoji", "", KeyCode.EMOJI, KeyboardGeometry.PUNCT,
+            utility = true, icon = org.akshara.ime.R.drawable.ic_emoji)
+        if ((spacePunctuationKeys || emojiPicker) && textLike) {
             keys += commaDef()
         } else if (editor !in setOf(EditorLayout.EMAIL, EditorLayout.URI) && languageSwitchLabel == null && ukComma) {
             keys += commaDef()

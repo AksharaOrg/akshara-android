@@ -128,6 +128,22 @@ class SettingsActivityTest {
         assertEquals(InputMode.WIJESEKARA, KeyboardPreferences(activity).mode)
     }
 
+    @Test fun emojiChoicePersistsAndPreferencesKeepFeedbackControls() {
+        openPage(R.string.page_emoji)
+        rowWithTitle(root(), activity.getString(R.string.emoji_button))!!.performClick()
+        val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+        dialog.listView.performItemClick(dialog.listView.getChildAt(1), 1, 1)
+        assertEquals(EmojiButtonPlacement.KEYBOARD, KeyboardPreferences(activity).emojiButtonPlacement)
+        assertTrue(hasText(root(), "Before comma key"))
+        @Suppress("DEPRECATION") activity.onBackPressed()
+        openPage(R.string.page_preferences)
+        for (title in listOf(R.string.key_sounds, R.string.haptics, R.string.key_hints, R.string.show_with_hardware_keyboard)) {
+            assertTrue(hasText(root(), activity.getString(title)))
+        }
+        @Suppress("DEPRECATION") activity.onBackPressed()
+        assertTrue(hasText(root(), activity.getString(R.string.enable_keyboard)))
+    }
+
     private fun root(): View = activity.findViewById(android.R.id.content)
     private fun openPage(title: Int) = rowWithTitle(root(), activity.getString(title))!!.performClick()
 

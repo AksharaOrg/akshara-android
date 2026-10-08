@@ -29,6 +29,19 @@ class EmojiRepositoryTest {
         assertTrue(repository.search("smile").isNotEmpty())
     }
 
+    @Test fun searchKeepsRankingAndLimitsAcrossLanguagesAndRepeatedQueries() {
+        val repo = repository
+        for (query in listOf("heart", "red", "face", "මල", "ආදර", "avocado")) {
+            val full = repo.search(query, 100)
+            assertTrue(full.isNotEmpty())
+            assertEquals(full.distinct(), full)
+            assertEquals(full.take(3), repo.search(query, 3))
+            assertEquals(full, repo.search("  $query  ", 100))
+            assertEquals(full, repo.search(query, 100))
+        }
+        assertTrue(repo.search("heart", 0).isEmpty())
+    }
+
     @Test fun categoriesMatchGboardSectionsIncludingFlags() {
         val names = repository.categories.map { it.name }
         assertEquals(

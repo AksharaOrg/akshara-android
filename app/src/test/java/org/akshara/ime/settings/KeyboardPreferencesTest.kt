@@ -25,6 +25,14 @@ class KeyboardPreferencesTest {
         p.v2RakaransayaU = true; p.v2Archaic = true
         assertEquals(SmartPhoneticV2.Options(archaic = true, rakaransayaU = true), KeyboardPreferences(context).smartPhoneticOptions)
     }
+    @Test fun emojiPlacementMigratesLegacyDisabledAndPersistsNewChoice() {
+        context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().putBoolean("emoji_picker", false).commit()
+        assertEquals(EmojiButtonPlacement.DISABLED, KeyboardPreferences(context).emojiButtonPlacement)
+        KeyboardPreferences(context).emojiButtonPlacement = EmojiButtonPlacement.KEYBOARD
+        assertEquals(EmojiButtonPlacement.KEYBOARD, KeyboardPreferences(context).emojiButtonPlacement)
+        KeyboardPreferences(context).reset()
+        assertEquals(EmojiButtonPlacement.TOOLBAR, KeyboardPreferences(context).emojiButtonPlacement)
+    }
     @Test fun valuesPersistAndReset() {
         KeyboardPreferences(context).apply { mode = InputMode.WIJESEKARA; highContrast = true }
         KeyboardPreferences(context).apply { assertEquals(InputMode.WIJESEKARA, mode); assertTrue(highContrast); reset() }

@@ -362,8 +362,9 @@ class SettingsActivity : Activity() {
     private fun renderEmoji() {
         toolbar(R.string.page_emoji)
         section(0) {
-            toggle(R.string.emoji_picker, R.string.emoji_picker_summary, R.drawable.ic_emoji, R.color.settings_icon_yellow, prefs.emojiPicker) {
-                prefs.emojiPicker = it
+            choice(R.string.emoji_button, R.drawable.ic_emoji, R.color.settings_icon_yellow,
+                R.array.emoji_button_entries, R.array.emoji_button_values, prefs.emojiButtonPlacement.name) {
+                prefs.emojiButtonPlacement = EmojiButtonPlacement.valueOf(it)
             }
             toggle(R.string.emoji_suggestions, R.string.emoji_suggestions_summary, R.drawable.ic_emoji, R.color.settings_icon_yellow, prefs.emojiSuggestions, enabled = prefs.suggestions) {
                 prefs.emojiSuggestions = it

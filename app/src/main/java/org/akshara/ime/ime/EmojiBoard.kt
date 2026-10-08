@@ -45,7 +45,7 @@ internal class EmojiCell(context: Context, ink: Int) : TextView(context) {
 }
 
 internal class EmojiAdapter(
-    private val values: List<String>,
+    private var values: List<String>,
     private val ink: Int,
     private val tone: String,
     private val onPick: (String) -> Unit
@@ -57,6 +57,12 @@ internal class EmojiAdapter(
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
         return Holder(cell)
+    }
+
+    fun submit(values: List<String>) {
+        if (this.values == values) return
+        this.values = values
+        notifyDataSetChanged()
     }
 
     override fun getItemCount() = values.size

@@ -107,6 +107,32 @@ class EnglishTypingIntegrationTest {
         assertEquals("teh ", editor.text.toString())
     }
 
+    @Test fun rejectedCorrectionSurvivesEditorRestartAndSpace() = withEditor { service, editor, _, _ ->
+        "teh".forEach { service.onCharacter(it.toString()) }
+        service.onSpace()
+        assertEquals("the ", editor.text.toString())
+        service.onBackspace(false)
+        assertEquals("teh", editor.text.toString())
+        service.onStartInput(service.currentInputEditorInfo, true)
+        service.onSpace()
+        assertEquals("teh ", editor.text.toString())
+    }
+
+    @Test fun editingRestoredWordDoesNotForgetRejectionButNewSessionDoes() = withEditor { service, editor, _, _ ->
+        "teh".forEach { service.onCharacter(it.toString()) }
+        service.onSpace()
+        service.onBackspace(false)
+        service.onCharacter("x")
+        service.onBackspace(false)
+        service.onSpace()
+        assertEquals("teh ", editor.text.toString())
+        editor.setText("")
+        service.onStartInput(service.currentInputEditorInfo, false)
+        "teh".forEach { service.onCharacter(it.toString()) }
+        service.onSpace()
+        assertEquals("the ", editor.text.toString())
+    }
+
     @Test fun correctionDoesNotSwallowDoneOrInsertNewline() = withEditor(
         InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE, EditorInfo.IME_ACTION_DONE
     ) { service, editor, _, actions ->

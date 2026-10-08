@@ -63,16 +63,47 @@ class EmojiRepository(context: Context) {
             .sortedWith(compareBy<String> { order[it] ?: order[it + "\uFE0F"] ?: Int.MAX_VALUE }.thenBy { it })) }
     }
 
+    private data class SearchTerm(val key: String, val words: List<String>, val emoji: Set<String>)
+    private val searchTerms by lazy {
+        val separator = Regex("[^\\p{L}\\p{N}]+")
+        index.map { (key, emoji) -> SearchTerm(key, key.split(separator), emoji) }
+    }
+
     fun search(query: String, max: Int = 48, scanNames: Boolean = true): List<String> {
         val needle = query.trim().lowercase()
-        if (needle.isEmpty()) return emptyList()
-        val indexed = index.asSequence().filter { (key, _) -> key.contains(needle) }
-            .sortedBy { (key, _) -> when { key == needle -> 0; key.startsWith(needle) -> 1; key.split(Regex("[^\\p{L}\\p{N}]+")).any { it.startsWith(needle) } -> 2; else -> 3 } }
-            .flatMap { it.value.asSequence() }
-        if (!scanNames) return indexed.distinct().take(max).toList()
-        val unicodeNamed = englishNames.asSequence().filter { (_, name) -> name.contains(needle) }
-            .sortedBy { (_, name) -> if (name.startsWith(needle)) 0 else 1 }.map { it.key }
-        return (indexed + unicodeNamed).distinct().take(max).toList()
+        if (needle.isEmpty() || max <= 0) return emptyList()
+        // Stable rank buckets avoid sorting and repeatedly tokenizing every matching term.
+        val ranked = Array(4) { ArrayList<Set<String>>() }
+        for (term in searchTerms) {
+            if (!term.key.contains(needle)) continue
+            val rank = when {
+                term.key == needle -> 0
+                term.key.startsWith(needle) -> 1
+                term.words.any { it.startsWith(needle) } -> 2
+                else -> 3
+            }
+            ranked[rank].add(term.emoji)
+        }
+        val result = linkedSetOf<String>()
+        for (bucket in ranked) for (values in bucket) for (emoji in values) {
+            result.add(emoji)
+            if (result.size >= max) return result.toList()
+        }
+        if (scanNames) {
+            val contains = ArrayList<String>()
+            for ((emoji, name) in englishNames) {
+                if (!name.contains(needle)) continue
+                if (name.startsWith(needle)) {
+                    result.add(emoji)
+                    if (result.size >= max) return result.toList()
+                } else contains.add(emoji)
+            }
+            for (emoji in contains) {
+                result.add(emoji)
+                if (result.size >= max) break
+            }
+        }
+        return result.toList()
     }
 
     private fun categoryFor(emoji: String): String {

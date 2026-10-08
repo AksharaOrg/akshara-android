@@ -37,7 +37,7 @@ class KeyboardPolicyTest {
     @Test fun punctuationSettingKeepsCommaAndPeriodBesideSpace() {
         val rows = KeyboardLayoutFactory.typingRows(
             org.akshara.ime.engine.InputMode.PHONETIC, KeyboardLayer.LETTERS, false, false,
-            EditorLayout.TEXT, "none", true, "Done", "Akshara", false, "EN", true
+            EditorLayout.TEXT, "none", false, "Done", "Akshara", false, "EN", true
         )
         val bottom = rows.last().keys
         val space = bottom.indexOfFirst { it.action == KeyCode.SPACE }
