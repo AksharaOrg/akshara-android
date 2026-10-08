@@ -169,8 +169,10 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         }
         if (oldSelStart != newSelStart || oldSelEnd != newSelEnd) {
             precedingDirty = true
+            updateSuggestions()
+        } else {
+            updateEnglishCapitalization()
         }
-        updateEnglishCapitalization()
     }
 
     override fun onCharacter(value: String) {
@@ -509,9 +511,10 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             val previous = ic.getTextBeforeCursor(1, 0)?.toString()?.lastOrNull()
             SmartPunctuationSpacing.smartQuote(value, previous)
         } else value
-        if (!persistentEnglish && editorLayout == EditorLayout.TEXT && prefs.smartPunctuation && quoted.isNotEmpty() && quoted != " " && !quoted.startsWith("\n")) {
+        if (editorLayout == EditorLayout.TEXT && prefs.smartPunctuation && quoted.isNotEmpty() && quoted != " " && !quoted.startsWith("\n")) {
             val before = ic.getTextBeforeCursor(8, 0)?.toString().orEmpty()
-            val change = SmartPunctuationSpacing.adjustment(quoted, before, punctuationField())
+            val field = if (persistentEnglish) SmartPunctuationSpacing.FieldKind.SUPPRESSES_SENTENCE_SPACING else punctuationField()
+            val change = SmartPunctuationSpacing.adjustment(quoted, before, field)
             if (change.deletePrecedingCount > 0) ic.deleteSurroundingText(change.deletePrecedingCount, 0)
             ic.commitText(change.text, 1)
         } else {

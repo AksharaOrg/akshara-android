@@ -1,6 +1,7 @@
 package org.akshara.ime.ime
 
 import android.content.Context
+import android.os.Looper
 import android.text.InputType
 import android.view.View
 import android.view.ViewGroup
@@ -14,7 +15,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import org.robolectric.util.ReflectionHelpers
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 class EnglishTypingIntegrationTest {
@@ -124,6 +127,34 @@ class EnglishTypingIntegrationTest {
         assertEquals("the the ", editor.text.toString())
         service.onBackspace(false)
         assertEquals("the the", editor.text.toString())
+    }
+
+    @Test fun movingCursorIntoWordRefreshesSuggestions() = withEditor { service, editor, view, _ ->
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
+        ReflectionHelpers.getField<java.util.concurrent.ExecutorService>(service, "executor")
+            .submit {}.get(5, TimeUnit.SECONDS)
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        editor.setText("hello teh")
+        view.setCandidates(listOf("stale"))
+        editor.setSelection(7)
+        service.onUpdateSelection(9, 9, 7, 7, -1, -1)
+        repeat(150) {
+            Shadows.shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
+            if (ReflectionHelpers.getField<List<String>>(view, "candidates").contains("the")) return@withEditor
+            Thread.sleep(10)
+        }
+        fail("Suggestions did not refresh for the word under the cursor")
+    }
+
+    @Test fun englishPunctuationRemovesSpaceBeforeClosingMark() = withEditor { service, editor, _, _ ->
+        service.onCandidate("hello")
+        service.onCharacter(",")
+        assertEquals("hello,", editor.text.toString())
+
+        editor.setText("hello ")
+        editor.setSelection(editor.text.length)
+        service.onCharacter(".")
+        assertEquals("hello.", editor.text.toString())
     }
 
     @Test fun fastTypingHonorsManualShiftAndCapsLock() = withEditor { service, editor, view, _ ->
