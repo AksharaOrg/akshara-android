@@ -247,9 +247,23 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         val word = commitComposition()
         if (latinWordActive) endLatinWord()
         val ic = currentInputConnection
+        val existingSpace = ic != null && ic.getSelectedText(0).isNullOrEmpty() &&
+            ic.getTextAfterCursor(1, 0)?.firstOrNull() == ' '
         val corrected = (phonetic != null && applyPhoneticChoice(phonetic.first, phonetic.second, word)) ||
             applyAutocorrection(englishWord ?: word, " ")
         if (corrected) {
+            if (existingSpace) {
+                ic?.deleteSurroundingText(0, 1)
+                pendingAutocorrection = pendingAutocorrection?.copy(restoreSeparatorOnUndo = true)
+            }
+            lastSpaceAt = SystemClock.elapsedRealtime()
+        } else if (existingSpace) {
+            val connection = requireNotNull(ic)
+            connection.beginBatchEdit()
+            try {
+                connection.commitText(" ", 1)
+                connection.deleteSurroundingText(0, 1)
+            } finally { connection.endBatchEdit() }
             lastSpaceAt = SystemClock.elapsedRealtime()
         } else if (ic != null && tryDoubleSpace(ic)) {
             lastSpaceAt = 0L
@@ -559,7 +573,13 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         currentInputConnection?.finishComposingText(); preview.clear(); composition.clear(); slsSource.clear(); generation++
         return word
     }
-    private data class PendingAutocorrection(val original: String, val replacement: String, val suffix: String)
+    private data class PendingAutocorrection(
+        val original: String,
+        val replacement: String,
+        val suffix: String,
+        val cursorPosition: Int?,
+        val restoreSeparatorOnUndo: Boolean = false
+    )
 
     private fun applyAutocorrection(word: String?, suffix: String): Boolean {
         if (!(if (persistentEnglish) prefs.englishAutocorrect else prefs.autocorrect) || restricted || editorLayout != EditorLayout.TEXT || word.isNullOrBlank()) return false
@@ -593,7 +613,8 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             ic.deleteSurroundingText(word.length, 0)
             ic.commitText(replacement + suffix, 1)
         } finally { ic.endBatchEdit() }
-        pendingAutocorrection = PendingAutocorrection(word, replacement, suffix)
+        val cursorPosition = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0)?.selectionEnd
+        pendingAutocorrection = PendingAutocorrection(word, replacement, suffix, cursorPosition)
         learn(replacement)
         precedingDirty = true
         return true
@@ -602,6 +623,11 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private fun undoAutocorrection(): Boolean {
         val pending = pendingAutocorrection ?: return false
         val ic = currentInputConnection ?: return false
+        val currentPosition = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0)?.selectionEnd
+        if (pending.cursorPosition != null && currentPosition != pending.cursorPosition) {
+            pendingAutocorrection = null
+            return false
+        }
         val expected = pending.replacement + pending.suffix
         if (ic.getTextBeforeCursor(expected.length + 1, 0)?.toString()?.endsWith(expected) != true) {
             pendingAutocorrection = null
@@ -610,7 +636,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         ic.beginBatchEdit()
         try {
             ic.deleteSurroundingText(expected.length, 0)
-            ic.commitText(pending.original, 1)
+            ic.commitText(pending.original + if (pending.restoreSeparatorOnUndo) pending.suffix else "", 1)
         } finally { ic.endBatchEdit() }
         pendingAutocorrection = null
         rejectedCorrections.add(pending.original.lowercase(java.util.Locale.ROOT))

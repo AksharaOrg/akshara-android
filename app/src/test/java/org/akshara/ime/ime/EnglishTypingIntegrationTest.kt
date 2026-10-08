@@ -119,6 +119,13 @@ class EnglishTypingIntegrationTest {
         assertEquals("the, world", editor.text.toString())
     }
 
+    @Test fun acceptingSuggestionReplacesSelectedWordWithoutExtraSpace() = withEditor { service, editor, _, _ ->
+        editor.setText("say teh now")
+        editor.setSelection(4, 7)
+        service.onCandidate("the")
+        assertEquals("say the now", editor.text.toString())
+    }
+
     @Test fun acceptingSuggestionDoesNotUndoAnEarlierAutocorrection() = withEditor { service, editor, _, _ ->
         "teh".forEach { service.onCharacter(it.toString()) }
         service.onSpace()
@@ -127,6 +134,33 @@ class EnglishTypingIntegrationTest {
         assertEquals("the the ", editor.text.toString())
         service.onBackspace(false)
         assertEquals("the the", editor.text.toString())
+    }
+
+    @Test fun backspaceAfterMovingCursorDoesNotUndoCorrectionAtAnotherWord() = withEditor { service, editor, _, _ ->
+        service.onCharacter("the ")
+        "teh".forEach { service.onCharacter(it.toString()) }
+        service.onSpace()
+        assertEquals("the the ", editor.text.toString())
+        editor.setSelection(4)
+        service.onUpdateSelection(8, 8, 4, 4, -1, -1)
+        service.onBackspace(false)
+        assertEquals("thethe ", editor.text.toString())
+    }
+
+    @Test fun spaceBeforeExistingSeparatorCorrectsWithoutDuplicatingIt() = withEditor { service, editor, _, _ ->
+        editor.setText("teh world")
+        editor.setSelection(3)
+        service.onSpace()
+        assertEquals("the world", editor.text.toString())
+        assertEquals(4, editor.selectionStart)
+        service.onBackspace(false)
+        assertEquals("teh world", editor.text.toString())
+
+        editor.setText("hello world")
+        editor.setSelection(5)
+        service.onSpace()
+        assertEquals("hello world", editor.text.toString())
+        assertEquals(6, editor.selectionStart)
     }
 
     @Test fun movingCursorIntoWordRefreshesSuggestions() = withEditor { service, editor, view, _ ->
