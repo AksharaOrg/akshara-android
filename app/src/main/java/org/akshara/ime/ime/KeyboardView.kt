@@ -147,7 +147,7 @@ class KeyboardView(
     private val inlineRow = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(8), dp(2), dp(8), dp(2))
+        setPadding(dp(8), 0, dp(8), 0)
     }
     private var inlineAutofillGeneration = 0
     private val clipboardHandle = View(context).apply {
@@ -416,17 +416,20 @@ class KeyboardView(
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || suggestions.isEmpty()) {
             return
         }
-        val size = android.util.Size((resources.displayMetrics.widthPixels * .72f).toInt(), suggestionRailHeight())
+        // Leave room for the row padding and spacing so two autofill chips fit at once.
+        val chipWidth = ((resources.displayMetrics.widthPixels - dp(32)) / 2).coerceAtLeast(dp(64))
+        val size = android.util.Size(chipWidth, suggestionRailHeight())
         val executor = java.util.concurrent.Executor { handler.post(it) }
         suggestions.take(3).forEach { suggestion ->
             // Inflation is asynchronous, so reserve each suggestion's place before callbacks arrive.
             val slot = FrameLayout(context)
-            inlineRow.addView(slot, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT).apply {
+            inlineRow.addView(slot, LinearLayout.LayoutParams(size.width, size.height).apply {
                 marginEnd = dp(8)
             })
             suggestion.inflate(context, size, executor) { view ->
                 if (generation != inlineAutofillGeneration || view == null) return@inflate
-                slot.addView(view, FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+                // The inflated surface reports no intrinsic width on some Android builds.
+                slot.addView(view, FrameLayout.LayoutParams(size.width, size.height))
                 inlineAutofill.visibility = VISIBLE
                 updateRailHeight()
                 bindRail(false)
