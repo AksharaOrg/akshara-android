@@ -132,7 +132,8 @@ class KeyboardView(
             render()
         },
         { actions.onClipboardPreviewPaste() },
-        { actions.onEmojiPicked(it) }
+        { actions.onEmojiPicked(it) },
+        { actions.onSettings() }
     )
     private val railHost = FrameLayout(context).apply {
         clipChildren = false
@@ -202,7 +203,7 @@ class KeyboardView(
             override fun onCommitPreviewDelete() = actions.onCommitPreviewDelete()
             override fun onCancelPreviewDelete() = actions.onCancelPreviewDelete()
         },
-        KeyboardColors(key, utility, ink, palette.dark, palette.highContrast),
+        KeyboardColors(key, utility, ink, palette.dark, palette.highContrast, prefs.keyHints),
         onLayer = { next -> layer = next; render() },
         onShift = { updateShift() }
     )
@@ -493,7 +494,8 @@ class KeyboardView(
 
     private fun bindRail(animated: Boolean) {
         val show = layer == KeyboardLayer.LETTERS && editorLayout == EditorLayout.TEXT
-        if (inlineAutofill.visibility == VISIBLE) {
+        // The collapsed rail does not clip, so its pinned actions would draw over the emoji board.
+        if (inlineAutofill.visibility == VISIBLE || !keepSuggestionRail()) {
             rail.visibility = GONE
             return
         }
@@ -581,6 +583,7 @@ class KeyboardView(
             return
         }
         val sections = listOf("Recent emoji" to recentEmoji) + emojiRepo.categories.map { it.name to it.emoji }
+        if (recentEmoji.isEmpty() && emojiCategoryIndex == 0) emojiCategoryIndex = 1
         val catalog = EmojiCatalogView(context, sections, ink, prefs.skinTone,
             onCategory = { index -> emojiCategoryIndex = index; updateEmojiTabs() },
             onPick = { actions.onEmojiPicked(it) })
@@ -647,6 +650,7 @@ class KeyboardView(
                 updateEmojiTabs()
             }.apply { setPadding(dp(10), dp(10), dp(10), dp(10)) }
             emojiTabs += tab
+            if (index == 0 && recentEmoji.isEmpty()) tab.visibility = GONE
             tabs.addView(tab, LayoutParams(dp(40), dp(36)))
         }
         scroll.addView(tabs)

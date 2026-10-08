@@ -127,13 +127,12 @@ internal class EmojiCatalogView(
     private data class Entry(val text: String, val category: Int, val heading: Boolean = false, val empty: Boolean = false)
     private val columns = EmojiBoard.columns(context)
     private val entries = buildList {
+        // Like Gboard, an empty section (no recent emoji yet) is left out rather than shown as a placeholder.
         sections.forEachIndexed { category, (title, emoji) ->
+            if (emoji.isEmpty()) return@forEachIndexed
             add(Entry(title, category, heading = true))
-            if (emoji.isEmpty()) add(Entry("Recently used emoji appear here", category, empty = true))
-            else {
-                emoji.forEach { add(Entry(it, category)) }
-                repeat((columns - emoji.size % columns) % columns) { add(Entry("", category)) }
-            }
+            emoji.forEach { add(Entry(it, category)) }
+            repeat((columns - emoji.size % columns) % columns) { add(Entry("", category)) }
         }
     }
     private val manager = GridLayoutManager(context, columns).apply {

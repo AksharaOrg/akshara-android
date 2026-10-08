@@ -234,6 +234,12 @@ class SettingsActivity : Activity() {
             }
         }
         section(R.string.category_layout) {
+            toggle(R.string.key_hints, R.string.key_hints_summary, R.drawable.ic_keyboard, R.color.settings_icon_gray, prefs.keyHints) {
+                prefs.keyHints = it
+            }
+            toggle(R.string.show_with_hardware_keyboard, R.string.show_with_hardware_keyboard_summary, R.drawable.ic_keyboard, R.color.settings_icon_indigo, prefs.showWithHardwareKeyboard) {
+                prefs.showWithHardwareKeyboard = it
+            }
             choice(R.string.key_spacing, R.drawable.ic_keyboard, R.color.settings_icon_gray, R.array.spacing_entries, R.array.spacing_values, prefs.keySpacing) {
                 prefs.keySpacing = it
             }
