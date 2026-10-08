@@ -968,7 +968,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     companion object {
-        private const val SUGGESTION_DEBOUNCE_MS = 24L
+        private const val SUGGESTION_DEBOUNCE_MS = 12L
         private const val CLIPBOARD_PREVIEW_MAX_AGE_MS = 5 * 60 * 1000L
         fun enterAction(info: EditorInfo?): Int {
             if (info == null) return EditorInfo.IME_ACTION_NONE
