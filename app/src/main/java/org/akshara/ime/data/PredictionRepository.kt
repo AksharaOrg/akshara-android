@@ -167,8 +167,13 @@ class PredictionRepository(private val context: Context, private val learning: L
         // Candidates come back in the style of the options; keep those whose dictionary spelling is a word.
         val exact = all.filter { countOf(lexicon, it, options) > 0 }
         val key = SoundLexicon.soundKey(spelled)
-        val learned = context.learned.keys.filter { SoundLexicon.soundKey(it) == key }
-        val ranked = (exact + learned).distinct().sortedByDescending { context.score(it, countOf(lexicon, it, options), 1.0) }
+        val learned = context.learned.keys.filter { SoundLexicon.soundKey(it) == key }.map { word ->
+            val styled = SoundLexicon.restyle(word, options)
+            // Retain the learned spelling's score, but only offer it in the selected style.
+            Candidate(styled, context.score(word, countOf(lexicon, styled, options), 1.0))
+        }
+        val ranked = (exact.map { Candidate(it, context.score(it, countOf(lexicon, it, options), 1.0)) } + learned)
+            .sortedByDescending { it.score }.map { it.text }.distinct()
         return listOfNotNull(pinned) + ranked.filter { it != pinned }
     }
 

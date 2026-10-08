@@ -5,6 +5,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import androidx.test.core.app.ApplicationProvider
 import org.akshara.ime.data.PredictionRepository
+import org.akshara.ime.data.LocalLearningStore
 import org.akshara.ime.engine.InputMode
 import org.akshara.ime.engine.SinhalaEngine
 import org.akshara.ime.engine.SmartPhoneticV2
@@ -80,5 +81,42 @@ class SmartPhoneticV2IntegrationTest {
         service.onSpace()
         service.type("d")
         assertEquals("ක්‍රමය ද්", editor.text.toString())
+    }
+
+    @Test fun archaicTouchMarkerStaysInCompositionAndBackspaceRecomposes() = withEditor({ v2Archaic = true }) { service, editor ->
+        service.type("dham+ma")
+        assertEquals("ධම\u200D්ම", editor.text.toString())
+        service.onBackspace(false)
+        service.onBackspace(false)
+        service.onBackspace(false)
+        assertEquals("ධම්", editor.text.toString())
+        service.type("+ma")
+        assertEquals("ධම\u200D්ම", editor.text.toString())
+    }
+
+    @Test fun archaicTildeSequencesReachTheConverter() = withEditor({ v2Archaic = true }) { service, editor ->
+        service.type("~l")
+        assertEquals("ඏ", editor.text.toString())
+        service.type("l")
+        assertEquals("ඐ", editor.text.toString())
+        service.onBackspace(false)
+        service.onBackspace(false)
+        service.onBackspace(false)
+        service.type("ka~n")
+        assertEquals("කඁ", editor.text.toString())
+    }
+
+    @Test fun archaicMarkersRemainLiteralWhenOptionIsOff() = withEditor { service, editor ->
+        service.type("dham+ma")
+        assertEquals("ධම්+ම", editor.text.toString())
+    }
+
+    @Test fun learnedSpellingDoesNotUndoJoinedRepayaOnSpace() = withEditor({ v2RepayaZwj = true }) { service, editor ->
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        LocalLearningStore(context).record("කර්ම", null)
+        service.type("karma")
+        assertEquals("කර්\u200Dම", editor.text.toString())
+        service.onSpace()
+        assertEquals("කර්\u200Dම ", editor.text.toString())
     }
 }

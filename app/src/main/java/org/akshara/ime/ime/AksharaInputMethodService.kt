@@ -193,7 +193,10 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             slsSource.append(value)
             val rendered = SinhalaEngine.normalizeSls(slsSource.toString())
             composition.replace(rendered); writePreview(rendered, true)
-        } else if (prefs.mode != InputMode.WIJESEKARA && value.length == 1 && value[0].isLetter() && value[0].code < 128) {
+        } else if (prefs.mode != InputMode.WIJESEKARA && value.length == 1 &&
+            ((value[0].isLetter() && value[0].code < 128) ||
+                (phoneticV2Active() && SinhalaEngine.smartPhoneticOptions.archaic && value in setOf("+", "~")))) {
+            // Archaic markers must stay in the source so the next key can complete +C, ~l or ~n.
             val rendered = composition.type(value, prefs.mode)
             writePreview(rendered, true)
         } else {
