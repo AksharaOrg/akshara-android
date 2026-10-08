@@ -306,6 +306,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onCandidate(value: String) {
         validatePreview()
         feedback()
+        pendingAutocorrection = null
         if (value == AksharaEasterEgg.TRUE_NAME_DISPLAY) {
             writePreview(AksharaEasterEgg.TRUE_NAME_INSERT, true); preview.clear()
             composition.clear(); slsSource.clear(); updateSuggestions(); return
@@ -314,6 +315,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             val editedWord = currentWordAtCursor()
             val editing = isEditingExistingWord(editedWord)
             val typed = if (editing) editedWord.text else currentLatinPrefix()
+            val nextCharacter = currentInputConnection?.getTextAfterCursor(editedWord.suffix.length + 1, 0)
+                ?.getOrNull(editedWord.suffix.length)
+            val separator = if (editedWord.suffix.isEmpty() && nextCharacter == null) " " else ""
             currentInputConnection?.beginBatchEdit()
             try {
                 if (typed.isNotEmpty()) {
@@ -322,7 +326,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
                         if (editing) editedWord.suffix.length else 0
                     )
                 }
-                currentInputConnection?.commitText("$value ", 1)
+                currentInputConnection?.commitText(value + separator, 1)
             } finally { currentInputConnection?.endBatchEdit() }
             learn(value)
             precedingDirty = true
