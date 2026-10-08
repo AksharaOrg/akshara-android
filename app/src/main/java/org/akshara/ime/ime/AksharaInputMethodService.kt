@@ -22,8 +22,11 @@ import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.InlineSuggestionsRequest
 import android.view.inputmethod.InlineSuggestionsResponse
+import android.view.inputmethod.InlineSuggestion
 import android.widget.inline.InlinePresentationSpec
 import android.util.Size
+import androidx.autofill.inline.UiVersions
+import androidx.autofill.inline.v1.InlineSuggestionUi
 import androidx.core.view.WindowCompat
 import androidx.core.view.inputmethod.EditorInfoCompat
 import androidx.core.view.inputmethod.InputConnectionCompat
@@ -66,6 +69,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private var previousCommittedWord: String? = null
     private var recentEmoji = mutableListOf<String>()
     private var editorLayout = EditorLayout.TEXT
+    private var pendingInlineSuggestions = emptyList<InlineSuggestion>()
     private var spaceIntroAllowed = true
     private var latinWordActive = false
     private var persistentEnglish = false
@@ -93,6 +97,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onCreateInputView(): View {
         window?.window?.let { WindowCompat.setDecorFitsSystemWindows(it, false) }
         keyboard = KeyboardView(this, this, prefs)
+        if (pendingInlineSuggestions.isNotEmpty()) keyboard.setInlineAutofillSuggestions(pendingInlineSuggestions)
         applySystemBarAppearance()
         return keyboard
     }
@@ -110,6 +115,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         secureEditor = attribute?.let(::isSecureEditor) ?: true
         clipboardEligible = attribute?.let(::isClipboardEditor) ?: false
         precedingDirty = true
+        pendingInlineSuggestions = emptyList()
         if (::keyboard.isInitialized) keyboard.setInlineAutofillSuggestions(emptyList())
     }
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -135,7 +141,12 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         applySystemBarAppearance()
         updateSuggestions()
     }
-    override fun onFinishInput() { deleteAnchor = -1; deleteLength = 0; cancelComposition(false); super.onFinishInput() }
+    override fun onFinishInput() {
+        deleteAnchor = -1; deleteLength = 0; cancelComposition(false)
+        pendingInlineSuggestions = emptyList()
+        if (::keyboard.isInitialized) keyboard.setInlineAutofillSuggestions(emptyList())
+        super.onFinishInput()
+    }
     override fun onDestroy() {
         clearClipboardPreview()
         stopClipboardListener()
@@ -437,20 +448,25 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
 
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !prefs.inlineAutofill) return null
+        if (UiVersions.INLINE_UI_VERSION_1 !in UiVersions.getVersions(uiExtras)) return null
+        val styles = UiVersions.newStylesBuilder()
+            .addStyle(InlineSuggestionUi.newStyleBuilder().build())
+            .build()
         val landscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         val height = KeyboardGeometry.railHeightPx(landscape, resources.displayMetrics.density).toInt()
         val spec = InlinePresentationSpec.Builder(
             Size((64 * resources.displayMetrics.density).toInt(), height),
             Size(resources.displayMetrics.widthPixels, height)
-        ).setStyle(uiExtras).build()
+        ).setStyle(styles).build()
         return InlineSuggestionsRequest.Builder(listOf(spec))
             .setMaxSuggestionCount(3)
             .build()
     }
 
     override fun onInlineSuggestionsResponse(response: InlineSuggestionsResponse): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !::keyboard.isInitialized || !prefs.inlineAutofill) return false
-        keyboard.setInlineAutofillSuggestions(response.inlineSuggestions)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !prefs.inlineAutofill) return false
+        pendingInlineSuggestions = response.inlineSuggestions
+        if (::keyboard.isInitialized) keyboard.setInlineAutofillSuggestions(pendingInlineSuggestions)
         return true
     }
 
@@ -957,7 +973,8 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         keyboard.learningEnabled = !restricted && editorLayout == EditorLayout.TEXT
         keyboard.setRecentEmoji(recentEmojiStore.items())
         keyboard.setClipboardItems(clipboardHistory.items(), clipboardHistory.pinnedItems())
-        if (!prefs.inlineAutofill) keyboard.setInlineAutofillSuggestions(emptyList())
+        if (!prefs.inlineAutofill) pendingInlineSuggestions = emptyList()
+        keyboard.setInlineAutofillSuggestions(pendingInlineSuggestions)
         if (inputViewActive) refreshClipboard() else clearClipboardPreview()
         listenForClipboard()
         applySystemBarAppearance()

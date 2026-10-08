@@ -419,11 +419,14 @@ class KeyboardView(
         val size = android.util.Size((resources.displayMetrics.widthPixels * .72f).toInt(), suggestionRailHeight())
         val executor = java.util.concurrent.Executor { handler.post(it) }
         suggestions.take(3).forEach { suggestion ->
+            // Inflation is asynchronous, so reserve each suggestion's place before callbacks arrive.
+            val slot = FrameLayout(context)
+            inlineRow.addView(slot, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT).apply {
+                marginEnd = dp(8)
+            })
             suggestion.inflate(context, size, executor) { view ->
                 if (generation != inlineAutofillGeneration || view == null) return@inflate
-                inlineRow.addView(view, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT).apply {
-                    marginEnd = dp(8)
-                })
+                slot.addView(view, FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
                 inlineAutofill.visibility = VISIBLE
                 updateRailHeight()
                 bindRail(false)
