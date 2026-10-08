@@ -14,6 +14,38 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class KeyboardInteractionTest {
+    @Test fun numericPadsHaveNoDeadCellsAndKeepActionsEasyToReach() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val typed = StringBuilder()
+        var deleted = 0
+        var entered = 0
+        val actions = object : KeyboardActions by idleActions() {
+            override fun onCharacter(value: String) { typed.append(value) }
+            override fun onBackspace(word: Boolean) { deleted++ }
+            override fun onEnter() { entered++ }
+        }
+        val view = KeyboardView(context, actions, KeyboardPreferences(context))
+        for (editor in listOf(EditorLayout.NUMBER, EditorLayout.SIGNED_NUMBER, EditorLayout.DECIMAL,
+            EditorLayout.SIGNED_DECIMAL, EditorLayout.PHONE, EditorLayout.DATETIME)) {
+            view.configure(InputMode.PHONETIC, false, "Done", editor)
+            layoutKeyboard(view)
+            for (digit in '0'..'9') assertNotNull("$editor $digit", findButton(view, digit.toString()))
+            val zero = findButton(view, "0")!!
+            val one = findButton(view, "1")!!
+            if (editor in listOf(EditorLayout.NUMBER, EditorLayout.SIGNED_NUMBER, EditorLayout.DECIMAL)) {
+                assertTrue("$editor zero key should fill unused bottom slots", zero.width > one.width)
+            }
+            val delete = findButton(view, "Delete")!!
+            val enter = findButton(view, "Enter")!!
+            assertTrue("$editor delete should span two rows", delete.height > one.height * 2)
+            assertTrue("$editor enter should span two rows", enter.height > one.height * 2)
+            one.performClick(); zero.performClick(); delete.performClick(); enter.performClick()
+        }
+        assertEquals("101010101010", typed.toString())
+        assertEquals(6, deleted)
+        assertEquals(6, entered)
+    }
+
     @Test @org.robolectric.annotation.Config(qualifiers = "land")
     fun landscapePanelsKeepUsableHeights() = auxiliaryPanelsKeepUsableHeightsIncludingTallAndOptionalRows()
     @Test fun emojiSearchTypingDoesNotWriteIntoHostEditor() {

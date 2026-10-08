@@ -410,21 +410,23 @@ class KeyboardView(
     fun setInlineAutofillSuggestions(suggestions: List<InlineSuggestion>) {
         val generation = ++inlineAutofillGeneration
         inlineRow.removeAllViews()
+        inlineAutofill.visibility = GONE
+        updateRailHeight()
+        bindRail(false)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || suggestions.isEmpty()) {
-            inlineAutofill.visibility = GONE
-            rail.visibility = VISIBLE
             return
         }
-        inlineAutofill.visibility = VISIBLE
-        rail.visibility = GONE
         val size = android.util.Size((resources.displayMetrics.widthPixels * .72f).toInt(), suggestionRailHeight())
         val executor = java.util.concurrent.Executor { handler.post(it) }
         suggestions.take(3).forEach { suggestion ->
             suggestion.inflate(context, size, executor) { view ->
-                if (generation != inlineAutofillGeneration) return@inflate
+                if (generation != inlineAutofillGeneration || view == null) return@inflate
                 inlineRow.addView(view, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT).apply {
                     marginEnd = dp(8)
                 })
+                inlineAutofill.visibility = VISIBLE
+                updateRailHeight()
+                bindRail(false)
             }
         }
     }
@@ -457,9 +459,7 @@ class KeyboardView(
         popups.dismiss()
         sliverPanel = null
         if (layer != KeyboardLayer.CLIPBOARD) clipboardExtraPx = 0
-        railHost.layoutParams = (railHost.layoutParams as LayoutParams).apply {
-            height = if (keepSuggestionRail()) suggestionRailHeight() else 0
-        }
+        updateRailHeight()
         bindRail(false)
         updateClipboardHandle()
         if (editorLayout in numericEditors) {
@@ -513,7 +513,16 @@ class KeyboardView(
         else -> "EN"
     }
 
-    private fun keepSuggestionRail() =
+    private fun updateRailHeight() {
+        val height = if (keepSuggestionRail()) suggestionRailHeight() else 0
+        val params = railHost.layoutParams as LayoutParams
+        if (params.height != height) {
+            params.height = height
+            railHost.layoutParams = params
+        }
+    }
+
+    private fun keepSuggestionRail() = inlineAutofill.visibility == VISIBLE ||
         editorLayout in setOf(EditorLayout.TEXT, EditorLayout.URI, EditorLayout.EMAIL) && layer in setOf(
             KeyboardLayer.LETTERS, KeyboardLayer.NUMBERS, KeyboardLayer.SYMBOLS, KeyboardLayer.CLIPBOARD
         )
@@ -550,22 +559,28 @@ class KeyboardView(
         val rows = when (editorLayout) {
             EditorLayout.PHONE -> listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), listOf("+","0","#"))
             EditorLayout.DATETIME -> listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), listOf("/","0",":"))
-            else -> listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), listOf(
-                if (editorLayout == EditorLayout.SIGNED_NUMBER || editorLayout == EditorLayout.SIGNED_DECIMAL) "−" else "",
-                "0",
-                if (editorLayout == EditorLayout.DECIMAL || editorLayout == EditorLayout.SIGNED_DECIMAL) "." else ""
-            ))
+            else -> listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), buildList {
+                if (editorLayout == EditorLayout.SIGNED_NUMBER || editorLayout == EditorLayout.SIGNED_DECIMAL) add("−")
+                add("0")
+                if (editorLayout == EditorLayout.DECIMAL || editorLayout == EditorLayout.SIGNED_DECIMAL) add(".")
+            })
         }
+        val pad = LinearLayout(context).apply { orientation = HORIZONTAL }
+        val digits = LinearLayout(context).apply { orientation = VERTICAL }
         rows.forEachIndexed { rowIndex, values ->
             val row = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER }
             values.forEach { value ->
-                if (value.isEmpty()) row.addView(Space(context), LayoutParams(0, keyHeight(), 1f).keyMargins())
-                else row.addView(button(value, key, value) { actions.onCharacter(if (value == "−") "-" else value) }, LayoutParams(0, keyHeight(), 1f).keyMargins())
+                val weight = if (rowIndex == 3 && value == "0") 4 - values.size.toFloat() else 1f
+                row.addView(button(value, key, value) { actions.onCharacter(if (value == "−") "-" else value) }, LayoutParams(0, keyHeight(), weight).keyMargins())
             }
-            val action = when (rowIndex) { 0 -> backspaceButton(); 3 -> enterButton(); else -> Space(context) }
-            row.addView(action, LayoutParams(0, keyHeight(), 1f).keyMargins())
-            body.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, rowHeight()))
+            digits.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, rowHeight()))
         }
+        pad.addView(digits, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 3.2f))
+        val actionsColumn = LinearLayout(context).apply { orientation = VERTICAL }
+        actionsColumn.addView(backspaceButton(), LayoutParams(LayoutParams.MATCH_PARENT, rowHeight() * 2).keyMargins())
+        actionsColumn.addView(enterButton(), LayoutParams(LayoutParams.MATCH_PARENT, rowHeight() * 2).keyMargins())
+        pad.addView(actionsColumn, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, .8f))
+        body.addView(pad, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         if (editorLayout == EditorLayout.PHONE) {
             val extras = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER }
             extras.addView(button("*", utility, "Asterisk") { actions.onCharacter("*") }, LayoutParams(0, dp(46), 1f).keyMargins())

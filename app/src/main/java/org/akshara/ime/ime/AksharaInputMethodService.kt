@@ -11,7 +11,6 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
-import android.os.LocaleList
 import android.os.Looper
 import android.os.SystemClock
 import android.net.Uri
@@ -437,20 +436,20 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onEvaluateInputViewShown() = super.onEvaluateInputViewShown() || prefs.showWithHardwareKeyboard
 
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || restricted || !prefs.inlineAutofill) return null
-        val height = (KeyboardGeometry.railHeightPx(false, resources.displayMetrics.density)).toInt()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !prefs.inlineAutofill) return null
+        val landscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val height = KeyboardGeometry.railHeightPx(landscape, resources.displayMetrics.density).toInt()
         val spec = InlinePresentationSpec.Builder(
             Size((64 * resources.displayMetrics.density).toInt(), height),
             Size(resources.displayMetrics.widthPixels, height)
         ).setStyle(uiExtras).build()
         return InlineSuggestionsRequest.Builder(listOf(spec))
             .setMaxSuggestionCount(3)
-            .setSupportedLocales(LocaleList(java.util.Locale("si", "LK"), java.util.Locale.ENGLISH))
             .build()
     }
 
     override fun onInlineSuggestionsResponse(response: InlineSuggestionsResponse): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !::keyboard.isInitialized || restricted || !prefs.inlineAutofill) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !::keyboard.isInitialized || !prefs.inlineAutofill) return false
         keyboard.setInlineAutofillSuggestions(response.inlineSuggestions)
         return true
     }
