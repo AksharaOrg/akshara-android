@@ -1,0 +1,142 @@
+package org.akshara.ime.data
+
+import org.akshara.ime.engine.SmartPhoneticV2
+
+/**
+ * Sound-alike disambiguation for Smart Phonetic v2: a port of `lexicon.py` from the
+ * sinhala-phonetic-orthography research repo. Words are indexed by a sound key that erases the
+ * distinctions speakers don't hear or don't write in Latin script (aspiration, ණ/න, ළ/ල, ශ/ෂ/ස,
+ * ද/ඩ, vowel length, sanyaka vs cluster …), so "honda" finds හොඳ although the rules spell හොන්ද.
+ * Words are returned in the style of the converter options ([restyle]), so a word list in the usual
+ * style (කෲර, කර්ම) doesn't undo the user's spelling options (ක්‍රූර, කර්‍ම).
+ * A list with no ZWJ at all is repaired with [normalize]; one that has ZWJ is used as written, since
+ * [normalize] would also join across word boundaries (බවත්ය).
+ * Checked against the reference by `SmartPhoneticV2Test`.
+ */
+class SoundLexicon(rows: Iterable<Pair<String, Int>>) {
+    val count = HashMap<String, Int>()
+    private val byKey = HashMap<String, MutableList<String>>()
+    private val keys: List<String>
+
+    init {
+        val list = rows.filter { it.first.isNotEmpty() }
+        val repair = list.none { ZWJ in it.first }
+        list.forEach { (word, n) -> (if (repair) normalize(word) else word).let { count[it] = (count[it] ?: 0) + n } }
+        count.keys.forEach { byKey.getOrPut(soundKey(it)) { ArrayList(1) }.add(it) }
+        keys = byKey.keys.sorted()
+    }
+
+    fun exact(key: String): List<String> = byKey[key].orEmpty()
+
+    fun prefix(key: String, limit: Int = 200): List<String> {
+        val out = ArrayList<String>()
+        var i = firstKeyAtOrAfter(key)
+        while (i < keys.size && keys[i].startsWith(key) && out.size < limit) out += byKey.getValue(keys[i++])
+        return out
+    }
+
+    /** True when some word's sound key starts with [key]; used to weigh touch input towards real words. */
+    fun hasPrefix(key: String): Boolean = firstKeyAtOrAfter(key).let { it < keys.size && keys[it].startsWith(key) }
+
+    /** Ranked Sinhala spellings for a romanized word, or for a word prefix with [partial]. */
+    fun candidates(
+        roman: String, limit: Int = 5, partial: Boolean = false, options: SmartPhoneticV2.Options = SmartPhoneticV2.Options()
+    ): List<String> {
+        val spelled = SmartPhoneticV2.transliterate(roman, options)
+        val key = soundKey(spelled)
+        val byFrequency = compareByDescending<String> { count[it] ?: 0 }.thenBy { it }
+        // An incomplete word: its last consonant may still take a vowel, so drop a trailing hal.
+        if (partial) return prefix(key.removeSuffix(HAL)).distinct().sortedWith(byFrequency).map { restyle(it, options) }.distinct().take(limit)
+        var ranked = exact(key).sortedWith(byFrequency).map { restyle(it, options) }.distinct()
+        if (isExplicit(roman) && (spelled in ranked || isLoneVowel(spelled))) ranked = listOf(spelled) + ranked.filter { it != spelled }   // explicit markers beat frequency
+        else if (spelled !in ranked) ranked = ranked + spelled                                                  // the rule spelling is always included
+        return ranked.take(limit)
+    }
+
+    private fun firstKeyAtOrAfter(key: String): Int {
+        var lo = 0
+        var hi = keys.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (keys[mid] < key) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    companion object {
+        const val HAL = "්"
+        private const val ZWJ = "‍"
+        private val JOIN = Regex("([ක-ෆ])$HAL(?!$ZWJ)(?=([යර]))")   // lookahead: ය/ර may start the next join
+
+        // Romanization markers that pin down a distinction the sound key erases.
+        private val EXPLICIT = Regex("[KCGJTDNLPBSWVUIEOAXRMH]|z[a-zA-Z]|aa|ii|uu|ee|oo|ae|thh|dh|kh|gh|chh|jh|ph|bh|x")
+
+        private val FOLD_SEQUENCES = listOf(
+            "ෛ" to "යි", "ඓ" to "අයි", "ෞ" to "වු", "ඖ" to "අවු",
+            "ෘ" to HAL + "රු", "ෲ" to HAL + "රු", "ඍ" to "රු", "ඎ" to "රු",
+            "ඥ" to "ග" + HAL + "න",                                                        // G-NS-12
+            "ඟ" to "න" + HAL + "ග", "ඦ" to "න" + HAL + "ජ", "ඬ" to "න" + HAL + "ද",           // R-03
+            "ඳ" to "න" + HAL + "ද", "ඹ" to "ම" + HAL + "බ",
+            "ං" to "න" + HAL, "ඞ" + HAL to "න" + HAL                                        // R-11
+        )
+        private val FOLD_CHARS: Map<Char, String> = mapOf(
+            'ඛ' to "ක", 'ඝ' to "ග", 'ඡ' to "ච", 'ඣ' to "ජ", 'ඨ' to "ට", 'ඪ' to "ද", 'ථ' to "ත", 'ධ' to "ද",
+            'ඵ' to "ප", 'භ' to "බ", 'ඩ' to "ද",                                              // G-SP-01, G-SP-06, R-01
+            'ණ' to "න", 'ළ' to "ල", 'ශ' to "ස", 'ෂ' to "ස", 'ඤ' to "න",                       // G-SP-02…05, G-NS-13
+            'ආ' to "අ", 'ඊ' to "ඉ", 'ඌ' to "උ", 'ඒ' to "එ", 'ඕ' to "ඔ", 'ඇ' to "එ", 'ඈ' to "එ",  // G-SP-07, G-TY-04
+            'ා' to "", 'ී' to "ි", 'ූ' to "ු", 'ේ' to "ෙ", 'ෝ' to "ො", 'ැ' to "ෙ", 'ෑ' to "ෙ",
+            '‍' to ""
+        )
+
+        /** C ් ය / C ් ර takes ZWJ, except after ර (G-HC-14, R-09) and C ් ර after ම න ල (R-07). */
+        private fun joins(c: String, next: String) = c != "ර" && !(next == "ර" && c in "මනල")
+
+        /** Restores the mandatory ZWJ in yansaya and rakaransaya, for word lists that dropped it. */
+        fun normalize(word: String): String =
+            JOIN.replace(word) { it.groupValues[1] + HAL + (if (joins(it.groupValues[1], it.groupValues[2])) ZWJ else "") }
+
+        fun soundKey(text: String): String {
+            var folded = text
+            FOLD_SEQUENCES.forEach { (from, to) -> folded = folded.replace(from, to) }
+            val out = StringBuilder(folded.length)
+            folded.forEach { ch -> FOLD_CHARS[ch]?.let(out::append) ?: out.append(ch) }
+            return out.toString()
+        }
+
+        fun isExplicit(roman: String) = EXPLICIT.containsMatchIn(roman)
+
+        /** One independent vowel letter (අ … ඖ): a list has no such words, yet a letter typed on its own is meant as that letter. */
+        fun isLoneVowel(spelling: String) = spelling.length == 1 && spelling[0] in 'අ'..'ඖ'
+
+        private val GAETTA = Regex("([ක-ෆ])([ෘෲ])")
+        private val REPAYA = Regex("ර$HAL(?!$ZWJ)(?=[ක-ෆ])")
+        private val CLUSTER = Regex("([ක-ෆ])$HAL(?!$ZWJ)(?=([ක-ෆ]))")
+
+        /**
+         * Writes a word in the style the converter options choose, as [SmartPhoneticV2] would (`restyle()` in
+         * the reference): rakaransaya + u for C + ෘ/ෲ (R-06), ZWJ repaya (R-08), classical bandi akuru (R-10).
+         * With no options the word is unchanged.
+         */
+        fun restyle(word: String, options: SmartPhoneticV2.Options): String {
+            var out = word
+            if (options.rakaransayaU) out = GAETTA.replace(out) { m ->
+                val c = m.groupValues[1]
+                if (c == "ර") m.value else c + HAL + ZWJ + "ර" + (if (m.groupValues[2] == "ෘ") "ු" else "ූ")
+            }
+            if (options.repayaZwj) out = REPAYA.replace(out, "ර$HAL$ZWJ")
+            if (options.classical) out = CLUSTER.replace(out) { m ->
+                val c = m.groupValues[1]
+                c + HAL + (if ((c to m.groupValues[2]) in SmartPhoneticV2.BANDI) ZWJ else "")
+            }
+            return out
+        }
+
+        /** Parses "word<TAB>count" lines like the reference: rows whose count isn't a number are skipped. */
+        fun parse(lines: Sequence<String>): List<Pair<String, Int>> = lines.mapNotNull { line ->
+            val tab = line.indexOf('\t')
+            if (tab <= 0) return@mapNotNull null
+            val n = line.substring(tab + 1).trimEnd('\r')
+            if (n.isEmpty() || !n.all(Char::isDigit)) null else line.substring(0, tab) to n.toInt()
+        }.toList()
+    }
+}

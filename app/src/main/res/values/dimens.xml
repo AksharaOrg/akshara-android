@@ -7,4 +7,7 @@
     <dimen name="settings_icon_radius">8dp</dimen>
     <dimen name="settings_row_gap">12dp</dimen>
     <dimen name="settings_chevron">18dp</dimen>
+    <dimen name="settings_logo_size">56dp</dimen>
+    <dimen name="settings_logo_size_large">88dp</dimen>
+    <dimen name="settings_logo_radius">14dp</dimen>
 </resources>

@@ -14,12 +14,18 @@ class SinhalaEngineTest {
         cases.forEach { (source, expected) -> assertEquals(source, expected, SinhalaEngine.transliterate(source, InputMode.PHONETIC)) }
     }
 
+    /** The classic (v1) Smart Phonetic, still available when the grammar-correct v2 setting is off. */
     @Test fun smartFixturesMatchIosRules() {
         val cases = mapOf(
             "x" to "ං", "zn" to "ං", "zga" to "ඟ", "chha" to "ඡ", "thha" to "ථ",
             "ru" to "රු", "kru" to "කෘ", "sha" to "ශ", "q" to "ද්"
         )
-        cases.forEach { (source, expected) -> assertEquals(source, expected, SinhalaEngine.transliterate(source, InputMode.SMART_PHONETIC)) }
+        try {
+            SinhalaEngine.smartPhoneticV2 = false
+            cases.forEach { (source, expected) -> assertEquals(source, expected, SinhalaEngine.transliterate(source, InputMode.SMART_PHONETIC)) }
+        } finally {
+            SinhalaEngine.smartPhoneticV2 = true
+        }
     }
 
     @Test fun slsNormalizationHandlesPrebaseAndIndependentSequences() {

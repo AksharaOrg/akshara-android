@@ -1,9 +1,9 @@
 package org.akshara.ime.data
 
 import android.content.Context
+import android.icu.text.BreakIterator
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.text.BreakIterator
 import java.util.Locale
 
 /**
@@ -86,6 +86,8 @@ class SinhalaAutocorrection(private val context: Context) {
         return items.indices.map { removed -> key(items.filterIndexed { index, _ -> index != removed }) }
     }
 
+    // ICU's extended grapheme clusters keep a consonant and its signs together (ගෙ, රා), on a device
+    // and in JVM tests alike; java.text.BreakIterator splits Sinhala signs off below Java 20.
     private fun graphemes(word: String): List<String> {
         val iterator = BreakIterator.getCharacterInstance(Locale("si", "LK")); iterator.setText(word)
         val result = ArrayList<String>(); var start = iterator.first(); var end = iterator.next()

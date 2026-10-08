@@ -3,6 +3,7 @@ package org.akshara.ime.data
 import android.content.Context
 import org.akshara.ime.R
 import org.akshara.ime.engine.SinhalaEngine
+import org.akshara.ime.engine.SmartPhoneticV2
 import kotlin.math.ln
 
 data class Candidate(val text: String, val score: Double)
@@ -16,6 +17,7 @@ class PredictionRepository(private val context: Context, private val learning: L
     private val starts = mutableListOf<Pair<String, Int>>()
     private val trigrams = mutableMapOf<String, MutableList<Pair<String, Int>>>()
     private var bigrams: BigramTable? = null
+    private var sounds: SoundLexicon? = null
 
     fun warmup() {
         ensureLoaded()
@@ -29,6 +31,7 @@ class PredictionRepository(private val context: Context, private val learning: L
             entries.sortBy { it.first }
             rows.forEach { unigramFrequency[it.first] = it.second }
             frequent.addAll(rows.sortedByDescending { it.second }.take(96))
+            sounds = SoundLexicon(rows)
         }
         readPairs(R.raw.sinhala_sentence_start_model).let(starts::addAll)
         readNgrams(R.raw.sinhala_trigram_model, trigrams, 3)
@@ -45,20 +48,40 @@ class PredictionRepository(private val context: Context, private val learning: L
         bigramsReady = true
     }
 
-    fun candidates(prefix: String, preceding: List<String>, max: Int = 3): List<Candidate> {
-        ensureLoaded()
-        if (max <= 0) return emptyList()
+    /** Scores words by frequency, the user's own words, and what follows the preceding one or two words. */
+    private inner class ContextScore(preceding: List<String>) {
         val previous = preceding.lastOrNull()
-        val earlier = preceding.dropLast(1).lastOrNull()
+        private val earlier = preceding.dropLast(1).lastOrNull()
         val learned = learning.words()
         val learnedNext = previous?.let { learning.followers(it) }.orEmpty()
         val bundledNext = previous?.let { bigrams?.followers(it) }.orEmpty()
         val trigramNext = if (earlier != null && previous != null) trigrams["$earlier\t$previous"].orEmpty() else emptyList()
-        val bundledCounts = HashMap<String, Int>(bundledNext.size)
-        bundledNext.forEach { (word, count) -> bundledCounts[word] = maxOf(bundledCounts[word] ?: 0, count) }
-        val trigramCounts = HashMap<String, Int>(trigramNext.size)
-        trigramNext.forEach { (word, count) -> trigramCounts[word] = maxOf(trigramCounts[word] ?: 0, count) }
+        private val bundledCounts = HashMap<String, Int>(bundledNext.size).also { counts ->
+            bundledNext.forEach { (word, count) -> counts[word] = maxOf(counts[word] ?: 0, count) }
+        }
+        private val trigramCounts = HashMap<String, Int>(trigramNext.size).also { counts ->
+            trigramNext.forEach { (word, count) -> counts[word] = maxOf(counts[word] ?: 0, count) }
+        }
         val hasContinuations = previous != null && (bundledNext.isNotEmpty() || learnedNext.isNotEmpty() || trigramNext.isNotEmpty())
+
+        fun score(word: String, frequency: Int, unigramWeight: Double) =
+            unigramWeight * ln(frequency.coerceAtLeast(1) + 1.0) +
+                learned.getOrDefault(word, 0) +
+                learnedNext.getOrDefault(word, 0) * 1.8 +
+                ln((bundledCounts[word] ?: 0) + 1.0) * 1.7 +
+                ln((trigramCounts[word] ?: 0) + 1.0) * 2.2
+    }
+
+    fun candidates(prefix: String, preceding: List<String>, max: Int = 3): List<Candidate> {
+        ensureLoaded()
+        if (max <= 0) return emptyList()
+        val context = ContextScore(preceding)
+        val previous = context.previous
+        val learned = context.learned
+        val learnedNext = context.learnedNext
+        val bundledNext = context.bundledNext
+        val trigramNext = context.trigramNext
+        val hasContinuations = context.hasContinuations
         val ranked = ArrayList<Candidate>(max)
         val considered = HashSet<String>(max * 16)
 
@@ -66,12 +89,7 @@ class PredictionRepository(private val context: Context, private val learning: L
             if (word == prefix) return
             if (prefix.isEmpty() && word == previous) return
             if (!considered.add(word)) return
-            val score = unigramWeight * ln(frequency.coerceAtLeast(1) + 1.0) +
-                learned.getOrDefault(word, 0) +
-                learnedNext.getOrDefault(word, 0) * 1.8 +
-                ln((bundledCounts[word] ?: 0) + 1.0) * 1.7 +
-                ln((trigramCounts[word] ?: 0) + 1.0) * 2.2
-            val candidate = Candidate(word, score)
+            val candidate = Candidate(word, context.score(word, frequency, unigramWeight))
             val insertion = ranked.indexOfFirst { candidate.score > it.score || (candidate.score == it.score && candidate.text < it.text) }
                 .let { if (it < 0) ranked.size else it }
             if (insertion >= max && ranked.size >= max) return
@@ -111,6 +129,64 @@ class PredictionRepository(private val context: Context, private val learning: L
         return ranked
     }
 
+    /**
+     * Smart Phonetic v2 suggestions for the romanized word being typed: whole words that sound like it
+     * (හොඳ for "honda", although the rules spell හොන්ද), then completions, ranked with the preceding words.
+     */
+    fun phoneticCandidates(roman: String, preceding: List<String>, max: Int = 3): List<String> {
+        ensureLoaded()
+        val lexicon = sounds ?: return emptyList()
+        if (roman.isEmpty() || max <= 0) return emptyList()
+        val context = ContextScore(preceding)
+        val options = SinhalaEngine.smartPhoneticOptions
+        val completions = lexicon.candidates(roman, PHONETIC_POOL, partial = true, options = options)
+            .sortedByDescending { context.score(it, countOf(lexicon, it, options), 1.0) }
+        return (phoneticWords(lexicon, roman, context) + completions).distinct().take(max)
+    }
+
+    /** The word Space commits in Smart Phonetic v2, or null to keep the rule spelling. */
+    fun phoneticChoice(roman: String, preceding: List<String>): String? {
+        if (!loaded || roman.isEmpty()) return null
+        val lexicon = sounds ?: return null
+        return phoneticWords(lexicon, roman, ContextScore(preceding)).firstOrNull()
+    }
+
+    /** Whole words that sound like [roman]. An explicit spelling (`kazda`, `aa` …) that is a word stays first. */
+    /** Frequency of a word as shown in the options' style: the most frequent dictionary spelling that restyles to it. */
+    private fun countOf(lexicon: SoundLexicon, word: String, options: SmartPhoneticV2.Options): Int =
+        lexicon.count[word] ?: lexicon.exact(SoundLexicon.soundKey(word))
+            .filter { SoundLexicon.restyle(it, options) == word }
+            .maxOfOrNull { lexicon.count[it] ?: 0 } ?: 0
+
+    private fun phoneticWords(lexicon: SoundLexicon, roman: String, context: ContextScore): List<String> {
+        val options = SinhalaEngine.smartPhoneticOptions
+        val all = lexicon.candidates(roman, PHONETIC_POOL, options = options)
+        val spelled = SmartPhoneticV2.transliterate(roman, options)
+        // The reference puts an explicit spelling first when it is a word or a lone vowel letter (R ඍ).
+        val pinned = all.firstOrNull()?.takeIf { it == spelled && SoundLexicon.isExplicit(roman) }
+        // Candidates come back in the style of the options; keep those whose dictionary spelling is a word.
+        val exact = all.filter { countOf(lexicon, it, options) > 0 }
+        val key = SoundLexicon.soundKey(spelled)
+        val learned = context.learned.keys.filter { SoundLexicon.soundKey(it) == key }.map { word ->
+            val styled = SoundLexicon.restyle(word, options)
+            // Retain the learned spelling's score, but only offer it in the selected style.
+            Candidate(styled, context.score(word, countOf(lexicon, styled, options), 1.0))
+        }
+        val ranked = (exact.map { Candidate(it, context.score(it, countOf(lexicon, it, options), 1.0)) } + learned)
+            .sortedByDescending { it.score }.map { it.text }.distinct()
+        return listOfNotNull(pinned) + ranked.filter { it != pinned }
+    }
+
+    /** Like [prefixEvidence], for a romanized Smart Phonetic v2 prefix. */
+    fun phoneticPrefixEvidence(roman: String): Float {
+        if (!loaded || roman.isEmpty()) return 0f
+        val lexicon = sounds ?: return 0f
+        val key = SoundLexicon.soundKey(SmartPhoneticV2.transliterate(roman, SinhalaEngine.smartPhoneticOptions))
+        lexicon.exact(key).maxOfOrNull { lexicon.count[it] ?: 0 }?.let { return ln(it + 1.0).toFloat() }
+        val longer = lexicon.prefix(key.removeSuffix(SoundLexicon.HAL), 1).maxOfOrNull { lexicon.count[it] ?: 0 } ?: return 0f
+        return ln(longer + 1.0).toFloat() * 0.4f
+    }
+
     fun prefixEvidence(prefix: String): Float {
         if (!loaded || prefix.isEmpty()) return 0f
         val exact = unigramFrequency[prefix]
@@ -120,6 +196,10 @@ class PredictionRepository(private val context: Context, private val learning: L
             return ln(entries[index].second + 1.0).toFloat() * 0.4f
         }
         return 0f
+    }
+
+    private companion object {
+        const val PHONETIC_POOL = 12
     }
 
     private fun firstIndexAtOrAfter(prefix: String): Int {

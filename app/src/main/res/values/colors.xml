@@ -12,4 +12,5 @@
     <color name="settings_icon_purple">#AF52DE</color>
     <color name="settings_icon_mint">#00C7BE</color>
     <color name="settings_icon_yellow">#FFCC00</color>
+    <color name="settings_logo_outline">#00000000</color>
 </resources>
