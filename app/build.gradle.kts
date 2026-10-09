@@ -49,6 +49,9 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isIncludeAndroidResources = true }
+    // Lifecycle's LiveData lint check (pulled in by Compose) is built for a newer lint than AGP 8.7 ships and
+    // crashes release builds. The app uses no LiveData; drop this once AGP is upgraded.
+    lint { disable += "NullSafeMutableLiveData" }
 }
 
 dependencies {
