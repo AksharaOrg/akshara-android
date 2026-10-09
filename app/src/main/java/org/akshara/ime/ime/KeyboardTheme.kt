@@ -46,8 +46,13 @@ internal data class KeyboardTheme(
     val border: Int,
     val dark: Boolean,
     val highContrast: Boolean,
-    val dynamic: Boolean
+    val dynamic: Boolean,
+    /** Gboard's "Key borders": off draws letter and plain function keys flat on the background. */
+    val keyBorders: Boolean = true
 ) {
+    /** High contrast needs a shape to outline, so it always keeps borders. */
+    val flatKeys: Boolean get() = !keyBorders && !highContrast
+
     companion object {
         private const val PRESSED_BLEND = .18f
         private const val SELECTED_BLEND = .16f
@@ -63,7 +68,8 @@ internal data class KeyboardTheme(
             ink: Int,
             dark: Boolean,
             highContrast: Boolean,
-            dynamic: Boolean = false
+            dynamic: Boolean = false,
+            keyBorders: Boolean = true
         ): KeyboardTheme {
             val overlay = if (dark) Color.WHITE else Color.BLACK
             // Dark keys sit a touch lighter so they don't sink into the background, like Gboard
@@ -91,25 +97,27 @@ internal data class KeyboardTheme(
                 border = ink,
                 dark = dark,
                 highContrast = highContrast,
-                dynamic = dynamic
+                dynamic = dynamic,
+                keyBorders = keyBorders
             )
         }
     }
 }
 
 internal object KeyboardThemes {
-    fun resolve(context: Context, theme: String, highContrast: Boolean): KeyboardTheme {
+    fun resolve(context: Context, theme: String, highContrast: Boolean, keyBorders: Boolean = true): KeyboardTheme {
         val dark = when (theme) {
             "dark" -> true
             "light" -> false
             else -> context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
                 Configuration.UI_MODE_NIGHT_YES
         }
-        return if (theme == "system" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val resolved = if (theme == "system" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             dynamic(context, dark, highContrast)
         } else {
             fixed(dark, highContrast)
         }
+        return resolved.copy(keyBorders = keyBorders)
     }
 
     internal fun fixed(dark: Boolean, highContrast: Boolean) = if (dark) {

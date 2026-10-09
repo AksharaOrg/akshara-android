@@ -114,7 +114,7 @@ class KeyboardView(
     private var clipboardVelocity: VelocityTracker? = null
     private val clipboardHandlePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val handler = Handler(Looper.getMainLooper())
-    private val theme = KeyboardThemes.resolve(context, prefs.theme, prefs.highContrast)
+    private val theme = KeyboardThemes.resolve(context, prefs.theme, prefs.highContrast, prefs.keyBorders())
     private val bg = theme.background
     private val ink = theme.ink
     private val rail = SuggestionRail(
@@ -1159,8 +1159,8 @@ class KeyboardView(
             setStroke(if (theme.highContrast) dp(2) else 0, theme.border)
         }
         val (base, pressed) = when (role) {
-            KeyRole.LETTER -> theme.key to theme.keyPressed
-            KeyRole.FUNCTION -> theme.function to theme.functionPressed
+            KeyRole.LETTER -> (if (theme.flatKeys) Color.TRANSPARENT else theme.key) to theme.keyPressed
+            KeyRole.FUNCTION -> (if (theme.flatKeys) Color.TRANSPARENT else theme.function) to theme.functionPressed
             KeyRole.ACCENT -> theme.accent to theme.accentPressed
             KeyRole.GHOST -> Color.TRANSPARENT to theme.ghostPressed
         }

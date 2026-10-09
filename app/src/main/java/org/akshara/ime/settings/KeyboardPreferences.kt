@@ -49,6 +49,9 @@ class KeyboardPreferences(context: Context) {
     var theme: String
         get() = store.getString(THEME, "system") ?: "system"
         set(value) = store.edit().putString(THEME, value).apply()
+    /** Gboard keeps Key borders per theme, so each theme remembers its own choice. */
+    fun keyBorders(theme: String = this.theme) = store.getBoolean(KEY_BORDERS_PREFIX + theme, true)
+    fun setKeyBorders(on: Boolean, theme: String = this.theme) = store.edit().putBoolean(KEY_BORDERS_PREFIX + theme, on).apply()
     var skinTone: String
         get() = store.getString(SKIN_TONE, "") ?: ""
         set(value) = store.edit().putString(SKIN_TONE, value).apply()
@@ -103,6 +106,7 @@ class KeyboardPreferences(context: Context) {
         private const val KEY_SPACING = "key_spacing"; private const val KEYBOARD_SIZE = "keyboard_size"
         private const val SPATIAL_DECODER = "spatial_decoder"; private const val DEBUG_OVERLAY = "debug_overlay"
         const val THEME = "theme"; private const val SKIN_TONE = "skin_tone"
+        const val KEY_BORDERS_PREFIX = "key_borders_"
         private const val DEVELOPER = "developer_unlocked"
         private const val DOUBLE_SPACE = "double_space_period"
         private const val SMART_QUOTES = "smart_quotes"

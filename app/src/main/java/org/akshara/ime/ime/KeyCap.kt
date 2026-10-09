@@ -60,7 +60,9 @@ internal class KeyCap(context: Context) : View(context) {
             else -> dp(KeyboardGeometry.LETTER_RADIUS_DP)
         }
         rect.set(0f, 0f, width.toFloat(), height.toFloat())
-        canvas.drawRoundRect(rect, radius, radius, fill)
+        // Without key borders, Gboard keeps shapes only on Space, ?123 and Enter; other keys show one while pressed
+        val shaped = key.action == KeyCode.SPACE || key.action == KeyCode.LAYER || key.action == KeyCode.ENTER
+        if (!theme.flatKeys || shaped || pressed) canvas.drawRoundRect(rect, radius, radius, fill)
         if (theme.highContrast) {
             fill.style = Paint.Style.STROKE
             fill.strokeWidth = dp(2)

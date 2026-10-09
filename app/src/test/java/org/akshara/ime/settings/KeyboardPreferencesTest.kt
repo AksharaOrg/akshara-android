@@ -33,6 +33,15 @@ class KeyboardPreferencesTest {
         KeyboardPreferences(context).reset()
         assertEquals(EmojiButtonPlacement.TOOLBAR, KeyboardPreferences(context).emojiButtonPlacement)
     }
+    @Test fun keyBordersAreRememberedPerTheme() {
+        val p = KeyboardPreferences(context)
+        assertTrue(p.keyBorders())
+        p.setKeyBorders(false)
+        assertFalse(KeyboardPreferences(context).keyBorders())
+        p.theme = "dark"
+        assertTrue(p.keyBorders())   // a different theme keeps its own choice
+        assertFalse(p.keyBorders("system"))
+    }
     @Test fun valuesPersistAndReset() {
         KeyboardPreferences(context).apply { mode = InputMode.WIJESEKARA; highContrast = true }
         KeyboardPreferences(context).apply { assertEquals(InputMode.WIJESEKARA, mode); assertTrue(highContrast); reset() }

@@ -99,6 +99,8 @@
     <string name="one_handed">One-handed layout</string>
     <string name="haptics">Vibrate on keypress</string>
     <string name="key_sounds">Sound on keypress</string>
+    <string name="key_borders">Key borders</string>
+    <string name="key_borders_summary">Draw a shape around each key. Off keeps keys flat on the background; each theme remembers its own choice</string>
     <string name="high_contrast">High-contrast keys</string>
     <string name="high_contrast_summary">Add stronger outlines to key surfaces</string>
     <string name="clear_learning_title">Clear learned words</string>

@@ -411,6 +411,9 @@ class SettingsActivity : Activity() {
                     recreate()   // re-reads the theme in attachBaseContext
                 }
             }
+            toggle(R.string.key_borders, R.string.key_borders_summary, R.drawable.ic_palette, R.color.settings_icon_blue, prefs.keyBorders()) {
+                prefs.setKeyBorders(it)
+            }
             toggle(R.string.high_contrast, R.string.high_contrast_summary, R.drawable.ic_palette, R.color.settings_icon_gray, prefs.highContrast) {
                 prefs.highContrast = it
             }

@@ -35,6 +35,14 @@ class KeyboardThemeTest {
         assertFalse(theme.dynamic)
     }
 
+    @Test
+    fun keyBordersOffFlattensKeysUnlessHighContrast() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        assertFalse(KeyboardThemes.resolve(context, "light", highContrast = false).flatKeys)
+        assertTrue(KeyboardThemes.resolve(context, "light", highContrast = false, keyBorders = false).flatKeys)
+        assertFalse(KeyboardThemes.resolve(context, "light", highContrast = true, keyBorders = false).flatKeys)
+    }
+
     /** The tokens reproduce what each surface used to derive on its own. */
     @Test
     fun derivedTokensMatchTheColorsSurfacesUsedToCompute() {
