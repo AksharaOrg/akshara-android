@@ -56,8 +56,8 @@ internal class KeyCap(context: Context) : View(context) {
             else -> if (pressed) theme.keyPressed else theme.key
         }
         val radius = when (key.action) {
-            KeyCode.LAYER, KeyCode.ENTER -> height / 2f
-            else -> dp(KeyboardGeometry.LETTER_RADIUS_DP)
+            KeyCode.LAYER, KeyCode.ENTER -> minOf(width, height) / 2f
+            else -> theme.keyShape.radius(width.toFloat(), height.toFloat(), dp(KeyboardGeometry.LETTER_RADIUS_DP))
         }
         rect.set(0f, 0f, width.toFloat(), height.toFloat())
         // Without key borders, Gboard keeps shapes only on Space, ?123 and Enter; other keys show one while pressed
@@ -102,13 +102,25 @@ internal class KeyCap(context: Context) : View(context) {
             canvas.drawText(text, width / 2f, baseline, labelPaint)
         }
         if (!hint.isNullOrEmpty()) {
-            drawHint(canvas, hint, Paint.Align.RIGHT)
             // A Sinhala letter hint takes the right corner, so the long-press number or symbol goes on the left
-            key.extras.firstOrNull()?.first?.takeIf { it != hint }?.let { drawHint(canvas, it, Paint.Align.LEFT) }
+            val second = key.extras.firstOrNull()?.first?.takeIf { it != hint }
+            val inset = dp(KeyTypography.HINT_INSET_X_DP)
+            if (theme.keyShape == KeyShape.PILL) {
+                // Round tops have no corners, so hints sit side by side at the top centre (Gboard's round keys)
+                val gap = dp(2)
+                if (second == null) drawHint(canvas, hint, Paint.Align.CENTER, width / 2f)
+                else {
+                    drawHint(canvas, second, Paint.Align.RIGHT, width / 2f - gap)
+                    drawHint(canvas, hint, Paint.Align.LEFT, width / 2f + gap)
+                }
+            } else {
+                drawHint(canvas, hint, Paint.Align.RIGHT, width - inset)
+                second?.let { drawHint(canvas, it, Paint.Align.LEFT, inset) }
+            }
         }
     }
 
-    private fun drawHint(canvas: Canvas, hint: String, align: Paint.Align) {
+    private fun drawHint(canvas: Canvas, hint: String, align: Paint.Align, x: Float) {
         hintPaint.color = theme.hint
         hintPaint.typeface = KeyTypography.keyTypeface()
         hintPaint.textAlign = align
@@ -118,7 +130,6 @@ internal class KeyCap(context: Context) : View(context) {
             hintSize *= 0.9f
         }
         hintPaint.textSize = hintSize
-        val x = if (align == Paint.Align.LEFT) dp(KeyTypography.HINT_INSET_X_DP) else width - dp(KeyTypography.HINT_INSET_X_DP)
         canvas.drawText(hint, x, dp(KeyTypography.HINT_INSET_Y_DP) - hintPaint.fontMetrics.ascent * 0.72f, hintPaint)
     }
 

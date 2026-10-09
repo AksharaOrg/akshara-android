@@ -114,7 +114,8 @@ class KeyboardView(
     private var clipboardVelocity: VelocityTracker? = null
     private val clipboardHandlePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val handler = Handler(Looper.getMainLooper())
-    private val theme = KeyboardThemes.resolve(context, prefs.theme, prefs.highContrast, prefs.keyBorders())
+    private val theme = KeyboardThemes.resolve(context, prefs.theme, prefs.highContrast, prefs.keyBorders(),
+        KeyShape.of(prefs.keyShape))
     private val bg = theme.background
     private val ink = theme.ink
     private val rail = SuggestionRail(
@@ -1155,7 +1156,8 @@ class KeyboardView(
     private fun inkFor(role: KeyRole) = if (role == KeyRole.ACCENT) theme.accentInk else ink
     private fun keyBackground(role: KeyRole): StateListDrawable {
         fun shape(color: Int) = GradientDrawable().apply {
-            cornerRadius = dp(8).toFloat(); setColor(color)
+            // Number pad keys are about 48dp tall; a too-large radius is clamped to a pill
+            cornerRadius = theme.keyShape.radius(dp(48).toFloat(), dp(48).toFloat(), dp(8).toFloat()); setColor(color)
             setStroke(if (theme.highContrast) dp(2) else 0, theme.border)
         }
         val (base, pressed) = when (role) {

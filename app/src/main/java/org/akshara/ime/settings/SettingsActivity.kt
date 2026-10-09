@@ -50,6 +50,7 @@ import org.akshara.ime.data.ClipboardHistoryStore
 import org.akshara.ime.data.LocalLearningStore
 import org.akshara.ime.engine.InputMode
 import org.akshara.ime.ime.AksharaInputMethodService
+import org.akshara.ime.ime.KeyShape
 import org.akshara.ime.ime.KeyboardThemes
 import org.akshara.ime.ime.ThemeCatalog
 import org.akshara.ime.ime.ThemeSection
@@ -423,6 +424,11 @@ class SettingsActivity : Activity() {
             themeHeader(section, collapsible, expanded)
             themeGrid(if (collapsible && !expanded) specs.take(COLLAPSED_THEMES) else specs)
         }
+        section(R.string.theme_keys) {
+            choice(R.string.key_shape, R.drawable.ic_keyboard, R.color.settings_icon_indigo, R.array.key_shape_entries, R.array.key_shape_values, prefs.keyShape) {
+                prefs.keyShape = it
+            }
+        }
         section(R.string.theme_accessibility) {
             toggle(R.string.high_contrast, R.string.high_contrast_summary, R.drawable.ic_palette, R.color.settings_icon_gray, prefs.highContrast) {
                 prefs.highContrast = it
@@ -440,7 +446,7 @@ class SettingsActivity : Activity() {
 
     /** System-following themes are previewed in the real system mode, not this screen's override. */
     private fun previewTheme(spec: ThemeSpec, keyBorders: Boolean = prefs.keyBorders(spec.id)) =
-        KeyboardThemes.resolve(applicationContext, spec.id, prefs.highContrast, keyBorders)
+        KeyboardThemes.resolve(applicationContext, spec.id, prefs.highContrast, keyBorders, KeyShape.of(prefs.keyShape))
 
     private val expandedThemeSections = mutableSetOf<ThemeSection>()
     private var themeSectionsOpened = false

@@ -43,6 +43,24 @@ class KeyboardThemeTest {
         assertFalse(KeyboardThemes.resolve(context, "light", highContrast = true, keyBorders = false).flatKeys)
     }
 
+    @Test
+    fun keyShapesRoundKeysWithoutChangingThemeColors() {
+        // A 36 x 48 letter key with the standard 8 radius
+        assertEquals(8f, KeyShape.RECTANGULAR.radius(36f, 48f, 8f))
+        assertEquals(10.8f, KeyShape.ROUNDED.radius(36f, 48f, 8f), .001f)
+        assertEquals(8f, KeyShape.ROUNDED.radius(20f, 20f, 8f))   // never squarer than standard
+        assertEquals(18f, KeyShape.PILL.radius(36f, 48f, 8f))
+        assertEquals(KeyShape.RECTANGULAR, KeyShape.of("nonsense"))
+
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        for (id in listOf(ThemeCatalog.LIGHT, "color_blue", "dark_gradient_21")) {
+            val plain = KeyboardThemes.resolve(context, id, highContrast = false)
+            val pill = KeyboardThemes.resolve(context, id, highContrast = false, keyShape = KeyShape.PILL)
+            assertEquals(KeyShape.PILL, pill.keyShape)
+            assertEquals(plain.copy(keyShape = KeyShape.PILL), pill)
+        }
+    }
+
     /** Gboard's 2025 Dynamic color: letters in one tone, every function key and Enter in one shared accent. */
     @Test
     @org.robolectric.annotation.Config(sdk = [34])

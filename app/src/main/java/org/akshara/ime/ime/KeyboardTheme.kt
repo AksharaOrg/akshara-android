@@ -10,6 +10,22 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 
+/** How keys are drawn; touch targets never change with the shape. */
+internal enum class KeyShape(val id: String) {
+    RECTANGULAR("rectangular"), ROUNDED("rounded"), PILL("pill");
+
+    /** Corner radius for a [width] by [height] key; [standard] is the rectangular radius. */
+    fun radius(width: Float, height: Float, standard: Float) = when (this) {
+        RECTANGULAR -> standard
+        ROUNDED -> maxOf(standard, minOf(width, height) * .3f)
+        PILL -> minOf(width, height) / 2f
+    }
+
+    companion object {
+        fun of(id: String?) = values().firstOrNull { it.id == id } ?: RECTANGULAR
+    }
+}
+
 /**
  * Every color the keyboard draws with. Surfaces read these tokens instead of deriving their own,
  * so a theme is fully described by one value (Gboard's theme stylesheets cover the same parts).
@@ -53,7 +69,8 @@ internal data class KeyboardTheme(
     val keyBorders: Boolean = true,
     /** Top-to-bottom background stops; empty or one stop means a solid [background]. */
     val gradient: List<Int> = emptyList(),
-    val glows: List<Glow> = emptyList()
+    val glows: List<Glow> = emptyList(),
+    val keyShape: KeyShape = KeyShape.RECTANGULAR
 ) {
     fun backgroundDrawable(): Drawable = if (gradient.size > 1 || glows.isNotEmpty()) {
         ThemeBackgroundDrawable(gradient.ifEmpty { listOf(background) }, glows)
@@ -139,8 +156,16 @@ internal object KeyboardThemes {
     private val DARK_ACCENT = Color.rgb(141, 182, 250)
 
     /** [theme] is a [ThemeCatalog] id; an unknown id falls back to System auto. */
-    fun resolve(context: Context, theme: String, highContrast: Boolean, keyBorders: Boolean = true): KeyboardTheme {
-        ThemeCatalog.find(theme)?.takeIf { it.section != ThemeSection.DEFAULT }?.let { return it.theme(highContrast, keyBorders) }
+    fun resolve(
+        context: Context,
+        theme: String,
+        highContrast: Boolean,
+        keyBorders: Boolean = true,
+        keyShape: KeyShape = KeyShape.RECTANGULAR
+    ): KeyboardTheme {
+        ThemeCatalog.find(theme)?.takeIf { it.section != ThemeSection.DEFAULT }?.let {
+            return it.theme(highContrast, keyBorders).copy(keyShape = keyShape)
+        }
         val systemDark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
             Configuration.UI_MODE_NIGHT_YES
         val resolved = when (theme) {
@@ -150,7 +175,7 @@ internal object KeyboardThemes {
                 else fixed(systemDark, highContrast)
             else -> fixed(systemDark, highContrast)
         }
-        return resolved.copy(keyBorders = keyBorders)
+        return resolved.copy(keyBorders = keyBorders, keyShape = keyShape)
     }
 
     internal fun fixed(dark: Boolean, highContrast: Boolean) = if (dark) {

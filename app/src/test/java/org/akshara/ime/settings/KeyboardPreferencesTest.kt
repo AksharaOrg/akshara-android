@@ -33,6 +33,13 @@ class KeyboardPreferencesTest {
         KeyboardPreferences(context).reset()
         assertEquals(EmojiButtonPlacement.TOOLBAR, KeyboardPreferences(context).emojiButtonPlacement)
     }
+    @Test fun keyShapeIsOneChoiceForEveryTheme() {
+        val p = KeyboardPreferences(context)
+        assertEquals("rectangular", p.keyShape)
+        p.keyShape = "pill"
+        p.theme = "dark"
+        assertEquals("pill", KeyboardPreferences(context).keyShape)
+    }
     @Test fun keyBordersAreRememberedPerTheme() {
         val p = KeyboardPreferences(context)
         assertTrue(p.keyBorders())

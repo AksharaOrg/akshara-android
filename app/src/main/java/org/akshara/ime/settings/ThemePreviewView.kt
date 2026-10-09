@@ -55,8 +55,8 @@ internal class ThemePreviewView(context: Context) : View(context) {
         val gap = w * .014f
         val rowHeight = (h - pad * 2 - gap * 3) / 4f
         val unit = (w - pad * 2 - gap * 9) / 10f
-        val radius = rowHeight * .22f
         fun key(x: Float, y: Float, width: Float, color: Int, shaped: Boolean = false) {
+            val radius = theme.keyShape.radius(width, rowHeight, rowHeight * .22f)
             if (theme.flatKeys && !shaped) {
                 // Flat keys still show where a label would be
                 paint.color = theme.hint

@@ -53,6 +53,10 @@ class KeyboardPreferences(context: Context) {
     /** Gboard keeps Key borders per theme, so each theme remembers its own choice. */
     fun keyBorders(theme: String = this.theme) = store.getBoolean(KEY_BORDERS_PREFIX + theme, true)
     fun setKeyBorders(on: Boolean, theme: String = this.theme) = store.edit().putBoolean(KEY_BORDERS_PREFIX + theme, on).apply()
+    /** An [org.akshara.ime.ime.KeyShape] id; one choice for every theme. */
+    var keyShape: String
+        get() = store.getString(KEY_SHAPE, "rectangular") ?: "rectangular"
+        set(value) = store.edit().putString(KEY_SHAPE, value).apply()
     var skinTone: String
         get() = store.getString(SKIN_TONE, "") ?: ""
         set(value) = store.edit().putString(SKIN_TONE, value).apply()
@@ -108,6 +112,7 @@ class KeyboardPreferences(context: Context) {
         private const val SPATIAL_DECODER = "spatial_decoder"; private const val DEBUG_OVERLAY = "debug_overlay"
         const val THEME = "theme"; private const val SKIN_TONE = "skin_tone"
         const val KEY_BORDERS_PREFIX = "key_borders_"
+        const val KEY_SHAPE = "key_shape"
         private const val DEVELOPER = "developer_unlocked"
         private const val DOUBLE_SPACE = "double_space_period"
         private const val SMART_QUOTES = "smart_quotes"
