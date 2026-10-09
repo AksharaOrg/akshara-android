@@ -46,6 +46,21 @@ class SettingsActivityTest {
         assertTrue(switches().isEmpty())   // toggles live on the pages, not the home list
     }
 
+    @Test fun theKeyboardCanOpenSettingsOnTheClipboardPage() {
+        controller.pause().stop().destroy()
+        val intent = android.content.Intent(ApplicationProvider.getApplicationContext(), SettingsActivity::class.java)
+            .putExtra(SettingsActivity.EXTRA_PAGE, SettingsActivity.PAGE_CLIPBOARD)
+        controller = Robolectric.buildActivity(SettingsActivity::class.java, intent).setup()
+        activity = controller.get()
+        assertTrue(hasText(activity.getString(R.string.clipboard_history)))
+        back()
+        assertTrue(hasText(activity.getString(R.string.page_sinhala)))   // Back leads Home
+
+        controller.newIntent(intent)
+        compose.waitForIdle()
+        assertTrue(hasText(activity.getString(R.string.clipboard_preview)))
+    }
+
     @Test fun pagesUseMaterialSwitchesAndGroupedSections() {
         openPage(R.string.page_correction)
         assertTrue(switches().isNotEmpty())

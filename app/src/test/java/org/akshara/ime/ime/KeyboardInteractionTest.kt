@@ -5,6 +5,7 @@ import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.LinearLayout
 import androidx.test.core.app.ApplicationProvider
+import org.akshara.ime.data.ClipboardHistoryStore
 import org.akshara.ime.engine.InputMode
 import org.akshara.ime.settings.KeyboardPreferences
 import org.junit.Assert.*
@@ -311,6 +312,73 @@ class KeyboardInteractionTest {
         layoutKeyboard(closed)
         val hidden = findButton(closed, "Clipboard history")
         assertTrue(hidden == null || hidden.visibility != View.VISIBLE)
+    }
+
+    @Test fun clipboardBoardPinsUnpinsClearsAndOpensClipboardSettings() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().clear().commit()
+        context.getSharedPreferences(ClipboardHistoryStore.FILE, 0).edit().clear().commit()
+        val prefs = KeyboardPreferences(context)
+        prefs.clipboardHistory = true
+        val store = ClipboardHistoryStore(context)
+        store.add("older")
+        store.add("clip")
+        var clipboardSettings = 0
+        var settings = 0
+        val actions = object : KeyboardActions by idleActions() {
+            override fun onSettings() { settings++ }
+            override fun onClipboardSettings() { clipboardSettings++ }
+        }
+        val view = KeyboardView(context, actions, prefs)
+        view.configure(InputMode.PHONETIC, false, "↵")
+        view.setClipboardItems(store.items(), store.pinnedItems())
+        layoutKeyboard(view)
+        findButton(view, "Clipboard history")!!.performClick()
+        layoutKeyboard(view)
+
+        // One gear: on the clipboard board it opens the Clipboard settings page with a single tap
+        findButton(view, "Keyboard settings")!!.performClick()
+        assertEquals(1, clipboardSettings)
+        assertEquals(0, settings)
+
+        // Recent rows offer an outlined Pin; pinned rows show Unpin, which moves the clip back to Recent
+        assertNull(findButton(view, "Unpin"))
+        findButton(view, "Pin")!!.performClick()
+        layoutKeyboard(view)
+        assertEquals(listOf("clip"), store.pinnedItems())
+        assertTrue(findText(view, "Pinned 1"))
+        clickText(view, "Pinned 1")
+        layoutKeyboard(view)
+        findButton(view, "Unpin")!!.performClick()
+        layoutKeyboard(view)
+        assertEquals(emptyList<String>(), store.pinnedItems())
+        assertEquals(listOf("clip", "older"), store.items())
+
+        // Clear asks first; Cancel keeps the clips, Clear removes them
+        clickText(view, "Recent 2")
+        layoutKeyboard(view)
+        findButton(view, "Clear recent clips")!!.performClick()
+        layoutKeyboard(view)
+        assertTrue(findText(view, "Clear all recent clips?"))
+        clickText(view, "Cancel")
+        layoutKeyboard(view)
+        assertEquals(2, store.items().size)
+        findButton(view, "Clear recent clips")!!.performClick()
+        clickText(view, "Clear")
+        layoutKeyboard(view)
+        assertTrue(store.items().isEmpty())
+        assertTrue(findText(view, "Recent 0"))
+    }
+
+    private fun clickText(view: View, value: String) {
+        fun find(v: View): View? {
+            if (v.visibility != View.VISIBLE) return null
+            if (v is TextView && v.isClickable && v.text.toString() == value) return v
+            if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i))?.let { return it }
+            return null
+        }
+        assertNotNull("no visible '$value'", find(view))
+        find(view)!!.performClick()
     }
 
     @Test fun optionalRowsGrowTheRenderedKeyboardInEveryLayout() {

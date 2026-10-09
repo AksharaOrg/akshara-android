@@ -75,7 +75,7 @@ class SettingsActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         prefs = KeyboardPreferences(this)
         onBackPressedDispatcher.addCallback(this, backCallback)
-        page = state?.getString(STATE_PAGE)?.let { runCatching { Page.valueOf(it) }.getOrNull() } ?: Page.HOME
+        page = (state?.getString(STATE_PAGE) ?: intent?.getStringExtra(EXTRA_PAGE)).toPage() ?: Page.HOME
         window.decorView.setBackgroundColor(colors.surface.toArgb())
         setContent {
             SettingsTheme {
@@ -89,6 +89,17 @@ class SettingsActivity : ComponentActivity() {
         super.onSaveInstanceState(outState)
         outState.putString(STATE_PAGE, page.name)
     }
+
+    /** The keyboard opens Settings on a page (its clipboard gear opens Clipboard); Back then leads Home. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val requested = intent.getStringExtra(EXTRA_PAGE).toPage() ?: return
+        backStack.clear()
+        page = requested
+        render(forward = true)
+    }
+
+    private fun String?.toPage() = this?.let { runCatching { Page.valueOf(it) }.getOrNull() }
 
     override fun onResume() {
         super.onResume()
@@ -726,5 +737,8 @@ class SettingsActivity : ComponentActivity() {
 
     companion object {
         private const val STATE_PAGE = "settings_page"
+        /** Opens Settings on this page, for example [PAGE_CLIPBOARD]. */
+        const val EXTRA_PAGE = "org.akshara.ime.settings.PAGE"
+        const val PAGE_CLIPBOARD = "CLIPBOARD"
     }
 }

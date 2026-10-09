@@ -49,6 +49,8 @@ interface KeyboardActions {
     fun onHide()
     fun onCursorDelta(delta: Int)
     fun onSettings() {}
+    /** Settings opened from the clipboard board, on its Clipboard page. */
+    fun onClipboardSettings() = onSettings()
     fun onClipboardOpen() {}
     fun onClipboardPreviewPaste() {}
     fun onEmojiPicked(value: String) = onCharacter(value)
@@ -132,7 +134,7 @@ class KeyboardView(
         },
         { actions.onClipboardPreviewPaste() },
         { actions.onEmojiPicked(it) },
-        { actions.onSettings() }
+        { if (layer == KeyboardLayer.CLIPBOARD) actions.onClipboardSettings() else actions.onSettings() }
     )
     private val railHost = FrameLayout(context).apply {
         clipChildren = false
@@ -906,21 +908,24 @@ class KeyboardView(
                 layer = KeyboardLayer.LETTERS
                 render()
             },
-            onSettings = { actions.onSettings() },
             onClearRecent = {
                 clipboardStore.clearHistory()
                 refreshClipboardFromStore()
             },
-            onPinRecent = { index ->
-                clipboardStore.pin(index)
+            onPin = { clip ->
+                clipboardStore.pin(clip)
                 refreshClipboardFromStore()
             },
-            onRemoveRecent = { index ->
-                clipboardStore.remove(index)
+            onUnpin = { clip ->
+                clipboardStore.unpin(clip)
                 refreshClipboardFromStore()
             },
-            onRemovePinned = { index ->
-                clipboardStore.removePinned(index)
+            onRemoveRecent = { clip ->
+                clipboardStore.remove(clip)
+                refreshClipboardFromStore()
+            },
+            onRemovePinned = { clip ->
+                clipboardStore.removePinned(clip)
                 refreshClipboardFromStore()
             }
         )

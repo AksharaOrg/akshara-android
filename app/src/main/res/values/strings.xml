@@ -75,7 +75,7 @@
     <string name="emoji_picker_summary">Show the built-in emoji picker button on the suggestion bar</string>
     <string name="skin_tone">Preferred skin tone</string>
     <string name="clipboard_history">Clipboard history</string>
-    <string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device. Pin clips from the keyboard to keep them.</string>
+    <string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device for 1 hour. Pin clips from the keyboard to keep them.</string>
     <string name="clipboard_preview">Quick paste preview</string>
     <string name="clipboard_preview_summary">Show recently copied text or a compatible image on the suggestion bar. Disabled by default.</string>
     <string name="space_punctuation_keys">Comma and period beside Space</string>
@@ -182,7 +182,7 @@
     <string name="privacy_permissions_title">Permissions</string>
     <string name="privacy_permissions_body">Akshara has no internet permission. Vibration is used only for keypress haptics. The keyboard can read text fields while it is open, which Android requires for any IME.</string>
     <string name="privacy_clipboard_title">Clipboard history</string>
-    <string name="privacy_clipboard_body">Clipboard features are disabled by default. Quick paste shows the latest copied text or compatible image while the keyboard is open. Images are copied temporarily into the app cache so Android can grant the receiving app access, then removed automatically. Clipboard history can save copied text on this device. Clipboard content is never shown in password fields or sent over the network.</string>
+    <string name="privacy_clipboard_body">Clipboard features are disabled by default. Quick paste shows the latest copied text or compatible image while the keyboard is open. Images are copied temporarily into the app cache so Android can grant the receiving app access, then removed automatically. Clipboard history can save copied text on this device: recent clips are removed after 1 hour, pinned clips stay until you delete them. Clipboard content is never shown in password fields or sent over the network.</string>
     <string name="privacy_predictions_title">Predictions</string>
     <string name="privacy_predictions_body">Word suggestions use compact models bundled with the app. Source corpora are not included and never leave your device.</string>
     <string name="privacy_diagnostics_title">Diagnostics</string>
@@ -244,4 +244,19 @@
         <item>KEYBOARD</item>
         <item>DISABLED</item>
     </string-array>
+    <!-- Clipboard board on the keyboard -->
+    <string name="clip_title">Clipboard</string>
+    <string name="clip_back">Back</string>
+    <string name="clip_recent">Recent %1$d</string>
+    <string name="clip_pinned">Pinned %1$d</string>
+    <string name="clip_clear">Clear recent clips</string>
+    <string name="clip_clear_question">Clear all recent clips?</string>
+    <string name="clip_clear_confirm">Clear</string>
+    <string name="clip_cancel">Cancel</string>
+    <string name="clip_empty_recent">Copied text shows here for 1 hour. Pin a clip to keep it.</string>
+    <string name="clip_empty_pinned">Pinned clips stay until you unpin or delete them. Tap a clip to paste it.</string>
+    <string name="clip_paste">Paste %1$s</string>
+    <string name="clip_pin">Pin</string>
+    <string name="clip_unpin">Unpin</string>
+    <string name="clip_delete">Delete</string>
 </resources>

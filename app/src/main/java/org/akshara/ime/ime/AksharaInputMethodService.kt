@@ -66,6 +66,8 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private var secureEditor = true
     private var clipboardEligible = false
     private var latestClipboard: ClipData? = null
+    /** The copy last pasted or typed past from the quick paste chip; it is not offered again. */
+    private var handledClipboard: String? = null
     private data class StagedImage(val source: Uri, val content: Uri, val mimeType: String)
     private var stagedImage: StagedImage? = null
     private var stagingSource: Uri? = null
@@ -191,7 +193,10 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     override fun onCharacter(value: String) {
-        if (latestClipboard != null) clearClipboardPreview()
+        if (latestClipboard != null) {
+            handledClipboard = latestClipboard?.let(::clipboardSource)
+            clearClipboardPreview()
+        }
         validatePreview()
         if (persistentEnglish) {
             commitComposition()
@@ -400,8 +405,14 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         val extracted = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0) ?: return
         val next = (extracted.selectionEnd + delta).coerceIn(0, extracted.text.length); ic.setSelection(next, next)
     }
-    override fun onSettings() {
-        startActivity(Intent(this, org.akshara.ime.settings.SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    override fun onSettings() = openSettings(null)
+    override fun onClipboardSettings() = openSettings(org.akshara.ime.settings.SettingsActivity.PAGE_CLIPBOARD)
+
+    private fun openSettings(page: String?) {
+        val intent = Intent(this, org.akshara.ime.settings.SettingsActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        page?.let { intent.putExtra(org.akshara.ime.settings.SettingsActivity.EXTRA_PAGE, it) }
+        startActivity(intent)
     }
     override fun onClipboardOpen() {
         refreshClipboard()
@@ -437,6 +448,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             val text = clipboardText(clip) ?: return
             onPasteText(text)
         }
+        handledClipboard = clipboardSource(clip)
         latestClipboard = null
         stagedImage = null
         stagingSource = null
@@ -839,7 +851,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private fun captureClipboardHistory(clip: ClipData) {
         if (!prefs.clipboardHistory || !clipboardEligible || secureEditor || clip.itemCount == 0) return
         if (currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0) return
-        clipboardText(clip)?.let(clipboardHistory::add)
+        clipboardText(clip)?.let { clipboardHistory.capture(it, clip.description.timestamp.toString()) }
     }
 
     private fun refreshClipboard(fresh: Boolean = false) {
@@ -862,7 +874,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             return
         }
         captureClipboardHistory(clip)
-        val next = clip.takeIf { prefs.clipboardPreview && (fresh || isRecentClipboard(it.description)) }
+        val next = clip.takeIf {
+            prefs.clipboardPreview && (fresh || isRecentClipboard(it.description)) && clipboardSource(it) != handledClipboard
+        }
         if (fresh || next?.getItemAt(0)?.uri != latestClipboard?.getItemAt(0)?.uri) {
             stagedImage = null
             stagingSource = null
@@ -896,6 +910,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         clipboardGeneration++
         if (::keyboard.isInitialized) keyboard.setClipboardPreview(null)
     }
+
+    /** Identifies one copy: the same clip read again has the same source, a new copy of the same text does not. */
+    private fun clipboardSource(clip: ClipData) = "${clip.description.timestamp}:${clip.getItemAt(0)?.let { it.uri ?: it.text }}"
 
     private fun clipboardText(clip: ClipData): String? {
         if (clip.itemCount == 0) return null
