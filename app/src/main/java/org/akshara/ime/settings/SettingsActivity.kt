@@ -1,7 +1,6 @@
 package org.akshara.ime.settings
 
 import android.animation.ValueAnimator
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Context
@@ -30,8 +29,6 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.animation.AnimationUtils
 import android.view.inputmethod.InputMethodManager
-import android.window.OnBackInvokedCallback
-import android.window.OnBackInvokedDispatcher
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -39,6 +36,10 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.ComposeView
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -57,16 +58,19 @@ import org.akshara.ime.ime.ThemeSection
 import org.akshara.ime.ime.ThemeSpec
 import org.akshara.ime.ime.TouchPersonalizationStore
 
-class SettingsActivity : Activity() {
+class SettingsActivity : ComponentActivity() {
     private lateinit var prefs: KeyboardPreferences
     private lateinit var pages: ViewGroup
     private lateinit var scroll: ScrollView
     private lateinit var container: LinearLayout
     private var page = Page.HOME
+    private val colors by lazy { SettingsColors.scheme(this) }
     private val scrollByPage = mutableMapOf<Page, Int>()
     private val backStack = ArrayDeque<Page>()
-    /** API 33+: with targetSdk 33+ the system back gesture skips onBackPressed(), so sub-pages register this. */
-    private var backCallback: Any? = null
+    /** Back on a sub-page goes up a page (gesture, button and predictive back); on Home it closes Settings. */
+    private val backCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() = navigateUp()
+    }
     private var buildTapCount = 0
     private var lastBuildTap = 0L
 
@@ -87,8 +91,11 @@ class SettingsActivity : Activity() {
         super.onCreate(state)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         prefs = KeyboardPreferences(this)
+        onBackPressedDispatcher.addCallback(this, backCallback)
         page = state?.getString(STATE_PAGE)?.let { runCatching { Page.valueOf(it) }.getOrNull() } ?: Page.HOME
         setContentView(R.layout.activity_settings)
+        // The same Material 3 scheme as the Compose cards, so Views and Compose share one surface
+        window.decorView.setBackgroundColor(colors.surface.toArgb())
         pages = findViewById(R.id.settings_pages)
         scroll = findViewById(R.id.settings_scroll)
         container = findViewById(R.id.settings_container)
@@ -112,16 +119,6 @@ class SettingsActivity : Activity() {
     override fun onStop() {
         TransitionManager.endTransitions(pages)
         super.onStop()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (page != Page.HOME) {
-            navigateUp()
-            return
-        }
-        @Suppress("DEPRECATION")
-        super.onBackPressed()
     }
 
     /** Back to the page this one was opened from (after a restart, to its parent). */
@@ -197,16 +194,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun updateBackCallback() {
-        if (Build.VERSION.SDK_INT < 33) return
-        val dispatcher = onBackInvokedDispatcher
-        if (page != Page.HOME && backCallback == null) {
-            val callback = OnBackInvokedCallback { navigateUp() }
-            dispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback)
-            backCallback = callback
-        } else if (page == Page.HOME && backCallback != null) {
-            dispatcher.unregisterOnBackInvokedCallback(backCallback as OnBackInvokedCallback)
-            backCallback = null
-        }
+        backCallback.isEnabled = page != Page.HOME
     }
 
     /** Home: setup status, then one row per settings page, like Gboard. */
@@ -809,12 +797,25 @@ class SettingsActivity : Activity() {
             layoutInflater.inflate(R.layout.settings_category, container, true)
             container.getChildAt(container.childCount - 1).let { it as TextView }.setText(title)
         }
-        val card = card()
-        CardScope(card).rows()
-        addCard(card)
+        val items = CardScope().apply(rows).rows.toList()
+        val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
+        container.addView(
+            ComposeView(this).apply { setContent { SettingsTheme { SettingsCard(items) } } },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = gutter
+                marginEnd = gutter
+                bottomMargin = resources.getDimensionPixelSize(R.dimen.settings_section_gap)
+            }
+        )
     }
 
-    private inner class CardScope(private val card: LinearLayout) {
+    /** Collects a card's rows; [section] draws them with Material 3 (Compose). */
+    private inner class CardScope {
+        val rows = mutableListOf<SettingsRow>()
+
+        /** Pages often re-render from a row's callback; let the tap finish before the card is replaced. */
+        private fun later(run: () -> Unit) { container.post(run) }
+
         fun action(
             title: Int,
             summary: Int,
@@ -824,98 +825,44 @@ class SettingsActivity : Activity() {
             destructive: Boolean = false,
             onClick: (() -> Unit)? = null
         ) {
-            val row = inflateRow(
-                card, title, summaryText ?: summary.takeIf { it != 0 }?.let(::getString),
-                icon, tint, chevron = onClick != null, destructive = destructive
+            rows += SettingsRow.Action(
+                getString(title), summaryText ?: summary.takeIf { it != 0 }?.let(::getString), icon, tint,
+                chevron = onClick != null, destructive = destructive, onClick = onClick?.let { { later(it) } }
             )
-            if (onClick != null) row.setOnClickListener { onClick() }
         }
 
         fun actionText(title: String, summary: String?, icon: Int, tint: Int, onClick: (() -> Unit)? = null) {
-            val row = inflateRow(card, 0, summary, icon, tint, chevron = onClick != null, titleText = title)
-            if (onClick != null) row.setOnClickListener { onClick() }
+            rows += SettingsRow.Action(title, summary, icon, tint, chevron = onClick != null, onClick = onClick?.let { { later(it) } })
         }
 
         fun toggle(title: Int, summary: Int, icon: Int, tint: Int, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
-            val row = inflateRow(card, title, summary.takeIf { it != 0 }?.let(::getString), icon, tint, switch = true)
-            val toggle = row.findViewById<Switch>(R.id.settings_item_switch)
-            toggle.visibility = View.VISIBLE
-            toggle.isChecked = checked
-            row.isEnabled = enabled
-            row.alpha = if (enabled) 1f else 0.4f
-            row.setOnClickListener {
-                if (!enabled) return@setOnClickListener
-                val next = !toggle.isChecked
-                toggle.isChecked = next
-                onChange(next)
-            }
+            rows += SettingsRow.Toggle(
+                getString(title), summary.takeIf { it != 0 }?.let(::getString), icon, tint, checked, enabled
+            ) { on -> later { onChange(on) } }
         }
 
         fun choice(title: Int, icon: Int, tint: Int, entries: Int, values: Int, current: String, onPick: (String) -> Unit) {
             val labels = resources.getStringArray(entries)
             val keys = resources.getStringArray(values)
             val selected = labels.getOrNull(keys.indexOf(current))
-            val row = inflateRow(card, title, selected, icon, tint, chevron = true)
-            row.setOnClickListener {
-                AlertDialog.Builder(this@SettingsActivity)
-                    .setTitle(title)
-                    .setSingleChoiceItems(labels, keys.indexOf(current).coerceAtLeast(0)) { dialog, which ->
-                        onPick(keys[which])
-                        dialog.dismiss()
-                        render()
-                    }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show()
-            }
+            rows += SettingsRow.Action(getString(title), selected, icon, tint, chevron = true, onClick = {
+                later {
+                    AlertDialog.Builder(this@SettingsActivity)
+                        .setTitle(title)
+                        .setSingleChoiceItems(labels, keys.indexOf(current).coerceAtLeast(0)) { dialog, which ->
+                            onPick(keys[which])
+                            dialog.dismiss()
+                            render()
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                }
+            })
         }
 
         fun labeled(title: Int, value: String, onClick: (() -> Unit)? = null) {
-            val row = inflateRow(card, title, null, 0, 0, clickable = onClick != null)
-            row.findViewById<TextView>(R.id.settings_item_value).apply {
-                text = value
-                visibility = View.VISIBLE
-            }
-            if (onClick != null) row.setOnClickListener { onClick() }
+            rows += SettingsRow.Value(getString(title), value, onClick?.let { { later(it) } })
         }
-    }
-
-    private fun inflateRow(
-        parent: ViewGroup,
-        title: Int,
-        summary: String?,
-        icon: Int,
-        tint: Int,
-        chevron: Boolean = false,
-        clickable: Boolean = false,
-        switch: Boolean = false,
-        destructive: Boolean = false,
-        titleText: String? = null
-    ): View {
-        val row = layoutInflater.inflate(R.layout.settings_item, parent, false)
-        val titleView = row.findViewById<TextView>(R.id.settings_item_title)
-        if (titleText != null) titleView.text = titleText else titleView.setText(title)
-        if (destructive) titleView.setTextColor(attrColor(android.R.attr.colorError).takeIf { it != 0 } ?: 0xFFB00020.toInt())
-        row.findViewById<TextView>(R.id.settings_item_summary).apply {
-            text = summary.orEmpty()
-            visibility = if (summary.isNullOrBlank()) View.GONE else View.VISIBLE
-        }
-        val well = row.findViewById<View>(R.id.settings_item_icon_well)
-        val iconView = row.findViewById<ImageView>(R.id.settings_item_icon)
-        if (icon == 0) {
-            well.visibility = View.GONE
-        } else {
-            iconView.setImageResource(icon)
-            iconView.imageTintList = ColorStateList.valueOf(Color.WHITE)
-            well.background = iconTile(getColor(tint))
-        }
-        row.findViewById<ImageView>(R.id.settings_item_chevron).apply {
-            visibility = if (chevron) View.VISIBLE else View.GONE
-            imageTintList = ColorStateList.valueOf(ColorUtils.setAlphaComponent(attrColor(android.R.attr.colorControlNormal), 140))
-        }
-        row.isClickable = clickable || switch || chevron
-        row.isFocusable = clickable || switch || chevron
-        parent.addView(row)
-        return row
     }
 
     private fun confirm(title: Int, message: Int, action: Int, run: () -> Unit) {
@@ -990,12 +937,6 @@ class SettingsActivity : Activity() {
         )
     }
 
-    private fun iconTile(color: Int) = GradientDrawable().apply {
-        shape = GradientDrawable.RECTANGLE
-        cornerRadius = resources.getDimension(R.dimen.settings_icon_radius)
-        setColor(color)
-    }
-
     private fun cardBackground() = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = cardRadius()
@@ -1010,13 +951,7 @@ class SettingsActivity : Activity() {
         return if (value.type == TypedValue.TYPE_DIMENSION) value.getDimension(resources.displayMetrics) else fallback
     }
 
-    private fun cardColor(): Int {
-        val window = attrColor(android.R.attr.colorBackground)
-        val floating = attrColor(android.R.attr.colorBackgroundFloating)
-        if (floating != 0 && floating != window) return floating
-        val ink = attrColor(android.R.attr.textColorPrimary)
-        return ColorUtils.blendARGB(window, ColorUtils.setAlphaComponent(ink, 255), 0.06f)
-    }
+    private fun cardColor(): Int = colors.surfaceContainer.toArgb()
 
     private fun attrColor(attr: Int): Int {
         val typed = obtainStyledAttributes(intArrayOf(attr))
