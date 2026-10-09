@@ -222,6 +222,15 @@ class EnglishTypingIntegrationTest {
         assertEquals("teh ", editor.text.toString())
     }
 
+    @Test fun choosingTypedSpellingKeepsItOnTheNextSpace() = withEditor { service, editor, _, _ ->
+        "teh".forEach { service.onCharacter(it.toString()) }
+        service.onCandidate("teh")
+        assertEquals("teh ", editor.text.toString())
+        "teh".forEach { service.onCharacter(it.toString()) }
+        service.onSpace()
+        assertEquals("teh teh ", editor.text.toString())
+    }
+
     @Test fun rejectedCorrectionSurvivesEditorRestartAndSpace() = withEditor { service, editor, _, _ ->
         "teh".forEach { service.onCharacter(it.toString()) }
         service.onSpace()

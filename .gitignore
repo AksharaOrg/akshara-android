@@ -2,6 +2,7 @@
 .gradle/
 .kotlin/
 **/build/
+*.profraw
 
 # Local Android SDK configuration
 local.properties

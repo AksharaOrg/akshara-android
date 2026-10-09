@@ -14,7 +14,7 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class KeyboardInteractionTest {
-    @Test fun numericPadsHaveNoDeadCellsAndKeepActionsEasyToReach() {
+    @Test fun numericPadsUseFourEvenColumnsAndKeepActionsEasyToReach() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val typed = StringBuilder()
         var deleted = 0
@@ -30,20 +30,45 @@ class KeyboardInteractionTest {
             view.configure(InputMode.PHONETIC, false, "Done", editor)
             layoutKeyboard(view)
             for (digit in '0'..'9') assertNotNull("$editor $digit", findButton(view, digit.toString()))
-            val zero = findButton(view, "0")!!
             val one = findButton(view, "1")!!
-            if (editor in listOf(EditorLayout.NUMBER, EditorLayout.SIGNED_NUMBER, EditorLayout.DECIMAL)) {
-                assertTrue("$editor zero key should fill unused bottom slots", zero.width > one.width)
-            }
+            val zero = findButton(view, "0")!!
             val delete = findButton(view, "Delete")!!
             val enter = findButton(view, "Enter")!!
-            assertTrue("$editor delete should span two rows", delete.height > one.height * 2)
-            assertTrue("$editor enter should span two rows", enter.height > one.height * 2)
+            for (cell in listOf(zero, delete, enter)) {
+                assertTrue("$editor cells have equal width", kotlin.math.abs(one.width - cell.width) <= 3)
+                assertTrue("$editor cells have equal height", kotlin.math.abs(one.height - cell.height) <= 3)
+            }
+            assertNotNull("$editor has a decimal point", findButton(view, "."))
             one.performClick(); zero.performClick(); delete.performClick(); enter.performClick()
         }
         assertEquals("101010101010", typed.toString())
         assertEquals(6, deleted)
         assertEquals(6, entered)
+    }
+
+    @Test fun telephonePadKeepsHashAndPlusOnLongPress() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val typed = StringBuilder()
+        val actions = object : KeyboardActions by idleActions() {
+            override fun onCharacter(value: String) { typed.append(value) }
+        }
+        val view = KeyboardView(context, actions, KeyboardPreferences(context))
+        view.configure(InputMode.PHONETIC, false, "Done", EditorLayout.PHONE)
+        layoutKeyboard(view)
+        findButton(view, "* #")!!.performClick()
+        findButton(view, "* #")!!.performLongClick()
+        findButton(view, "0")!!.performLongClick()
+        assertEquals("*#+", typed.toString())
+    }
+
+    @Test fun phoneticTopRowOffersDigitsWithoutReplacingSinhalaHints() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val view = KeyboardView(context, idleActions(), KeyboardPreferences(context))
+        view.configure(InputMode.PHONETIC, false, "Done")
+        layoutKeyboard(view)
+        val q = view.typingLayout()!!.keyById("q")!!
+        assertEquals("1", q.extras.first().second)
+        assertNotEquals("1", q.hint)
     }
 
     @Test @org.robolectric.annotation.Config(qualifiers = "land")

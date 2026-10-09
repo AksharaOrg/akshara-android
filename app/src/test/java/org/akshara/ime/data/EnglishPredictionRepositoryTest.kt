@@ -19,6 +19,9 @@ class EnglishPredictionRepositoryTest {
         assertEquals("I", repository.correction("i"))
         assertTrue(repository.candidates("TE").all { it == it.uppercase() })
         assertEquals("the", repository.candidates("teh").first())
+        assertEquals("teh", repository.candidates("teh")[1])
+        assertEquals("ten", repository.candidates("teh")[2])
+        assertEquals("Teh", repository.candidates("Teh")[1])
         assertNull(repository.correction("hello"))
     }
     @Test fun wordfreqProvidesRankedCompletionsAndLeavesKnownWordsAlone() {
@@ -26,6 +29,9 @@ class EnglishPredictionRepositoryTest {
         val repository = EnglishPredictionRepository(context, LocalLearningStore(context))
         assertTrue(repository.candidates("the").contains("the"))
         assertNull(repository.correction("the"))
+        val completions = repository.candidates("hel")
+        assertTrue(completions.first().startsWith("hel"))
+        assertEquals("hel", completions[1])
     }
 
     @Test fun nextWordSuggestionsUseThePrecedingEnglishWord() {

@@ -35,9 +35,17 @@ class EnglishPredictionRepository(private val context: Context, private val lear
         val first = entries.binarySearchBy(normalized) { it.word }.let { if (it < 0) -it - 1 else it }
         val bundled = entries.asSequence().drop(first).takeWhile { it.word.startsWith(normalized) }.sortedBy { it.rank }.map { it.word }
         val correction = correction(prefix)?.lowercase(java.util.Locale.ROOT)
-        val exactWord = if (correction == null && exact.containsKey(normalized)) sequenceOf(normalized) else emptySequence()
-        return (exactWord + listOfNotNull(correction).asSequence() + continuations + learned.asSequence() + bundled)
-            .distinct().take(maximum.coerceAtLeast(0)).map { matchCase(it, prefix) }.toList()
+        val nearbySpellings = if (correction != null) candidatesAtOneEdit(normalized).asSequence().map { it.word }
+            else emptySequence()
+        val ranked = (nearbySpellings + continuations + learned.asSequence() + bundled)
+            .distinct().take(maximum.coerceAtLeast(0) + 2).toList()
+        val preferred = correction ?: if (exact.containsKey(normalized)) normalized else ranked.firstOrNull() ?: normalized
+        // The rail places its first candidate in the center and its second on the left.
+        // Keep the exact typed spelling in that easy-to-reach left slot when a correction
+        // or completion is preferred, as Gboard does.
+        return (sequenceOf(preferred, normalized) + ranked.asSequence())
+            .distinct().take(maximum.coerceAtLeast(0))
+            .map { if (it == normalized) prefix else matchCase(it, prefix) }.toList()
     }
 
     @Synchronized fun correction(word: String): String? {

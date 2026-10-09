@@ -294,9 +294,12 @@ internal object KeyboardLayoutFactory {
             }
             val q = KeyboardView.qwertyRows[0].mapIndexed { index, id ->
                 val letter = key(id)
-                if (english && topRow != "numbers") {
+                if (editor == EditorLayout.TEXT && topRow != "numbers") {
                     val number = "1234567890"[index].toString()
-                    letter.copy(hint = number, extras = listOf(number to number) + letter.extras)
+                    letter.copy(
+                        hint = if (english) number else letter.hint,
+                        extras = listOf(number to number) + letter.extras
+                    )
                 } else letter
             }
             val a = KeyboardView.qwertyRows[1].map(::key)

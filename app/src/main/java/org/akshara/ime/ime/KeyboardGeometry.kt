@@ -24,9 +24,9 @@ internal object KeyboardGeometry {
     const val VISUAL_INSET_V_DP = 6f
     const val RAIL_PORTRAIT_DP = 46
     const val RAIL_LANDSCAPE_DP = 38
-    const val KEY_AREA_COMPACT_DP = 218
-    const val KEY_AREA_STANDARD_DP = 234
-    const val KEY_AREA_TALL_DP = 250
+    const val KEY_AREA_COMPACT_DP = 221
+    const val KEY_AREA_STANDARD_DP = 237
+    const val KEY_AREA_TALL_DP = 253
     const val SLIVER_DP = 4
     const val LONG_PRESS_MS = 400L
     const val LANGUAGE_SWITCH_HOLD_MS = 500L
@@ -43,7 +43,7 @@ internal object KeyboardGeometry {
     const val DELETE_SWIPE_DP = 24
     const val ICON_DP = 24f
     const val TOP_PAD_DP = 8
-    const val BOTTOM_PAD_DP = 30
+    const val BOTTOM_PAD_DP = 33
     const val LETTER_RADIUS_DP = 8f
     const val SPACE_INTRO_MS = 1200L
     const val SPACE_COLLAPSE_MS = 580L
@@ -77,9 +77,9 @@ internal object KeyboardGeometry {
 
     fun keyAreaDp(size: String, landscape: Boolean): Int {
         if (landscape) return when (size) {
-            "compact" -> 154
-            "tall" -> 178
-            else -> 166
+            "compact" -> 157
+            "tall" -> 181
+            else -> 169
         }
         return when (size) {
             "compact" -> KEY_AREA_COMPACT_DP

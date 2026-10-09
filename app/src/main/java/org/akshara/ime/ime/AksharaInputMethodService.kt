@@ -346,6 +346,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             val editedWord = currentWordAtCursor()
             val editing = isEditingExistingWord(editedWord)
             val typed = if (editing) editedWord.text else currentLatinPrefix()
+            if (typed.isNotEmpty() && value == typed) {
+                rejectedCorrections.add(typed.lowercase(java.util.Locale.ROOT))
+            }
             val nextCharacter = currentInputConnection?.getTextAfterCursor(editedWord.suffix.length + 1, 0)
                 ?.getOrNull(editedWord.suffix.length)
             val separator = if (editedWord.suffix.isEmpty() && nextCharacter == null) " " else ""
@@ -547,12 +550,12 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (event != null && event.isPrintingKey && !event.isCtrlPressed && !event.isAltPressed) {
-            onCharacter(event.unicodeChar.toChar().toString()); return true
-        }
         if (keyCode == KeyEvent.KEYCODE_DEL) { onBackspace(); return true }
         if (keyCode == KeyEvent.KEYCODE_SPACE) { onSpace(); return true }
         if (keyCode == KeyEvent.KEYCODE_ENTER) { onEnter(); return true }
+        if (event != null && event.isPrintingKey && !event.isCtrlPressed && !event.isAltPressed) {
+            onCharacter(event.unicodeChar.toChar().toString()); return true
+        }
         return super.onKeyDown(keyCode, event)
     }
 
