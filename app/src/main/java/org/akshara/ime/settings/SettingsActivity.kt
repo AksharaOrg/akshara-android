@@ -409,11 +409,19 @@ class SettingsActivity : Activity() {
     /** Gboard's theme picker: sections of live previews; tapping one opens its Key borders choice and Apply. */
     private fun renderTheme() {
         toolbar(R.string.theme)
+        if (!themeSectionsOpened) {
+            // Open on the section holding the current theme, so its checkmark is visible
+            themeSectionsOpened = true
+            ThemeCatalog.available().firstOrNull { (_, specs) -> specs.drop(COLLAPSED_THEMES).any { it.id == prefs.theme } }
+                ?.let { expandedThemeSections += it.first }
+        }
         for ((section, specs) in ThemeCatalog.available()) {
             if (specs.isEmpty()) continue
-            layoutInflater.inflate(R.layout.settings_category, container, true)
-            container.getChildAt(container.childCount - 1).let { it as TextView }.setText(section.title)
-            themeGrid(specs)
+            // Like Gboard, long sections show three rows until expanded
+            val collapsible = specs.size > COLLAPSED_THEMES
+            val expanded = section in expandedThemeSections
+            themeHeader(section, collapsible, expanded)
+            themeGrid(if (collapsible && !expanded) specs.take(COLLAPSED_THEMES) else specs)
         }
         section(R.string.theme_accessibility) {
             toggle(R.string.high_contrast, R.string.high_contrast_summary, R.drawable.ic_palette, R.color.settings_icon_gray, prefs.highContrast) {
@@ -433,6 +441,35 @@ class SettingsActivity : Activity() {
     /** System-following themes are previewed in the real system mode, not this screen's override. */
     private fun previewTheme(spec: ThemeSpec, keyBorders: Boolean = prefs.keyBorders(spec.id)) =
         KeyboardThemes.resolve(applicationContext, spec.id, prefs.highContrast, keyBorders)
+
+    private val expandedThemeSections = mutableSetOf<ThemeSection>()
+    private var themeSectionsOpened = false
+
+    private fun themeHeader(section: ThemeSection, collapsible: Boolean, expanded: Boolean) {
+        layoutInflater.inflate(R.layout.settings_category, container, true)
+        val title = container.getChildAt(container.childCount - 1) as TextView
+        title.setText(section.title)
+        if (!collapsible) return
+        title.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, R.drawable.ic_chevron, 0)
+        title.compoundDrawablesRelative[2]?.let { chevron ->
+            val rotated = android.graphics.drawable.RotateDrawable().apply {
+                drawable = chevron.mutate()
+                fromDegrees = if (expanded) -90f else 90f
+                toDegrees = fromDegrees
+                level = 10000
+                setTint(title.currentTextColor)
+            }
+            rotated.setBounds(0, 0, chevron.intrinsicWidth, chevron.intrinsicHeight)
+            title.setCompoundDrawablesRelative(null, null, rotated, null)
+        }
+        title.contentDescription = getString(if (expanded) R.string.theme_show_less else R.string.theme_show_all, getString(section.title))
+        title.isClickable = true
+        title.isFocusable = true
+        title.setOnClickListener {
+            if (!expandedThemeSections.remove(section)) expandedThemeSections += section
+            render()
+        }
+    }
 
     private fun themeGrid(specs: List<ThemeSpec>) {
         val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
@@ -465,15 +502,22 @@ class SettingsActivity : Activity() {
                 setStroke(if (selected) dp(3) else dp(1), if (selected) accent else ColorUtils.setAlphaComponent(attrColor(android.R.attr.textColorPrimary), 40))
             }
         }
-        frame.addView(ThemePreviewView(this).apply { theme = previewTheme(spec); cornerRadius = radius })
+        frame.addView(ThemePreviewView(this).apply {
+            compact = true
+            aspect = .72f
+            cornerRadius = radius
+            if (spec.id == ThemeCatalog.SYSTEM) {
+                // System auto shows both of its looks, light on the left and dark on the right
+                theme = KeyboardThemes.resolve(applicationContext, ThemeCatalog.LIGHT, prefs.highContrast)
+                splitTheme = KeyboardThemes.resolve(applicationContext, ThemeCatalog.DARK, prefs.highContrast)
+            } else theme = previewTheme(spec)
+        })
         if (selected) {
-            frame.addView(TextView(this).apply {
-                text = "✓"
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                textSize = 12f
-                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(accent) }
-            }, android.widget.FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply { setMargins(dp(5), dp(5), dp(5), dp(5)) })
+            frame.addView(ImageView(this).apply {
+                setImageResource(R.drawable.ic_check_circle)
+                imageTintList = ColorStateList.valueOf(accent)
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) }
+            }, android.widget.FrameLayout.LayoutParams(dp(32), dp(32), Gravity.CENTER).apply { bottomMargin = dp(10) })
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -527,6 +571,7 @@ class SettingsActivity : Activity() {
     }
 
     private val screenThemes = setOf(ThemeCatalog.LIGHT, ThemeCatalog.DARK)
+    private val COLLAPSED_THEMES = 9
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 

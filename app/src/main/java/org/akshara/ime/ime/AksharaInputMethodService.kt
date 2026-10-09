@@ -1033,7 +1033,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             win.isNavigationBarContrastEnforced = false
             win.decorView.isForceDarkAllowed = false
         }
-        win.navigationBarColor = if (::keyboard.isInitialized) keyboard.keyboardBackground() else android.graphics.Color.TRANSPARENT
+        // Gradients and glows run under the bar (the keyboard pads for it); a solid theme paints the bar itself
+        win.navigationBarColor = if (::keyboard.isInitialized && !keyboard.drawsUnderNavigationBar()) keyboard.keyboardBackground()
+            else android.graphics.Color.TRANSPARENT
     }
 
     companion object {

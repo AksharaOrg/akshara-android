@@ -53,7 +53,8 @@ class KeyboardThemeTest {
         assertEquals(key, dark.surface)
         assertEquals(ColorUtils.blendARGB(lifted, Color.WHITE, .18f), dark.keyPressed)
         assertEquals(ColorUtils.blendARGB(dark.function, Color.WHITE, .18f), dark.functionPressed)
-        assertEquals(dark.function, dark.accent)
+        assertEquals(Color.rgb(141, 182, 250), dark.accent)   // Gboard-style blue Enter
+        assertEquals(KeyboardTheme.onAccent(dark.accent), dark.accentInk)
         assertEquals(Color.WHITE, dark.popupInk)
         assertEquals(ColorUtils.blendARGB(key, Color.WHITE, .16f), dark.popupSelected)
         assertEquals(ColorUtils.setAlphaComponent(dark.ink, 140), dark.hint)

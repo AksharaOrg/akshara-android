@@ -1185,6 +1185,7 @@ class KeyboardView(
     }
     internal fun isDarkTheme() = theme.dark
     internal fun keyboardBackground() = bg
+    internal fun drawsUnderNavigationBar() = theme.drawsUnderNavigationBar
 
     companion object {
         val qwertyRows = listOf("qwertyuiop".map(Char::toString), "asdfghjkl".map(Char::toString), "zxcvbnm".map(Char::toString))

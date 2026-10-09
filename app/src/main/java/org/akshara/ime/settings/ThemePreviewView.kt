@@ -9,8 +9,8 @@ import android.view.View
 import org.akshara.ime.ime.KeyboardTheme
 
 /**
- * A miniature keyboard in a theme's colors, like the cards in Gboard's theme picker. It draws the same
- * key roles the real keyboard does (letters, function keys, Space, Enter) and honours Key borders.
+ * A theme preview. [compact] is Gboard's picker card (the background with a space bar and the Enter accent);
+ * otherwise it is a miniature keyboard drawing the same key roles as the real one and honouring Key borders.
  */
 internal class ThemePreviewView(context: Context) : View(context) {
     var theme: KeyboardTheme? = null
@@ -18,6 +18,10 @@ internal class ThemePreviewView(context: Context) : View(context) {
     /** Height as a fraction of width. */
     var aspect = 0.62f
     var cornerRadius = 12f * resources.displayMetrics.density
+    var compact = false
+    /** Drawn on the right half, for System auto (light and dark). */
+    var splitTheme: KeyboardTheme? = null
+        set(value) { field = value; invalidate() }
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
@@ -36,6 +40,15 @@ internal class ThemePreviewView(context: Context) : View(context) {
         clip.addRoundRect(0f, 0f, w, h, cornerRadius, cornerRadius, Path.Direction.CW)
         canvas.save()
         canvas.clipPath(clip)
+        if (compact) {
+            drawCard(canvas, theme)
+            splitTheme?.let { right ->
+                canvas.clipRect(w / 2, 0f, w, h)
+                drawCard(canvas, right)
+            }
+            canvas.restore()
+            return
+        }
         theme.backgroundDrawable().apply { setBounds(0, 0, width, height); draw(canvas) }
 
         val pad = w * .035f
@@ -76,5 +89,19 @@ internal class ThemePreviewView(context: Context) : View(context) {
         key(periodX, y, unit, theme.function)
         key(enterX, y, wide, theme.accent, shaped = true)
         canvas.restore()
+    }
+
+    private fun drawCard(canvas: Canvas, theme: KeyboardTheme) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        theme.backgroundDrawable().apply { setBounds(0, 0, width, height); draw(canvas) }
+        val pill = h * .1f
+        val top = h * .78f
+        paint.color = theme.key
+        rect.set(w * .27f, top, w * .67f, top + pill)
+        canvas.drawRoundRect(rect, pill / 2, pill / 2, paint)
+        paint.color = theme.accent
+        rect.set(w * .74f, top, w * .86f, top + pill)
+        canvas.drawRoundRect(rect, pill / 2, pill / 2, paint)
     }
 }

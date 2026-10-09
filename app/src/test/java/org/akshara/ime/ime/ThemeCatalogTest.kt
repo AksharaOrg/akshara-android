@@ -34,18 +34,24 @@ class ThemeCatalogTest {
     /** Labels stay readable on every built-in theme (WCAG AA for text, 4.5:1). */
     @Test fun labelsAreReadableOnEveryKey() {
         val failures = mutableListOf<String>()
-        fun check(what: String, ink: Int, fill: Int) {
+        fun check(what: String, ink: Int, fill: Int, min: Double = 4.5) {
             val contrast = ColorUtils.calculateContrast(ink, fill)
-            if (contrast < 4.5) failures += "$what %.2f".format(contrast)
+            if (contrast < min) failures += "$what %.2f".format(contrast)
         }
         for (spec in ThemeCatalog.all.filter { it.section != ThemeSection.DEFAULT }) {
             val theme = spec.theme(highContrast = false, keyBorders = true)
+            // A glow's brightest point sits behind key labels, which are large text (WCAG AA 3:1)
+            for (glow in spec.glows.map { ColorUtils.compositeColors(it.color, spec.gradient.last()) }) {
+                check("${spec.id} key on glow", theme.ink, ColorUtils.compositeColors(theme.key, glow), 3.0)
+                check("${spec.id} flat on glow", theme.ink, glow, 3.0)
+            }
             for (stop in spec.gradient) {
                 check("${spec.id} key", theme.ink, ColorUtils.compositeColors(theme.key, stop))
                 check("${spec.id} function", theme.ink, ColorUtils.compositeColors(theme.function, stop))
                 check("${spec.id} flat", theme.ink, stop)
             }
             check("${spec.id} popup", theme.popupInk, theme.popup)
+            check("${spec.id} enter", theme.accentInk, theme.accent)
         }
         assertTrue(failures.joinToString("; "), failures.isEmpty())
     }

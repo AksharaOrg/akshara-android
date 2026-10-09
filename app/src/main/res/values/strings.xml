@@ -105,6 +105,8 @@
     <string name="theme_section_dark_gradients">Dark gradients</string>
     <string name="theme_accessibility">Accessibility</string>
     <string name="theme_apply">Apply</string>
+    <string name="theme_show_all">%1$s, show all</string>
+    <string name="theme_show_less">%1$s, show less</string>
     <string name="theme_selected">%1$s, selected</string>
     <string name="theme_dynamic">Dynamic color</string>
     <string name="theme_system">System auto</string>

@@ -5,7 +5,6 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
@@ -53,11 +52,15 @@ internal data class KeyboardTheme(
     /** Gboard's "Key borders": off draws letter and plain function keys flat on the background. */
     val keyBorders: Boolean = true,
     /** Top-to-bottom background stops; empty or one stop means a solid [background]. */
-    val gradient: List<Int> = emptyList()
+    val gradient: List<Int> = emptyList(),
+    val glows: List<Glow> = emptyList()
 ) {
-    fun backgroundDrawable(): Drawable = if (gradient.size > 1) {
-        GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, gradient.toIntArray())
+    fun backgroundDrawable(): Drawable = if (gradient.size > 1 || glows.isNotEmpty()) {
+        ThemeBackgroundDrawable(gradient.ifEmpty { listOf(background) }, glows)
     } else ColorDrawable(background)
+
+    /** A gradient or glow continues under the navigation bar; a solid color can simply paint the bar. */
+    val drawsUnderNavigationBar: Boolean get() = gradient.size > 1 || glows.isNotEmpty()
 
     /** High contrast needs a shape to outline, so it always keeps borders. */
     val flatKeys: Boolean get() = !keyBorders && !highContrast
@@ -79,7 +82,10 @@ internal data class KeyboardTheme(
             highContrast: Boolean,
             dynamic: Boolean = false,
             keyBorders: Boolean = true,
-            gradient: List<Int> = emptyList()
+            gradient: List<Int> = emptyList(),
+            glows: List<Glow> = emptyList(),
+            /** The Enter key's color; null uses the function key color. */
+            accent: Int? = null
         ): KeyboardTheme {
             val overlay = if (dark) Color.WHITE else Color.BLACK
             // Dark keys sit a touch lighter so they don't sink into the background, like Gboard
@@ -95,9 +101,9 @@ internal data class KeyboardTheme(
                 function = function,
                 functionPressed = functionPressed,
                 ghostPressed = ColorUtils.blendARGB(Color.TRANSPARENT, overlay, PRESSED_BLEND),
-                accent = function,
-                accentPressed = functionPressed,
-                accentInk = ink,
+                accent = accent ?: function,
+                accentPressed = accent?.let { ColorUtils.blendARGB(it, overlay, PRESSED_BLEND) } ?: functionPressed,
+                accentInk = accent?.let { onAccent(it) } ?: ink,
                 ink = ink,
                 hint = ColorUtils.setAlphaComponent(ink, 140),
                 surface = key,
@@ -111,8 +117,15 @@ internal data class KeyboardTheme(
                 highContrast = highContrast,
                 dynamic = dynamic,
                 keyBorders = keyBorders,
-                gradient = gradient
+                gradient = gradient,
+                glows = glows
             )
+        }
+
+        /** White or near-black, whichever reads better on the accent. */
+        fun onAccent(accent: Int): Int {
+            val darkInk = Color.rgb(32, 33, 36)
+            return if (ColorUtils.calculateContrast(Color.WHITE, accent) >= ColorUtils.calculateContrast(darkInk, accent)) Color.WHITE else darkInk
         }
 
         private fun midBackground(background: Int, gradient: List<Int>) =
@@ -121,6 +134,10 @@ internal data class KeyboardTheme(
 }
 
 internal object KeyboardThemes {
+    /** Gboard's Default themes give Enter a blue accent. */
+    private val LIGHT_ACCENT = Color.rgb(27, 110, 243)
+    private val DARK_ACCENT = Color.rgb(141, 182, 250)
+
     /** [theme] is a [ThemeCatalog] id; an unknown id falls back to System auto. */
     fun resolve(context: Context, theme: String, highContrast: Boolean, keyBorders: Boolean = true): KeyboardTheme {
         ThemeCatalog.find(theme)?.takeIf { it.section != ThemeSection.DEFAULT }?.let { return it.theme(highContrast, keyBorders) }
@@ -144,7 +161,8 @@ internal object KeyboardThemes {
             function = Color.rgb(95, 99, 104),
             ink = Color.rgb(241, 243, 244),
             dark = true,
-            highContrast = highContrast
+            highContrast = highContrast,
+            accent = DARK_ACCENT
         )
     } else {
         KeyboardTheme.from(
@@ -154,7 +172,8 @@ internal object KeyboardThemes {
             function = Color.rgb(211, 211, 211),
             ink = Color.rgb(32, 33, 36),
             dark = false,
-            highContrast = highContrast
+            highContrast = highContrast,
+            accent = LIGHT_ACCENT
         )
     }
 
