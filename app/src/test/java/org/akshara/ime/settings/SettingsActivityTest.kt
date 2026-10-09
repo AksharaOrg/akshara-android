@@ -133,8 +133,7 @@ class SettingsActivityTest {
     @Test fun emojiChoicePersistsAndPreferencesKeepFeedbackControls() {
         openPage(R.string.page_emoji)
         clickRow(activity.getString(R.string.emoji_button))
-        val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
-        dialog.listView.performItemClick(dialog.listView.getChildAt(1), 1, 1)
+        clickRow(activity.resources.getStringArray(R.array.emoji_button_entries)[1])   // in the Material 3 choice dialog
         assertEquals(EmojiButtonPlacement.KEYBOARD, KeyboardPreferences(activity).emojiButtonPlacement)
         assertTrue(hasText("Before comma key"))
         @Suppress("DEPRECATION") activity.onBackPressed()

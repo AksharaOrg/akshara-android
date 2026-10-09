@@ -1,7 +1,6 @@
 package org.akshara.ime.settings
 
 import android.animation.ValueAnimator
-import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -38,6 +37,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.graphics.ColorUtils
@@ -65,6 +67,8 @@ class SettingsActivity : ComponentActivity() {
     private lateinit var container: LinearLayout
     private var page = Page.HOME
     private val colors by lazy { SettingsColors.scheme(this) }
+    /** The open dialog or sheet, drawn by the Compose host added in [onCreate]. */
+    private var dialog by mutableStateOf<SettingsDialog?>(null)
     private val scrollByPage = mutableMapOf<Page, Int>()
     private val backStack = ArrayDeque<Page>()
     /** Back on a sub-page goes up a page (gesture, button and predictive back); on Home it closes Settings. */
@@ -96,6 +100,11 @@ class SettingsActivity : ComponentActivity() {
         setContentView(R.layout.activity_settings)
         // The same Material 3 scheme as the Compose cards, so Views and Compose share one surface
         window.decorView.setBackgroundColor(colors.surface.toArgb())
+        // Dialogs and sheets open in their own windows; this empty host only keeps them composed
+        addContentView(
+            ComposeView(this).apply { setContent { SettingsTheme { SettingsDialogHost(dialog) { dialog = null } } } },
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        )
         pages = findViewById(R.id.settings_pages)
         scroll = findViewById(R.id.settings_scroll)
         container = findViewById(R.id.settings_container)
@@ -404,13 +413,34 @@ class SettingsActivity : ComponentActivity() {
             ThemeCatalog.available().firstOrNull { (_, specs) -> specs.drop(COLLAPSED_THEMES).any { it.id == prefs.theme } }
                 ?.let { expandedThemeSections += it.first }
         }
+        val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
         for ((section, specs) in ThemeCatalog.available()) {
             if (specs.isEmpty()) continue
             // Like Gboard, long sections show three rows until expanded
             val collapsible = specs.size > COLLAPSED_THEMES
             val expanded = section in expandedThemeSections
-            themeHeader(section, collapsible, expanded)
-            themeGrid(if (collapsible && !expanded) specs.take(COLLAPSED_THEMES) else specs)
+            val cells = (if (collapsible && !expanded) specs.take(COLLAPSED_THEMES) else specs).map(::themeCell)
+            val toggle = {
+                container.post {
+                    if (!expandedThemeSections.remove(section)) expandedThemeSections += section
+                    render()
+                }
+                Unit
+            }
+            container.addView(
+                ComposeView(this).apply {
+                    setContent {
+                        SettingsTheme {
+                            ThemeGrid(getString(section.title), collapsible, expanded, toggle, cells) { cell ->
+                                container.post { themeSheet(ThemeCatalog.find(cell.id)!!) }
+                            }
+                        }
+                    }
+                },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = gutter; marginEnd = gutter; bottomMargin = resources.getDimensionPixelSize(R.dimen.settings_section_gap)
+                }
+            )
         }
         section(R.string.theme_keys) {
             choice(R.string.key_shape, R.drawable.ic_keyboard, R.color.settings_icon_indigo, R.array.key_shape_entries, R.array.key_shape_values, prefs.keyShape) {
@@ -439,129 +469,25 @@ class SettingsActivity : ComponentActivity() {
     private val expandedThemeSections = mutableSetOf<ThemeSection>()
     private var themeSectionsOpened = false
 
-    private fun themeHeader(section: ThemeSection, collapsible: Boolean, expanded: Boolean) {
-        layoutInflater.inflate(R.layout.settings_category, container, true)
-        val title = container.getChildAt(container.childCount - 1) as TextView
-        title.setText(section.title)
-        if (!collapsible) return
-        title.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, R.drawable.ic_chevron, 0)
-        title.compoundDrawablesRelative[2]?.let { chevron ->
-            val rotated = android.graphics.drawable.RotateDrawable().apply {
-                drawable = chevron.mutate()
-                fromDegrees = if (expanded) -90f else 90f
-                toDegrees = fromDegrees
-                level = 10000
-                setTint(title.currentTextColor)
-            }
-            rotated.setBounds(0, 0, chevron.intrinsicWidth, chevron.intrinsicHeight)
-            title.setCompoundDrawablesRelative(null, null, rotated, null)
-        }
-        title.contentDescription = getString(if (expanded) R.string.theme_show_less else R.string.theme_show_all, getString(section.title))
-        title.isClickable = true
-        title.isFocusable = true
-        title.setOnClickListener {
-            if (!expandedThemeSections.remove(section)) expandedThemeSections += section
-            render()
-        }
-    }
-
-    private fun themeGrid(specs: List<ThemeSpec>) {
-        val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
-        val gap = dp(10)
-        val columns = 3
-        val current = prefs.theme
-        val accent = attrColor(android.R.attr.colorAccent)
-        specs.chunked(columns).forEach { rowSpecs ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            for (index in 0 until columns) {
-                val spec = rowSpecs.getOrNull(index)
-                val params = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    if (index > 0) marginStart = gap
-                }
-                if (spec == null) { row.addView(View(this), params); continue }
-                row.addView(themeCell(spec, spec.id == current, accent), params)
-            }
-            container.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = gutter; marginEnd = gutter; bottomMargin = gap
-            })
-        }
-    }
-
-    private fun themeCell(spec: ThemeSpec, selected: Boolean, accent: Int): View {
-        val name = themeName(spec)
-        val radius = dp(12).toFloat()
-        val frame = android.widget.FrameLayout(this).apply {
-            foreground = GradientDrawable().apply {
-                cornerRadius = radius
-                setStroke(if (selected) dp(3) else dp(1), if (selected) accent else ColorUtils.setAlphaComponent(attrColor(android.R.attr.textColorPrimary), 40))
-            }
-        }
-        frame.addView(ThemePreviewView(this).apply {
-            compact = true
-            aspect = .72f
-            cornerRadius = radius
-            if (spec.id == ThemeCatalog.SYSTEM) {
-                // System auto shows both of its looks, light on the left and dark on the right
-                theme = KeyboardThemes.resolve(applicationContext, ThemeCatalog.LIGHT, prefs.highContrast)
-                splitTheme = KeyboardThemes.resolve(applicationContext, ThemeCatalog.DARK, prefs.highContrast)
-            } else theme = previewTheme(spec)
-        })
-        if (selected) {
-            frame.addView(ImageView(this).apply {
-                setImageResource(R.drawable.ic_check_circle)
-                imageTintList = ColorStateList.valueOf(accent)
-                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) }
-            }, android.widget.FrameLayout.LayoutParams(dp(32), dp(32), Gravity.CENTER).apply { bottomMargin = dp(10) })
-        }
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(frame)
-            if (spec.name != 0) addView(TextView(this@SettingsActivity).apply {
-                text = name
-                gravity = Gravity.CENTER
-                textSize = 12f
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(0, dp(4), 0, 0)
-            })
-            contentDescription = if (selected) getString(R.string.theme_selected, name) else name
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { showThemeDialog(spec) }
-        }
+    private fun themeCell(spec: ThemeSpec): ThemeCell {
+        val system = spec.id == ThemeCatalog.SYSTEM
+        return ThemeCell(
+            spec.id, themeName(spec), showName = spec.name != 0, selected = spec.id == prefs.theme,
+            // System auto shows both of its looks, light on the left and dark on the right
+            theme = if (system) KeyboardThemes.resolve(applicationContext, ThemeCatalog.LIGHT, prefs.highContrast) else previewTheme(spec),
+            split = if (system) KeyboardThemes.resolve(applicationContext, ThemeCatalog.DARK, prefs.highContrast) else null
+        )
     }
 
     /** Gboard's apply sheet: a large preview, the theme's own Key borders choice, and Apply. */
-    private fun showThemeDialog(spec: ThemeSpec) {
-        var borders = prefs.keyBorders(spec.id)
-        val preview = ThemePreviewView(this).apply { theme = previewTheme(spec, borders) }
-        val toggle = Switch(this).apply {
-            setText(R.string.key_borders)
-            textSize = 16f
-            isChecked = borders
-            setOnCheckedChangeListener { _, on ->
-                borders = on
-                preview.theme = previewTheme(spec, on)
-            }
+    private fun themeSheet(spec: ThemeSpec) {
+        dialog = SettingsDialog.ThemeSheet(themeName(spec), prefs.keyBorders(spec.id), { borders -> previewTheme(spec, borders) }) { borders ->
+            val before = prefs.theme
+            prefs.setKeyBorders(borders, spec.id)
+            prefs.theme = spec.id
+            // Light and Dark also restyle this screen (attachBaseContext)
+            if (spec.id != before && (before in screenThemes || spec.id in screenThemes)) recreate() else render()
         }
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(8), dp(24), 0)
-            addView(preview)
-            addView(toggle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)).apply { topMargin = dp(8) })
-        }
-        AlertDialog.Builder(this)
-            .setTitle(themeName(spec))
-            .setView(body)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.theme_apply) { _, _ ->
-                val before = prefs.theme
-                prefs.setKeyBorders(borders, spec.id)
-                prefs.theme = spec.id
-                // Light and Dark also restyle this screen (attachBaseContext)
-                if (spec.id != before && (before in screenThemes || spec.id in screenThemes)) recreate() else render()
-            }
-            .show()
     }
 
     private val screenThemes = setOf(ThemeCatalog.LIGHT, ThemeCatalog.DARK)
@@ -771,20 +697,23 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun toolbar(title: Int) {
-        layoutInflater.inflate(R.layout.settings_toolbar, container, true)
-        val bar = container.getChildAt(container.childCount - 1)
-        bar.findViewById<TextView>(R.id.settings_toolbar_title).setText(title)
-        bar.findViewById<ImageButton>(R.id.settings_toolbar_back).apply {
-            imageTintList = ColorStateList.valueOf(attrColor(android.R.attr.colorControlNormal))
-            setOnClickListener { navigateUp() }
+        container.addView(
+            ComposeView(this).apply { setContent { SettingsTheme { SettingsTopBar(getString(title)) { navigateUp() } } } },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        )
+    }
+
+    /** A section header in the Material 3 primary color. */
+    private fun category(title: Int) {
+        layoutInflater.inflate(R.layout.settings_category, container, true)
+        (container.getChildAt(container.childCount - 1) as TextView).apply {
+            setText(title)
+            setTextColor(colors.primary.toArgb())
         }
     }
 
     private fun copy(title: Int, body: Int) {
-        if (title != 0) {
-            layoutInflater.inflate(R.layout.settings_category, container, true)
-            container.getChildAt(container.childCount - 1).let { it as TextView }.setText(title)
-        }
+        if (title != 0) category(title)
         val card = card()
         val text = layoutInflater.inflate(R.layout.settings_copy, card, false) as TextView
         text.setText(body)
@@ -793,10 +722,7 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun section(title: Int, rows: CardScope.() -> Unit) {
-        if (title != 0) {
-            layoutInflater.inflate(R.layout.settings_category, container, true)
-            container.getChildAt(container.childCount - 1).let { it as TextView }.setText(title)
-        }
+        if (title != 0) category(title)
         val items = CardScope().apply(rows).rows.toList()
         val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
         container.addView(
@@ -847,15 +773,10 @@ class SettingsActivity : ComponentActivity() {
             val selected = labels.getOrNull(keys.indexOf(current))
             rows += SettingsRow.Action(getString(title), selected, icon, tint, chevron = true, onClick = {
                 later {
-                    AlertDialog.Builder(this@SettingsActivity)
-                        .setTitle(title)
-                        .setSingleChoiceItems(labels, keys.indexOf(current).coerceAtLeast(0)) { dialog, which ->
-                            onPick(keys[which])
-                            dialog.dismiss()
-                            render()
-                        }
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show()
+                    dialog = SettingsDialog.Choice(getString(title), labels.toList(), keys.indexOf(current)) { which ->
+                        onPick(keys[which])
+                        render()
+                    }
                 }
             })
         }
@@ -866,10 +787,7 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun confirm(title: Int, message: Int, action: Int, run: () -> Unit) {
-        AlertDialog.Builder(this).setTitle(title).setMessage(message)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(action) { _, _ -> run() }
-            .show()
+        dialog = SettingsDialog.Confirm(getString(title), getString(message), getString(action), run)
     }
 
     private fun handleBuildTap() {
