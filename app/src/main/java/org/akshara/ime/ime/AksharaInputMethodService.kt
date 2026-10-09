@@ -454,17 +454,17 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !prefs.inlineAutofill) return null
         if (UiVersions.INLINE_UI_VERSION_1 !in UiVersions.getVersions(uiExtras)) return null
-        val palette = KeyboardPaletteResolver.resolve(this, prefs.theme, prefs.highContrast)
+        val theme = KeyboardThemes.resolve(this, prefs.theme, prefs.highContrast)
         val chipBackground = Icon.createWithResource(this, R.drawable.inline_autofill_chip)
-            .setTint(palette.key)
+            .setTint(theme.surface)
         val chip = ViewStyle.Builder()
             .setBackground(chipBackground)
             .setLayoutMargin(0, (2 * resources.displayMetrics.density).toInt(), 0,
                 (2 * resources.displayMetrics.density).toInt())
             .build()
-        val title = TextViewStyle.Builder().setTextColor(palette.ink).setTextSize(14f).build()
+        val title = TextViewStyle.Builder().setTextColor(theme.ink).setTextSize(14f).build()
         val subtitle = TextViewStyle.Builder()
-            .setTextColor(ColorUtils.setAlphaComponent(palette.ink, 190))
+            .setTextColor(ColorUtils.setAlphaComponent(theme.ink, 190))
             .setTextSize(12f)
             .build()
         val styles = UiVersions.newStylesBuilder()

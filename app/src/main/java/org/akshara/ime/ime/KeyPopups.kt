@@ -11,7 +11,6 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.TextView
-import androidx.core.graphics.ColorUtils
 
 /** Gboard-style press preview and long-press alternate strip. */
 internal class KeyPopups(private val context: Context) {
@@ -23,8 +22,8 @@ internal class KeyPopups(private val context: Context) {
     private var selected = 0
     private var itemWidth = 1
     private var panelColor = Color.WHITE
-    private var labelColor = Color.rgb(25, 28, 33)
-    private var darkTheme = false
+    private var labelColor = Color.BLACK
+    private var selectedColor = Color.LTGRAY
     private val density = context.resources.displayMetrics.density
 
     init {
@@ -48,15 +47,13 @@ internal class KeyPopups(private val context: Context) {
         picker.animationStyle = 0
     }
 
-    fun showPreview(key: View, text: String, fill: Int, dark: Boolean) {
+    fun showPreview(key: View, text: String, theme: KeyboardTheme) {
         if (!key.isShown || text.isBlank()) return
         hidePicker()
-        darkTheme = dark
-        panelColor = fill
-        labelColor = if (dark) Color.WHITE else Color.rgb(25, 28, 33)
+        useTheme(theme)
         previewLabel.text = text
         previewLabel.setTextColor(labelColor)
-        previewLabel.background = panel(fill, dp(14).toFloat())
+        previewLabel.background = panel(panelColor, dp(14).toFloat())
         val width = maxOf(key.width + dp(4), dp(52))
         val height = dp(KeyboardGeometry.PREVIEW_HEIGHT_DP)
         preview.width = width
@@ -74,12 +71,10 @@ internal class KeyPopups(private val context: Context) {
         if (preview.isShowing) preview.dismiss()
     }
 
-    fun showPicker(key: View, values: List<Pair<String, String>>, fill: Int, dark: Boolean) {
+    fun showPicker(key: View, values: List<Pair<String, String>>, theme: KeyboardTheme) {
         if (!key.isShown || values.size < 2) return
         hidePreview()
-        darkTheme = dark
-        panelColor = fill
-        labelColor = if (dark) Color.WHITE else Color.rgb(25, 28, 33)
+        useTheme(theme)
         choices = values
         selected = 1    // Gboard-style: the first extra (the key's hint) is ready on release; slide left for the base
         itemWidth = maxOf(key.width, dp(48))
@@ -87,7 +82,7 @@ internal class KeyPopups(private val context: Context) {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(6), dp(6), dp(6), dp(6))
-            background = panel(fill, dp(18).toFloat())
+            background = panel(panelColor, dp(18).toFloat())
         }
         values.forEachIndexed { index, choice -> row.addView(pickerCell(choice.first, index == selected), LinearLayout.LayoutParams(itemWidth, dp(48))) }
         pickerRow = row
@@ -166,7 +161,13 @@ internal class KeyPopups(private val context: Context) {
 
     private fun selection() = GradientDrawable().apply {
         cornerRadius = dp(24).toFloat()
-        setColor(ColorUtils.blendARGB(panelColor, if (darkTheme) Color.WHITE else Color.BLACK, 0.16f))
+        setColor(selectedColor)
+    }
+
+    private fun useTheme(theme: KeyboardTheme) {
+        panelColor = theme.popup
+        labelColor = theme.popupInk
+        selectedColor = theme.popupSelected
     }
 
     private fun dp(value: Int) = (value * density).toInt()

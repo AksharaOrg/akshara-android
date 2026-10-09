@@ -114,11 +114,9 @@ class KeyboardView(
     private var clipboardVelocity: VelocityTracker? = null
     private val clipboardHandlePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val handler = Handler(Looper.getMainLooper())
-    private val palette = KeyboardPaletteResolver.resolve(context, prefs.theme, prefs.highContrast)
-    private val bg = palette.background
-    private val key = palette.key
-    private val utility = palette.utility
-    private val ink = palette.ink
+    private val theme = KeyboardThemes.resolve(context, prefs.theme, prefs.highContrast)
+    private val bg = theme.background
+    private val ink = theme.ink
     private val rail = SuggestionRail(
         context,
         ink,
@@ -209,7 +207,7 @@ class KeyboardView(
             override fun onCommitPreviewDelete() = actions.onCommitPreviewDelete()
             override fun onCancelPreviewDelete() = actions.onCancelPreviewDelete()
         },
-        KeyboardColors(key, utility, ink, palette.dark, palette.highContrast, prefs.keyHints),
+        theme, prefs.keyHints,
         onLayer = { next -> layer = next; render() },
         onShift = { updateShift() }
     )
@@ -598,7 +596,7 @@ class KeyboardView(
             val row = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER }
             values.forEach { value ->
                 val weight = if (rowIndex == 3 && value == "0") 4 - values.size.toFloat() else 1f
-                row.addView(button(value, key, value) { actions.onCharacter(if (value == "−") "-" else value) }, LayoutParams(0, keyHeight(), weight).keyMargins())
+                row.addView(button(value, KeyRole.LETTER, value) { actions.onCharacter(if (value == "−") "-" else value) }, LayoutParams(0, keyHeight(), weight).keyMargins())
             }
             digits.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, rowHeight()))
         }
@@ -610,9 +608,9 @@ class KeyboardView(
         body.addView(pad, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         if (editorLayout == EditorLayout.PHONE) {
             val extras = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER }
-            extras.addView(button("*", utility, "Asterisk") { actions.onCharacter("*") }, LayoutParams(0, dp(46), 1f).keyMargins())
-            extras.addView(button("(", utility, "Left parenthesis") { actions.onCharacter("(") }, LayoutParams(0, dp(46), 1f).keyMargins())
-            extras.addView(button(")", utility, "Right parenthesis") { actions.onCharacter(")") }, LayoutParams(0, dp(46), 1f).keyMargins())
+            extras.addView(button("*", KeyRole.FUNCTION, "Asterisk") { actions.onCharacter("*") }, LayoutParams(0, dp(46), 1f).keyMargins())
+            extras.addView(button("(", KeyRole.FUNCTION, "Left parenthesis") { actions.onCharacter("(") }, LayoutParams(0, dp(46), 1f).keyMargins())
+            extras.addView(button(")", KeyRole.FUNCTION, "Right parenthesis") { actions.onCharacter(")") }, LayoutParams(0, dp(46), 1f).keyMargins())
             body.addView(extras, LayoutParams(LayoutParams.MATCH_PARENT, dp(52)))
         }
     }
@@ -649,8 +647,8 @@ class KeyboardView(
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(8), 0, dp(4), 0)
-        addView(iconButton(org.akshara.ime.R.drawable.ic_nav_back, utility, "Letters") { closeEmoji() }.apply {
-            background = emojiPill(utility)
+        addView(iconButton(org.akshara.ime.R.drawable.ic_nav_back, KeyRole.FUNCTION, "Letters") { closeEmoji() }.apply {
+            background = emojiPill(theme.function)
             setPadding(dp(6), dp(6), dp(6), dp(6))
         }, LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(8) })
         val scroll = HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled = false }
@@ -667,7 +665,7 @@ class KeyboardView(
             setCompoundDrawables(compoundDrawables[0], null, null, null)
             compoundDrawablePadding = dp(6)
             contentDescription = "Search emoji"
-            background = emojiPill(utility)
+            background = emojiPill(theme.function)
             isFocusable = true
             setOnClickListener {
                 searchQuery.setLanguage(mode, persistentEnglish || englishOneWord)
@@ -686,7 +684,7 @@ class KeyboardView(
         val names = listOf("Recent") + emojiRepo.categories.map { it.name }
         emojiTabs.clear()
         names.forEachIndexed { index, name ->
-            val tab = iconButton(icons[index], Color.TRANSPARENT, name) {
+            val tab = iconButton(icons[index], KeyRole.GHOST, name) {
                 emojiCategoryIndex = index
                 emojiCatalog?.showCategory(index)
                 updateEmojiTabs()
@@ -718,9 +716,9 @@ class KeyboardView(
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(8), dp(4), dp(8), dp(4))
-        addView(button("ABC", Color.TRANSPARENT, "Letters") { closeEmoji() }.apply { typeface = android.graphics.Typeface.DEFAULT; textSize = 16f }, LayoutParams(dp(48), dp(40)))
+        addView(button("ABC", KeyRole.GHOST, "Letters") { closeEmoji() }.apply { typeface = android.graphics.Typeface.DEFAULT; textSize = 16f }, LayoutParams(dp(48), dp(40)))
         addView(Space(context), LayoutParams(0, 1, 1f))
-        addView(iconButton(org.akshara.ime.R.drawable.ic_key_emoji, ink, "Emoji picker active") { }.apply {
+        addView(iconButton(org.akshara.ime.R.drawable.ic_key_emoji, KeyRole.FUNCTION, "Emoji picker active") { }.apply {
             setColorFilter(bg)
             background = emojiPill(ink)
             isSelected = true
@@ -742,10 +740,10 @@ class KeyboardView(
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8), 0, dp(8), 0)
         }
-        header.addView(iconButton(org.akshara.ime.R.drawable.ic_nav_back, utility, "Back to emoji") {
+        header.addView(iconButton(org.akshara.ime.R.drawable.ic_nav_back, KeyRole.FUNCTION, "Back to emoji") {
             emojiSearch = false; render()
         }.apply {
-            background = emojiPill(utility)
+            background = emojiPill(theme.function)
             setPadding(dp(6), dp(6), dp(6), dp(6))
         }, LayoutParams(dp(34), dp(34)))
         header.addView(textView("Search emoji", 18f).apply {
@@ -757,7 +755,7 @@ class KeyboardView(
         val gridHeight = if (isLandscape()) dp(50) else dp(104)
         val resultsCard = LinearLayout(context).apply {
             orientation = VERTICAL
-            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(key) }
+            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(theme.surface) }
             clipToOutline = true
         }
         val grid = emojiScroller(emptyList())
@@ -786,7 +784,7 @@ class KeyboardView(
         val queryRow = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         queryRow.addView(query, LayoutParams(0, dp(36), 1f))
         searchLabel = query
-        val clear = button("×", Color.TRANSPARENT, "Clear emoji search") {
+        val clear = button("×", KeyRole.GHOST, "Clear emoji search") {
             searchQuery.clear(); updateEmojiSearchResults()
         }
         searchClear = clear
@@ -819,7 +817,7 @@ class KeyboardView(
             override fun languageScoreForKey(output: String) = 0f
         }
         val keyboard = KeyboardPanel(context, prefs, popups, searchActions,
-            KeyboardColors(key, utility, ink, palette.dark, palette.highContrast),
+            theme, hints = true,
             onLayer = { searchLayer = it; bindEmojiSearchKeys() },
             onShift = { searchShift = !searchShift; bindEmojiSearchKeys() })
         keyboard.learningEnabled = false
@@ -895,7 +893,7 @@ class KeyboardView(
         body.removeAllViews()
         val board = ClipboardBoard(
             context,
-            KeyboardColors(key, utility, ink, palette.dark, palette.highContrast),
+            theme,
             onPaste = { clip ->
                 actions.onPasteText(clip)
                 resetClipboardExpansion()
@@ -1088,7 +1086,7 @@ class KeyboardView(
         }
     }
     private fun backspaceButton(): ImageButton {
-        val b = iconButton(org.akshara.ime.R.drawable.ic_key_backspace, utility, "Delete") { }
+        val b = iconButton(org.akshara.ime.R.drawable.ic_key_backspace, KeyRole.FUNCTION, "Delete") { }
         var repeats = 0
         b.setOnClickListener { actions.onBackspace() }
         val repeat = object : Runnable { override fun run() { repeats++; actions.onBackspace(repeats > 20); handler.postDelayed(this, if (repeats > 20) 45 else 80) } }
@@ -1101,7 +1099,7 @@ class KeyboardView(
     }
     private fun spaceButton(): Button {
         val label = spaceCaption()
-        val b = button(label, key, "Space") { }
+        val b = button(label, KeyRole.LETTER, "Space") { }
         b.textSize = KeyboardGeometry.SPACE_COLLAPSE_SP
         b.gravity = Gravity.BOTTOM or Gravity.END
         b.setPadding(dp(8), 0, dp(10), dp(7))
@@ -1116,20 +1114,20 @@ class KeyboardView(
         } }; return b
     }
     private fun enterButton(): View = when (enterLabel) {
-        "↵" -> iconButton(org.akshara.ime.R.drawable.ic_key_enter, utility, "Enter") { actions.onEnter() }
-        "⌕" -> iconButton(org.akshara.ime.R.drawable.ic_key_search, utility, "Enter") { actions.onEnter() }
-        else -> button(enterLabel, utility, "Enter") { actions.onEnter() }
+        "↵" -> iconButton(org.akshara.ime.R.drawable.ic_key_enter, KeyRole.ACCENT, "Enter") { actions.onEnter() }
+        "⌕" -> iconButton(org.akshara.ime.R.drawable.ic_key_search, KeyRole.ACCENT, "Enter") { actions.onEnter() }
+        else -> button(enterLabel, KeyRole.ACCENT, "Enter") { actions.onEnter() }
     }
-    private fun button(label: String, color: Int, description: String, click: () -> Unit) = Button(context).apply {
+    private fun button(label: String, role: KeyRole, description: String, click: () -> Unit) = Button(context).apply {
         text = label; textSize = if (label.length > 10) 13f else 20f; isAllCaps = false; gravity = Gravity.CENTER
-        setTextColor(ink); contentDescription = description; minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
-        background = keyBackground(color)
+        setTextColor(inkFor(role)); contentDescription = description; minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+        background = keyBackground(role)
         stateListAnimator = null; setOnClickListener { click() }
         accessibilityDelegate = object : AccessibilityDelegate() { override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) { super.onInitializeAccessibilityNodeInfo(host, info); info.className = Button::class.java.name } }
     }
-    private fun iconButton(icon: Int, color: Int, description: String, click: () -> Unit) = ImageButton(context).apply {
-        setImageResource(icon); setColorFilter(ink); scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
-        setPadding(dp(10), dp(10), dp(10), dp(10)); contentDescription = description; background = keyBackground(color)
+    private fun iconButton(icon: Int, role: KeyRole, description: String, click: () -> Unit) = ImageButton(context).apply {
+        setImageResource(icon); setColorFilter(inkFor(role)); scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+        setPadding(dp(10), dp(10), dp(10), dp(10)); contentDescription = description; background = keyBackground(role)
         stateListAnimator = null; setOnClickListener { click() }
     }
     private fun textView(value: String, size: Float) = TextView(context).apply { text = value; textSize = size; gravity = Gravity.CENTER; setTextColor(ink) }
@@ -1153,12 +1151,19 @@ class KeyboardView(
         transformed.recycle()
         return handled
     }
-    private fun keyBackground(base: Int): StateListDrawable {
+    private enum class KeyRole { LETTER, FUNCTION, ACCENT, GHOST }
+    private fun inkFor(role: KeyRole) = if (role == KeyRole.ACCENT) theme.accentInk else ink
+    private fun keyBackground(role: KeyRole): StateListDrawable {
         fun shape(color: Int) = GradientDrawable().apply {
             cornerRadius = dp(8).toFloat(); setColor(color)
-            setStroke(if (prefs.highContrast) dp(2) else 0, ink)
+            setStroke(if (theme.highContrast) dp(2) else 0, theme.border)
         }
-        val pressed = ColorUtils.blendARGB(base, if (isDark()) Color.WHITE else Color.BLACK, .18f)
+        val (base, pressed) = when (role) {
+            KeyRole.LETTER -> theme.key to theme.keyPressed
+            KeyRole.FUNCTION -> theme.function to theme.functionPressed
+            KeyRole.ACCENT -> theme.accent to theme.accentPressed
+            KeyRole.GHOST -> Color.TRANSPARENT to theme.ghostPressed
+        }
         return StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_pressed), shape(pressed))
             addState(intArrayOf(), shape(base))
@@ -1178,8 +1183,7 @@ class KeyboardView(
         val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
         return if (id != 0) resources.getDimensionPixelSize(id) else 0
     }
-    private fun isDark() = palette.dark
-    internal fun isDarkTheme() = palette.dark
+    internal fun isDarkTheme() = theme.dark
     internal fun keyboardBackground() = bg
 
     companion object {

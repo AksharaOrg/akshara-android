@@ -21,7 +21,7 @@ import androidx.recyclerview.widget.RecyclerView
 
 internal class ClipboardBoard(
     context: Context,
-    private val colors: KeyboardColors,
+    private val theme: KeyboardTheme,
     private val onPaste: (String) -> Unit,
     private val onBack: () -> Unit,
     private val onSettings: () -> Unit,
@@ -41,7 +41,7 @@ internal class ClipboardBoard(
     private val empty = TextView(context).apply {
         gravity = Gravity.CENTER
         textSize = 15f
-        setTextColor(ColorUtils.setAlphaComponent(colors.ink, 170))
+        setTextColor(ColorUtils.setAlphaComponent(theme.ink, 170))
         setPadding(dp(24), dp(16), dp(24), dp(16))
     }
     private val list = RecyclerView(context).apply {
@@ -128,7 +128,7 @@ internal class ClipboardBoard(
             textSize = 16f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
-            setTextColor(colors.ink)
+            setTextColor(theme.ink)
         }, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
         addView(
             settingsButton(),
@@ -139,7 +139,7 @@ internal class ClipboardBoard(
 
     private fun tabs() = LinearLayout(context).apply {
         orientation = HORIZONTAL
-        background = pill(ColorUtils.setAlphaComponent(colors.ink, 18), dp(20).toFloat())
+        background = pill(ColorUtils.setAlphaComponent(theme.ink, 18), dp(20).toFloat())
         setPadding(dp(3), dp(3), dp(3), dp(3))
         addView(recentTab, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
         addView(pinnedTab, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
@@ -156,13 +156,13 @@ internal class ClipboardBoard(
     }
 
     private fun styleTab(view: TextView) {
-        view.setTextColor(colors.ink)
-        view.background = if (view.isSelected) pill(colors.key, dp(16).toFloat()) else null
+        view.setTextColor(theme.ink)
+        view.background = if (view.isSelected) pill(theme.surface, dp(16).toFloat()) else null
     }
 
     private fun toolbarIcon(icon: Int, description: String, click: () -> Unit) = ImageButton(context).apply {
         setImageResource(icon)
-        setColorFilter(colors.ink)
+        setColorFilter(theme.ink)
         scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
         setPadding(dp(10), dp(10), dp(10), dp(10))
         contentDescription = description
@@ -218,7 +218,7 @@ internal class ClipboardBoard(
             val row = LinearLayout(parent.context).apply {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                background = keySurface(colors.key)
+                background = keySurface(theme.surface)
                 layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     bottomMargin = dp(8)
                 }
@@ -226,7 +226,7 @@ internal class ClipboardBoard(
             }
             val preview = TextView(parent.context).apply {
                 textSize = 15f
-                setTextColor(colors.ink)
+                setTextColor(theme.ink)
                 maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(dp(16), dp(12), dp(8), dp(12))
@@ -251,7 +251,7 @@ internal class ClipboardBoard(
             holder.row.contentDescription = "Paste ${text.take(40)}"
             holder.pin.contentDescription = if (pinnedTab) "Remove pin" else "Pin clip"
             holder.pin.setColorFilter(
-                if (pinnedTab) ColorUtils.blendARGB(colors.ink, 0xFFFF9800.toInt(), 0.65f) else ColorUtils.setAlphaComponent(colors.ink, 140)
+                if (pinnedTab) ColorUtils.blendARGB(theme.ink, theme.highlight, 0.65f) else ColorUtils.setAlphaComponent(theme.ink, 140)
             )
             holder.row.setOnClickListener { onPaste(text) }
             holder.pin.setOnClickListener {
@@ -286,7 +286,7 @@ internal class ClipboardBoard(
     ) : RecyclerView.ViewHolder(row)
 
     private fun keySurface(color: Int) = RippleDrawable(
-        ColorStateList.valueOf(ColorUtils.setAlphaComponent(colors.ink, 40)),
+        ColorStateList.valueOf(ColorUtils.setAlphaComponent(theme.ink, 40)),
         pill(color, dp(12).toFloat()),
         pill(Color.WHITE, dp(12).toFloat())
     )

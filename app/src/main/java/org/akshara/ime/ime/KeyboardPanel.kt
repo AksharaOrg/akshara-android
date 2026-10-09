@@ -22,7 +22,8 @@ internal class KeyboardPanel(
     private val prefs: KeyboardPreferences,
     private val popups: KeyPopups,
     private val actions: KeyboardActions,
-    private val colors: KeyboardColors,
+    private val theme: KeyboardTheme,
+    private val hints: Boolean,
     private val onLayer: (KeyboardLayer) -> Unit,
     private val onShift: () -> Unit
 ) : ViewGroup(context), TouchController.Listener {
@@ -78,7 +79,8 @@ internal class KeyboardPanel(
         val needed = rows.sumOf { it.keys.size }
         while (caps.size < needed) {
             val cap = KeyCap(context)
-            cap.colors = colors
+            cap.theme = theme
+            cap.hints = hints
             caps += cap
             addView(cap)
         }
@@ -87,7 +89,8 @@ internal class KeyboardPanel(
         rows.forEach { row ->
             row.keys.forEach { def ->
                 val cap = caps[index++]
-                cap.colors = colors
+                cap.theme = theme
+                cap.hints = hints
                 cap.spec = KeySpec(
                     def.id, def.label, def.output, def.action,
                     Bounds(0f, 0f, 0f, 0f), Bounds(0f, 0f, 0f, 0f), 0,
@@ -132,7 +135,8 @@ internal class KeyboardPanel(
         var index = 0
         placed.keys.forEach { spec ->
             val cap = caps[index++]
-            cap.colors = colors
+            cap.theme = theme
+            cap.hints = hints
             cap.spec = spec
             cap.setOnClickListener { cap.spec?.let(::activate) }
             cap.layout(spec.visual.left.toInt(), spec.visual.top.toInt(), spec.visual.right.toInt(), spec.visual.bottom.toInt())
@@ -221,7 +225,7 @@ internal class KeyboardPanel(
     }
 
     override fun onPreview(key: KeySpec) {
-        capFor(key)?.let { popups.showPreview(it, key.label.ifEmpty { key.output }, colors.key, colors.dark) }
+        capFor(key)?.let { popups.showPreview(it, key.label.ifEmpty { key.output }, theme) }
     }
 
     override fun onHidePreview() = popups.hidePreview()
@@ -230,7 +234,7 @@ internal class KeyboardPanel(
         val cap = capFor(key) ?: return
         pickerKey = cap
         val choices = listOf(key.label.ifEmpty { key.output } to key.output) + key.extras
-        popups.showPicker(cap, choices, colors.key, colors.dark)
+        popups.showPicker(cap, choices, theme)
     }
 
     override fun onMovePicker(rawX: Float) {
