@@ -67,10 +67,13 @@ class KeyboardPreferences(context: Context) {
     var v2Classical: Boolean by bool(V2_CLASSICAL, false)
     var v2RakaransayaU: Boolean by bool(V2_RAKARANSAYA_U, false)
     var v2Archaic: Boolean by bool(V2_ARCHAIC, false)
+    /** Off: d types ද, dh ධ, D ඩ. On: the older keyboard convention, d types ඩ and dh ද. */
+    var v2RetroflexD: Boolean by bool(V2_RETROFLEX_D, false)
 
     val smartPhoneticOptions: SmartPhoneticV2.Options
         get() = SmartPhoneticV2.Options(
-            archaic = v2Archaic, repayaZwj = v2RepayaZwj, classical = v2Classical, rakaransayaU = v2RakaransayaU
+            archaic = v2Archaic, repayaZwj = v2RepayaZwj, classical = v2Classical, rakaransayaU = v2RakaransayaU,
+            retroflexD = v2RetroflexD
         )
 
     fun register(listener: SharedPreferences.OnSharedPreferenceChangeListener) =
@@ -114,5 +117,6 @@ class KeyboardPreferences(context: Context) {
         const val V2_CLASSICAL = "smart_phonetic_v2_classical"
         const val V2_RAKARANSAYA_U = "smart_phonetic_v2_rakaransaya_u"
         const val V2_ARCHAIC = "smart_phonetic_v2_archaic"
+        const val V2_RETROFLEX_D = "smart_phonetic_v2_retroflex_d"
     }
 }

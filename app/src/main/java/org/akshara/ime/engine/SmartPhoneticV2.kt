@@ -10,7 +10,7 @@ package org.akshara.ime.engine
  * `akshara-phonetics/tools/build_golden.py`.
  */
 object SmartPhoneticV2 {
-    /** The reference's options, all off by default (`to_sinhala(..., archaic=, repaya_zwj=, classical=, rakaransaya_u=)`). */
+    /** The reference's options, all off by default (`to_sinhala(..., archaic=, repaya_zwj=, classical=, rakaransaya_u=, retroflex_d=)`). */
     data class Options(
         /** Allow ඏ ඐ ෟ ෳ ඎ ඁ ඦ and touching letters (R-14). */
         val archaic: Boolean = false,
@@ -20,6 +20,8 @@ object SmartPhoneticV2 {
         val classical: Boolean = false,
         /** Write C + r + u/uu as rakaransaya + ු/ූ (ක්‍රූර) instead of the usual ෘ/ෲ (කෲර) (R-06). */
         val rakaransayaU: Boolean = false,
+        /** Write d as ඩ and dh as ද, the older keyboard convention (R-01). */
+        val retroflexD: Boolean = false,
     )
 
     private const val HAL = "්"
@@ -40,6 +42,8 @@ object SmartPhoneticV2 {
     private val FRONT = setOf("i", "ii", "e", "ee", "ae", "aee", "ai")
     private val BACK = setOf("u", "uu", "o", "oo", "au")
     private val GAETTA = mapOf("u" to "ෘ", "uu" to "ෲ")                       // R-06: C + r + u/uu (G-VS-15)
+    /** R-01 retroflexD: d ඩ · dh ද · D ඪ · Dh ධ · zd ඬ (q, dhh, zdh, zq and zD keep their letters). */
+    private val RETROFLEX_D = mapOf("d" to "ඩ", "dh" to "ද", "D" to "ඪ", "Dh" to "ධ", "zd" to "ඬ")
     internal val BANDI = setOf(                                                // G-HC-15, R-10
         "ක" to "ෂ", "ක" to "ව", "ග" to "ධ", "ට" to "ඨ", "ත" to "ථ", "ත" to "ව", "ද" to "ධ",
         "ද" to "ව", "න" to "ථ", "න" to "ද", "න" to "ධ", "න" to "ව", "ඤ" to "ච"
@@ -124,7 +128,10 @@ object SmartPhoneticV2 {
     private enum class State { VOWEL, ANUSVARA, HAL }
 
     fun transliterate(source: String, options: Options = Options()): String {
-        val tokens = tokenize(source, options.archaic)
+        var tokens = tokenize(source, options.archaic)
+        if (options.retroflexD) tokens = tokens.map { t ->
+            if (t is Consonant) RETROFLEX_D[t.seq]?.let { Consonant(it, t.seq) } ?: t else t
+        }
         val out = ArrayList<String>(tokens.size * 2)
         var state: State? = null        // null: word start
         var previousVowel: String? = null

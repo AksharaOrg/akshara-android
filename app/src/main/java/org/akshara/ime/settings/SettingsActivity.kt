@@ -286,6 +286,11 @@ class SettingsActivity : Activity() {
                     prefs.smartPhoneticV2 = it
                     render()
                 }
+                if (prefs.smartPhoneticV2) {
+                    toggle(R.string.v2_retroflex_d, R.string.v2_retroflex_d_summary, R.drawable.ic_language, R.color.settings_icon_blue, prefs.v2RetroflexD) {
+                        prefs.v2RetroflexD = it
+                    }
+                }
                 toggle(R.string.english_one_word, R.string.english_one_word_summary, R.drawable.ic_language, R.color.settings_icon_teal, prefs.englishForOneWord) {
                     prefs.englishForOneWord = it
                 }

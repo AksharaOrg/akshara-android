@@ -22,8 +22,8 @@ class KeyboardPreferencesTest {
         val p = KeyboardPreferences(context)
         assertTrue(p.smartPhoneticV2)
         assertEquals(SmartPhoneticV2.Options(), p.smartPhoneticOptions)
-        p.v2RakaransayaU = true; p.v2Archaic = true
-        assertEquals(SmartPhoneticV2.Options(archaic = true, rakaransayaU = true), KeyboardPreferences(context).smartPhoneticOptions)
+        p.v2RakaransayaU = true; p.v2Archaic = true; p.v2RetroflexD = true
+        assertEquals(SmartPhoneticV2.Options(archaic = true, rakaransayaU = true, retroflexD = true), KeyboardPreferences(context).smartPhoneticOptions)
     }
     @Test fun emojiPlacementMigratesLegacyDisabledAndPersistsNewChoice() {
         context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().putBoolean("emoji_picker", false).commit()
