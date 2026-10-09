@@ -130,7 +130,7 @@ internal class KeyCap(context: Context) : View(context) {
                     drawHint(canvas, hint, Paint.Align.LEFT, width / 2f + gap, prominentHint, mainInkTop, mainInkLeft, mainInkRight)
                 }
             } else {
-                hint?.let { drawHint(canvas, it, Paint.Align.RIGHT, width - inset, prominentHint, mainInkTop, mainInkLeft, mainInkRight) }
+                hint?.let { drawHint(canvas, it, Paint.Align.RIGHT, width - inset - dp(2f), prominentHint, mainInkTop, mainInkLeft, mainInkRight) }
                 second?.let { drawHint(canvas, it, Paint.Align.LEFT, inset, false, mainInkTop, mainInkLeft, mainInkRight) }
             }
         }
