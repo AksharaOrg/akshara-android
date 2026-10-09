@@ -17,6 +17,7 @@ class KeyboardPreferencesTest {
         val p = KeyboardPreferences(context); assertEquals(InputMode.SMART_PHONETIC, p.mode); assertTrue(p.suggestions); assertFalse(p.clipboardHistory)
         assertTrue(p.doubleSpacePeriod); assertTrue(p.smartQuotes); assertTrue(p.smartPunctuation); assertFalse(p.englishForOneWord)
         assertFalse(p.clipboardPreview); assertTrue(p.spacePunctuationKeys); assertTrue(p.emojiPicker)
+        assertTrue(p.symbolHints)
     }
     @Test fun grammarCorrectSmartPhoneticIsTheDefault() {
         val p = KeyboardPreferences(context)
@@ -50,8 +51,9 @@ class KeyboardPreferencesTest {
         assertFalse(p.keyBorders(org.akshara.ime.ime.ThemeCatalog.defaultId))
     }
     @Test fun valuesPersistAndReset() {
-        KeyboardPreferences(context).apply { mode = InputMode.WIJESEKARA; highContrast = true }
-        KeyboardPreferences(context).apply { assertEquals(InputMode.WIJESEKARA, mode); assertTrue(highContrast); reset() }
+        KeyboardPreferences(context).apply { mode = InputMode.WIJESEKARA; highContrast = true; symbolHints = false }
+        KeyboardPreferences(context).apply { assertEquals(InputMode.WIJESEKARA, mode); assertTrue(highContrast); assertFalse(symbolHints); reset() }
         assertEquals(InputMode.SMART_PHONETIC, KeyboardPreferences(context).mode)
+        assertTrue(KeyboardPreferences(context).symbolHints)
     }
 }

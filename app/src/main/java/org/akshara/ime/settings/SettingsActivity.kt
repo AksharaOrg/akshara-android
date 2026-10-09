@@ -282,6 +282,9 @@ class SettingsActivity : ComponentActivity() {
             toggle(R.string.key_hints, R.string.key_hints_summary, R.drawable.ic_keyboard, R.color.settings_icon_gray, prefs.keyHints) {
                 prefs.keyHints = it
             }
+            toggle(R.string.symbol_hints, R.string.symbol_hints_summary, R.drawable.ic_keyboard, R.color.settings_icon_gray, prefs.symbolHints) {
+                prefs.symbolHints = it
+            }
             toggle(R.string.spatial_decoder, R.string.spatial_decoder_summary, R.drawable.ic_keyboard, R.color.settings_icon_blue, prefs.spatialDecoder) {
                 prefs.spatialDecoder = it
             }

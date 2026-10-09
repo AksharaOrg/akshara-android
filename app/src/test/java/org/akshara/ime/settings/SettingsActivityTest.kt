@@ -138,6 +138,18 @@ class SettingsActivityTest {
         assertFalse(KeyboardPreferences(activity).suggestions)
     }
 
+    @Test fun symbolHintSwitchPersistsWithoutChangingSinhalaHints() {
+        openPage(R.string.page_preferences)
+        val title = activity.getString(R.string.symbol_hints)
+        clickRow(title)
+        assertFalse(KeyboardPreferences(activity).symbolHints)
+        assertTrue(KeyboardPreferences(activity).keyHints)
+        compose.onNode(hasNodeText(title) and isToggleable()).assertIsOff()
+        clickRow(title)
+        assertTrue(KeyboardPreferences(activity).symbolHints)
+        compose.onNode(hasNodeText(title) and isToggleable()).assertIsOn()
+    }
+
     @Test fun switchesRefreshWhenPreferencesChangeWhileSettingsIsPaused() {
         openPage(R.string.page_correction)
         val title = activity.getString(R.string.suggestions)

@@ -30,6 +30,8 @@ internal class KeyCap(context: Context) : View(context) {
         set(value) { field = value; invalidate() }
     var hints = true
         set(value) { field = value; invalidate() }
+    var symbolHints = true
+        set(value) { field = value; invalidate() }
     var flickActive = false
         set(value) { field = value; invalidate() }
 
@@ -87,7 +89,7 @@ internal class KeyCap(context: Context) : View(context) {
             return
         }
         val text = if (flickActive && key.flickOutput != null) key.flickOutput else key.label
-        val hint = key.hint?.takeIf { hints && !flickActive && !key.utility }
+        val (hint, second) = visibleHints()
         val prominentHint = hint?.length == 1 && !KeyTypography.isSinhala(hint) &&
             KeyTypography.isLatinLetter(text)
         var mainInkTop = height.toFloat()
@@ -116,23 +118,32 @@ internal class KeyCap(context: Context) : View(context) {
             mainInkRight = mainStart + mainInkBounds.right
             canvas.drawText(text, width / 2f, baseline, labelPaint)
         }
-        if (!hint.isNullOrEmpty()) {
+        if (!hint.isNullOrEmpty() || !second.isNullOrEmpty()) {
             // A Sinhala letter hint takes the right corner, so the long-press number or symbol goes on the left
-            val second = key.extras.firstOrNull()?.first?.takeIf { it != hint }
             val inset = if (prominentHint) dp(1.5f) else dp(KeyTypography.HINT_INSET_DP)
             if (theme.keyShape == KeyShape.PILL) {
                 // Round tops have no corners, so hints sit side by side at the top centre (Gboard's round keys)
                 val gap = dp(2)
-                if (second == null) drawHint(canvas, hint, Paint.Align.CENTER, width / 2f, prominentHint, mainInkTop, mainInkLeft, mainInkRight)
+                if (hint == null || second == null) drawHint(canvas, hint ?: second!!, Paint.Align.CENTER, width / 2f, prominentHint, mainInkTop, mainInkLeft, mainInkRight)
                 else {
                     drawHint(canvas, second, Paint.Align.RIGHT, width / 2f - gap, false, mainInkTop, mainInkLeft, mainInkRight)
                     drawHint(canvas, hint, Paint.Align.LEFT, width / 2f + gap, prominentHint, mainInkTop, mainInkLeft, mainInkRight)
                 }
             } else {
-                drawHint(canvas, hint, Paint.Align.RIGHT, width - inset, prominentHint, mainInkTop, mainInkLeft, mainInkRight)
+                hint?.let { drawHint(canvas, it, Paint.Align.RIGHT, width - inset, prominentHint, mainInkTop, mainInkLeft, mainInkRight) }
                 second?.let { drawHint(canvas, it, Paint.Align.LEFT, inset, false, mainInkTop, mainInkLeft, mainInkRight) }
             }
         }
+    }
+
+    /** Filter only the printed hints; alternate outputs remain available to the touch controller. */
+    internal fun visibleHints(): Pair<String?, String?> {
+        val key = spec ?: return null to null
+        if (flickActive || key.utility) return null to null
+        fun visible(value: String?) = value?.takeIf {
+            if (KeyTypography.isSinhala(it) || it.all(Char::isDigit)) hints else symbolHints
+        }
+        return visible(key.hint) to visible(key.extras.firstOrNull()?.first?.takeIf { it != key.hint })
     }
 
     private fun drawHint(

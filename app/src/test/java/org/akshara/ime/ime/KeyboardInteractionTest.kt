@@ -15,6 +15,28 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class KeyboardInteractionTest {
+    @Test fun symbolHintsAreIndependentOfSinhalaHintsAndKeepAlternates() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val prefs = KeyboardPreferences(context)
+        for (english in listOf(false, true)) {
+            for (symbols in listOf(false, true)) for (sinhala in listOf(false, true)) {
+                prefs.symbolHints = symbols
+                prefs.keyHints = sinhala
+                val view = KeyboardView(context, idleActions(), prefs)
+                view.configure(InputMode.PHONETIC, false, "Done", english = english)
+                layoutKeyboard(view)
+                val m = findTagged(view, "m") as KeyCap
+                val hints = m.visibleHints().toList().filterNotNull()
+                assertEquals(symbols, "?" in hints)
+                assertEquals(!english && sinhala, hints.any(KeyTypography::isSinhala))
+                assertEquals("?", m.spec!!.extras.first().second)
+                val w = findTagged(view, "w") as KeyCap
+                assertEquals(sinhala, "2" in w.visibleHints().toList())
+                assertEquals("2", w.spec!!.extras.first().second)
+            }
+        }
+    }
+
     @Test fun numericPadsUseFourEvenColumnsAndKeepActionsEasyToReach() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val typed = StringBuilder()

@@ -1003,6 +1003,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         if (key == "persistent_english" && persistentEnglish == prefs.persistentEnglish) return
         commitComposition()
         val recreate = key == null || key == KeyboardPreferences.THEME || key == "high_contrast" || key == KeyboardPreferences.KEY_HINTS ||
+            key == KeyboardPreferences.SYMBOL_HINTS ||
             key == KeyboardPreferences.SMART_PHONETIC_V2 ||
             key.startsWith(KeyboardPreferences.KEY_BORDERS_PREFIX) || key == KeyboardPreferences.KEY_SHAPE
         if (recreate) {

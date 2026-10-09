@@ -84,6 +84,8 @@
     <string name="inline_autofill_summary">Show password-manager and form-fill suggestions in the keyboard bar</string>
     <string name="key_hints">Sinhala key hints</string>
     <string name="key_hints_summary">Show the Sinhala letter each key types in its corner</string>
+    <string name="symbol_hints">Symbol key hints</string>
+    <string name="symbol_hints_summary">Show long-press symbols such as @ and ? on letter keys. Long-press still works when hints are hidden.</string>
     <string name="show_with_hardware_keyboard">Show on-screen keyboard</string>
     <string name="show_with_hardware_keyboard_summary">Keep the keyboard on screen while a physical keyboard is connected</string>
     <string name="theme">Theme</string>

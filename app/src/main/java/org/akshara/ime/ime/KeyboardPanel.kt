@@ -81,6 +81,7 @@ internal class KeyboardPanel(
             val cap = KeyCap(context)
             cap.theme = theme
             cap.hints = hints
+            cap.symbolHints = prefs.symbolHints
             caps += cap
             addView(cap)
         }
@@ -91,6 +92,7 @@ internal class KeyboardPanel(
                 val cap = caps[index++]
                 cap.theme = theme
                 cap.hints = hints
+                cap.symbolHints = prefs.symbolHints
                 cap.spec = KeySpec(
                     def.id, def.label, def.output, def.action,
                     Bounds(0f, 0f, 0f, 0f), Bounds(0f, 0f, 0f, 0f), 0,
@@ -137,6 +139,7 @@ internal class KeyboardPanel(
             val cap = caps[index++]
             cap.theme = theme
             cap.hints = hints
+            cap.symbolHints = prefs.symbolHints
             cap.spec = spec
             cap.setOnClickListener { cap.spec?.let(::activate) }
             cap.layout(spec.visual.left.toInt(), spec.visual.top.toInt(), spec.visual.right.toInt(), spec.visual.bottom.toInt())
