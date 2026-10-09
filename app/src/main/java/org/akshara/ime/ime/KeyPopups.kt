@@ -81,7 +81,7 @@ internal class KeyPopups(private val context: Context) {
         panelColor = fill
         labelColor = if (dark) Color.WHITE else Color.rgb(25, 28, 33)
         choices = values
-        selected = 0
+        selected = 1    // Gboard-style: the first extra (the key's hint) is ready on release; slide left for the base
         itemWidth = maxOf(key.width, dp(48))
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -101,7 +101,7 @@ internal class KeyPopups(private val context: Context) {
         val expandsRight = loc[0] + width <= (key.rootView?.width ?: Int.MAX_VALUE) - dp(4)
         if (!expandsRight) {
             choices = values.drop(1).reversed() + values.first()
-            selected = choices.lastIndex
+            selected = choices.lastIndex - 1
             row.removeAllViews()
             choices.forEachIndexed { index, choice ->
                 row.addView(pickerCell(choice.first, index == selected), LinearLayout.LayoutParams(itemWidth, dp(48)))

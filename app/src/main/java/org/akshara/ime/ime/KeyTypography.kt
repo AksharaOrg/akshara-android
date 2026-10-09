@@ -8,7 +8,8 @@ internal object KeyTypography {
     const val LATIN_SP = 26f
     const val SINHALA_SP = 21.5f
     const val HINT_SP = 9f
-    const val HINT_INSET_DP = 3f
+    const val HINT_INSET_X_DP = 6f
+    const val HINT_INSET_Y_DP = 5f
     const val HINT_LABEL_SHIFT_DP = 4f
     const val FUNCTION_SP = 14f
     const val PREVIEW_SP = 28f

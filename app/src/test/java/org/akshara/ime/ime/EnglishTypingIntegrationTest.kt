@@ -268,11 +268,11 @@ class EnglishTypingIntegrationTest {
         assertEquals("don't https://example.com/a?b=1  ", editor.text.toString())
     }
 
-    @Test fun englishShiftFollowsSentenceBoundariesAndAccentsAreAvailable() = withEditor { service, editor, view, _ ->
+    @Test fun englishShiftFollowsSentenceBoundariesAndSymbolsAreAvailable() = withEditor { service, editor, view, _ ->
         layout(view)
         assertEquals("Akshara - English", view.typingLayout()!!.keyById("space")!!.label)
         assertEquals("A", view.typingLayout()!!.keyById("a")!!.output)
-        assertTrue(view.typingLayout()!!.keyById("a")!!.extras.any { it.second == "Á" })
+        assertTrue(view.typingLayout()!!.keyById("a")!!.extras.any { it.second == "@" })
         service.onCharacter("Hello")
         layout(view)
         assertEquals("a", view.typingLayout()!!.keyById("a")!!.output)

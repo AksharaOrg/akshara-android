@@ -106,16 +106,24 @@ internal class KeyCap(context: Context) : View(context) {
             canvas.drawText(text, width / 2f, baseline, labelPaint)
         }
         if (!hint.isNullOrEmpty()) {
-            hintPaint.color = ColorUtils.setAlphaComponent(colors.ink, 140)
-            hintPaint.typeface = KeyTypography.keyTypeface()
-            var hintSize = KeyTypography.hintPx(resources)
-            val maxHintWidth = width * 0.4f
-            while (hintSize > dp(7) && hintPaint.apply { textSize = hintSize }.measureText(hint) > maxHintWidth) {
-                hintSize *= 0.9f
-            }
-            hintPaint.textSize = hintSize
-            canvas.drawText(hint, width - dp(KeyTypography.HINT_INSET_DP), dp(KeyTypography.HINT_INSET_DP) - hintPaint.fontMetrics.ascent * 0.72f, hintPaint)
+            drawHint(canvas, hint, Paint.Align.RIGHT)
+            // A Sinhala letter hint takes the right corner, so the long-press number or symbol goes on the left
+            key.extras.firstOrNull()?.first?.takeIf { it != hint }?.let { drawHint(canvas, it, Paint.Align.LEFT) }
         }
+    }
+
+    private fun drawHint(canvas: Canvas, hint: String, align: Paint.Align) {
+        hintPaint.color = ColorUtils.setAlphaComponent(colors.ink, 140)
+        hintPaint.typeface = KeyTypography.keyTypeface()
+        hintPaint.textAlign = align
+        var hintSize = KeyTypography.hintPx(resources)
+        val maxHintWidth = width * 0.4f
+        while (hintSize > dp(7) && hintPaint.apply { textSize = hintSize }.measureText(hint) > maxHintWidth) {
+            hintSize *= 0.9f
+        }
+        hintPaint.textSize = hintSize
+        val x = if (align == Paint.Align.LEFT) dp(KeyTypography.HINT_INSET_X_DP) else width - dp(KeyTypography.HINT_INSET_X_DP)
+        canvas.drawText(hint, x, dp(KeyTypography.HINT_INSET_Y_DP) - hintPaint.fontMetrics.ascent * 0.72f, hintPaint)
     }
 
     override fun drawableStateChanged() {

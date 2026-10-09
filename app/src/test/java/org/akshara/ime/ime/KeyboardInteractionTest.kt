@@ -199,7 +199,11 @@ class KeyboardInteractionTest {
         assertNotNull(findButton(view, "Rakaranshaya"))
         assertTrue(view.typingLayout()!!.keys.any { it.hint == "ඟ" })
         assertEquals(listOf("ඟ" to "ඟ"), KeyAlternates.extras(".", InputMode.WIJESEKARA, KeyboardLayer.LETTERS, false))
-        assertTrue(KeyAlternates.extras("a", InputMode.PHONETIC, KeyboardLayer.LETTERS, false).any { it.first == "à" })
+        assertEquals(listOf("@" to "@"), KeyAlternates.extras("a", InputMode.PHONETIC, KeyboardLayer.LETTERS, false))
+        assertEquals(listOf("?" to "?"), KeyAlternates.extras("m", InputMode.PHONETIC, KeyboardLayer.LETTERS, false))
+        assertEquals(listOf("?" to "?"), KeyAlternates.extras("m", InputMode.PHONETIC, KeyboardLayer.LETTERS, true))
+        assertTrue(KeyAlternates.extras("m", InputMode.WIJESEKARA, KeyboardLayer.LETTERS, false).isEmpty())
+        assertTrue(KeyAlternates.extras("e", InputMode.PHONETIC, KeyboardLayer.LETTERS, false).isEmpty())   // no accented letters
         assertNull(findButton(view, "z, '"))
     }
     @Test fun phoneticKeysMatchGboardProportionsAndOwnLeftoverHits() {
