@@ -1,13 +1,9 @@
 package org.akshara.ime.settings
 
-import android.animation.ValueAnimator
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.res.ColorStateList
 import android.content.res.Configuration
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -15,38 +11,18 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
-import android.transition.Fade
-import android.transition.Slide
-import android.transition.Transition
-import android.transition.TransitionManager
-import android.transition.TransitionSet
-import android.transition.Visibility
-import android.util.TypedValue
-import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup
-import android.view.ViewOutlineProvider
-import android.view.animation.AnimationUtils
 import android.view.inputmethod.InputMethodManager
-import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.Switch
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.annotation.VisibleForTesting
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.ComposeView
-import androidx.core.graphics.ColorUtils
-import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.doOnLayout
 import org.akshara.ime.BuildConfig
 import org.akshara.ime.R
 import org.akshara.ime.data.ClipboardHistoryStore
@@ -62,15 +38,18 @@ import org.akshara.ime.ime.TouchPersonalizationStore
 
 class SettingsActivity : ComponentActivity() {
     private lateinit var prefs: KeyboardPreferences
-    private lateinit var pages: ViewGroup
-    private lateinit var scroll: ScrollView
-    private lateinit var container: LinearLayout
     private var page = Page.HOME
     private val colors by lazy { SettingsColors.scheme(this) }
-    /** The open dialog or sheet, drawn by the Compose host added in [onCreate]. */
+    /** The open dialog or sheet, drawn over the page. */
     private var dialog by mutableStateOf<SettingsDialog?>(null)
-    private val scrollByPage = mutableMapOf<Page, Int>()
+    /** The page on screen; [render] rebuilds it from the preferences. */
+    private var shown by mutableStateOf(Shown(PageContent(Page.HOME.name, null, emptyList()), forward = true))
+    /** Each page keeps its scroll position while Settings is open, like the system Settings app. */
+    private val listStates = mutableMapOf<String, LazyListState>()
     private val backStack = ArrayDeque<Page>()
+    // Filled by the page functions while [render] runs
+    private var pageTitle: String? = null
+    private val blocks = mutableListOf<PageBlock>()
     /** Back on a sub-page goes up a page (gesture, button and predictive back); on Home it closes Settings. */
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = navigateUp()
@@ -97,21 +76,12 @@ class SettingsActivity : ComponentActivity() {
         prefs = KeyboardPreferences(this)
         onBackPressedDispatcher.addCallback(this, backCallback)
         page = state?.getString(STATE_PAGE)?.let { runCatching { Page.valueOf(it) }.getOrNull() } ?: Page.HOME
-        setContentView(R.layout.activity_settings)
-        // The same Material 3 scheme as the Compose cards, so Views and Compose share one surface
         window.decorView.setBackgroundColor(colors.surface.toArgb())
-        // Dialogs and sheets open in their own windows; this empty host only keeps them composed
-        addContentView(
-            ComposeView(this).apply { setContent { SettingsTheme { SettingsDialogHost(dialog) { dialog = null } } } },
-            ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        )
-        pages = findViewById(R.id.settings_pages)
-        scroll = findViewById(R.id.settings_scroll)
-        container = findViewById(R.id.settings_container)
-        ViewCompat.setOnApplyWindowInsetsListener(pages) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            insets
+        setContent {
+            SettingsTheme {
+                SettingsScreen(shown, { key -> listStates.getOrPut(key) { LazyListState() } }, ::navigateUp)
+                SettingsDialogHost(dialog) { dialog = null }
+            }
         }
     }
 
@@ -125,36 +95,23 @@ class SettingsActivity : ComponentActivity() {
         render()
     }
 
-    override fun onStop() {
-        TransitionManager.endTransitions(pages)
-        super.onStop()
-    }
-
     /** Back to the page this one was opened from (after a restart, to its parent). */
     private fun navigateUp() {
-        scrollByPage[page] = scroll.scrollY
         page = backStack.removeLastOrNull() ?: page.parent ?: Page.HOME
-        render(scrollByPage[page] ?: 0, forward = false)
+        render(forward = false)
     }
 
     private fun open(next: Page) {
-        scrollByPage[page] = scroll.scrollY
         backStack.addLast(page)
         page = next
-        render(scrollByPage[next] ?: 0, forward = true)
+        render(forward = true)
     }
 
-    /** Redraws the current page; a toggle that shows or hides rows keeps the scroll position. */
-    private fun render(y: Int = scroll.scrollY, forward: Boolean? = null) {
-        // Finish an interrupted navigation before capturing another pair of pages.
-        TransitionManager.endTransitions(pages)
-        val outgoing = scroll
-        if (forward != null) {
-            scroll = layoutInflater.inflate(R.layout.settings_page, pages, false) as ScrollView
-            container = scroll.findViewById(R.id.settings_container)
-        }
+    /** Rebuilds the current page; a toggle that shows or hides rows keeps the page and its scroll. */
+    private fun render(forward: Boolean = shown.forward) {
         updateBackCallback()
-        container.removeAllViews()
+        pageTitle = null
+        blocks.clear()
         when (page) {
             Page.HOME -> renderHome()
             Page.SINHALA -> renderSinhala()
@@ -171,36 +128,12 @@ class SettingsActivity : ComponentActivity() {
             Page.DIAGNOSTICS -> renderDiagnostics()
             Page.DEVELOPER -> renderDeveloper()
         }
-        val incoming = scroll
-        incoming.doOnLayout { incoming.scrollTo(0, y) }
-        if (forward != null) {
-            if (pages.isLaidOut && ValueAnimator.areAnimatorsEnabled()) {
-                TransitionManager.beginDelayedTransition(pages, pageTransition(outgoing, incoming, forward))
-            }
-            pages.removeView(outgoing)
-            pages.addView(incoming)
-        }
+        shown = Shown(PageContent(page.name, pageTitle, blocks.toList()), forward)
     }
 
-    private fun pageTransition(outgoing: View, incoming: View, forward: Boolean): Transition = TransitionSet().apply {
-        ordering = TransitionSet.ORDERING_TOGETHER
-        duration = 250L
-        interpolator = AnimationUtils.loadInterpolator(this@SettingsActivity, android.R.interpolator.fast_out_slow_in)
-        // Both layouts reuse resource IDs; match instances so they remain separate entering/exiting pages.
-        setMatchOrder(Transition.MATCH_INSTANCE)
-        addTransition(Slide(if (forward) Gravity.END else Gravity.START).apply {
-            mode = Visibility.MODE_IN
-            addTarget(incoming)
-        })
-        addTransition(Slide(if (forward) Gravity.START else Gravity.END).apply {
-            mode = Visibility.MODE_OUT
-            addTarget(outgoing)
-        })
-        addTransition(Fade().apply {
-            addTarget(outgoing)
-            addTarget(incoming)
-        })
-    }
+    /** The current page's first visible item, so tests can check scroll positions survive navigation. */
+    @VisibleForTesting
+    internal fun visibleItemIndex() = listStates[shown.page.key]?.firstVisibleItemIndex ?: 0
 
     private fun updateBackCallback() {
         backCallback.isEnabled = page != Page.HOME
@@ -208,7 +141,7 @@ class SettingsActivity : ComponentActivity() {
 
     /** Home: setup status, then one row per settings page, like Gboard. */
     private fun renderHome() {
-        logoHeader(R.layout.settings_header)
+        blocks += PageBlock.Logo(large = false, subtitle = getString(R.string.settings_subtitle))
         val enabled = keyboardEnabled()
         val selected = keyboardSelected()
         section(R.string.category_get_started) {
@@ -413,34 +346,16 @@ class SettingsActivity : ComponentActivity() {
             ThemeCatalog.available().firstOrNull { (_, specs) -> specs.drop(COLLAPSED_THEMES).any { it.id == prefs.theme } }
                 ?.let { expandedThemeSections += it.first }
         }
-        val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
         for ((section, specs) in ThemeCatalog.available()) {
             if (specs.isEmpty()) continue
             // Like Gboard, long sections show three rows until expanded
             val collapsible = specs.size > COLLAPSED_THEMES
             val expanded = section in expandedThemeSections
             val cells = (if (collapsible && !expanded) specs.take(COLLAPSED_THEMES) else specs).map(::themeCell)
-            val toggle = {
-                container.post {
-                    if (!expandedThemeSections.remove(section)) expandedThemeSections += section
-                    render()
-                }
-                Unit
-            }
-            container.addView(
-                ComposeView(this).apply {
-                    setContent {
-                        SettingsTheme {
-                            ThemeGrid(getString(section.title), collapsible, expanded, toggle, cells) { cell ->
-                                container.post { themeSheet(ThemeCatalog.find(cell.id)!!) }
-                            }
-                        }
-                    }
-                },
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    marginStart = gutter; marginEnd = gutter; bottomMargin = resources.getDimensionPixelSize(R.dimen.settings_section_gap)
-                }
-            )
+            blocks += PageBlock.Themes(getString(section.title), collapsible, expanded, onToggle = {
+                if (!expandedThemeSections.remove(section)) expandedThemeSections += section
+                render()
+            }, cells = cells) { cell -> themeSheet(ThemeCatalog.find(cell.id)!!) }
         }
         section(R.string.theme_keys) {
             choice(R.string.key_shape, R.drawable.ic_keyboard, R.color.settings_icon_indigo, R.array.key_shape_entries, R.array.key_shape_values, prefs.keyShape) {
@@ -492,8 +407,6 @@ class SettingsActivity : ComponentActivity() {
 
     private val screenThemes = setOf(ThemeCatalog.LIGHT, ThemeCatalog.DARK)
     private val COLLAPSED_THEMES = 9
-
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     private fun renderEmoji() {
         toolbar(R.string.page_emoji)
@@ -556,7 +469,7 @@ class SettingsActivity : ComponentActivity() {
 
     private fun renderAbout() {
         toolbar(R.string.category_about)
-        logoHeader(R.layout.settings_about_header)
+        blocks += PageBlock.Logo(large = true, subtitle = getString(R.string.about_made_by))
         section(0) {
             labeled(R.string.about_version, BuildConfig.VERSION_NAME)
             labeled(R.string.about_build, BuildConfig.VERSION_CODE.toString(), onClick = ::handleBuildTap)
@@ -690,57 +603,28 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
-    /** A header with the logo; the tile's rounded outline also clips the logo image. */
-    private fun logoHeader(layout: Int) {
-        layoutInflater.inflate(layout, container, true)
-        container.getChildAt(container.childCount - 1).findViewById<ImageView>(R.id.settings_logo).clipToOutline = true
-    }
-
+    /** Sub-pages get a large top bar with this title and a back button. */
     private fun toolbar(title: Int) {
-        container.addView(
-            ComposeView(this).apply { setContent { SettingsTheme { SettingsTopBar(getString(title)) { navigateUp() } } } },
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        )
+        pageTitle = getString(title)
     }
 
-    /** A section header in the Material 3 primary color. */
     private fun category(title: Int) {
-        layoutInflater.inflate(R.layout.settings_category, container, true)
-        (container.getChildAt(container.childCount - 1) as TextView).apply {
-            setText(title)
-            setTextColor(colors.primary.toArgb())
-        }
+        blocks += PageBlock.Category(getString(title))
     }
 
     private fun copy(title: Int, body: Int) {
         if (title != 0) category(title)
-        val card = card()
-        val text = layoutInflater.inflate(R.layout.settings_copy, card, false) as TextView
-        text.setText(body)
-        card.addView(text)
-        addCard(card)
+        blocks += PageBlock.Copy(getString(body))
     }
 
     private fun section(title: Int, rows: CardScope.() -> Unit) {
         if (title != 0) category(title)
-        val items = CardScope().apply(rows).rows.toList()
-        val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
-        container.addView(
-            ComposeView(this).apply { setContent { SettingsTheme { SettingsCard(items) } } },
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = gutter
-                marginEnd = gutter
-                bottomMargin = resources.getDimensionPixelSize(R.dimen.settings_section_gap)
-            }
-        )
+        blocks += PageBlock.Card(CardScope().apply(rows).rows.toList())
     }
 
-    /** Collects a card's rows; [section] draws them with Material 3 (Compose). */
+    /** Collects a card's rows for [section]. */
     private inner class CardScope {
         val rows = mutableListOf<SettingsRow>()
-
-        /** Pages often re-render from a row's callback; let the tap finish before the card is replaced. */
-        private fun later(run: () -> Unit) { container.post(run) }
 
         fun action(
             title: Int,
@@ -753,18 +637,18 @@ class SettingsActivity : ComponentActivity() {
         ) {
             rows += SettingsRow.Action(
                 getString(title), summaryText ?: summary.takeIf { it != 0 }?.let(::getString), icon, tint,
-                chevron = onClick != null, destructive = destructive, onClick = onClick?.let { { later(it) } }
+                chevron = onClick != null, destructive = destructive, onClick = onClick
             )
         }
 
         fun actionText(title: String, summary: String?, icon: Int, tint: Int, onClick: (() -> Unit)? = null) {
-            rows += SettingsRow.Action(title, summary, icon, tint, chevron = onClick != null, onClick = onClick?.let { { later(it) } })
+            rows += SettingsRow.Action(title, summary, icon, tint, chevron = onClick != null, onClick = onClick)
         }
 
         fun toggle(title: Int, summary: Int, icon: Int, tint: Int, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
             rows += SettingsRow.Toggle(
                 getString(title), summary.takeIf { it != 0 }?.let(::getString), icon, tint, checked, enabled
-            ) { on -> later { onChange(on) } }
+            ) { on -> onChange(on) }
         }
 
         fun choice(title: Int, icon: Int, tint: Int, entries: Int, values: Int, current: String, onPick: (String) -> Unit) {
@@ -772,17 +656,15 @@ class SettingsActivity : ComponentActivity() {
             val keys = resources.getStringArray(values)
             val selected = labels.getOrNull(keys.indexOf(current))
             rows += SettingsRow.Action(getString(title), selected, icon, tint, chevron = true, onClick = {
-                later {
-                    dialog = SettingsDialog.Choice(getString(title), labels.toList(), keys.indexOf(current)) { which ->
-                        onPick(keys[which])
-                        render()
-                    }
+                dialog = SettingsDialog.Choice(getString(title), labels.toList(), keys.indexOf(current)) { which ->
+                    onPick(keys[which])
+                    render()
                 }
             })
         }
 
         fun labeled(title: Int, value: String, onClick: (() -> Unit)? = null) {
-            rows += SettingsRow.Value(getString(title), value, onClick?.let { { later(it) } })
+            rows += SettingsRow.Value(getString(title), value, onClick)
         }
     }
 
@@ -833,49 +715,6 @@ class SettingsActivity : ComponentActivity() {
         val component = ComponentName(this, AksharaInputMethodService::class.java).flattenToShortString()
         val selected = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
         return selected?.let { ComponentName.unflattenFromString(it)?.packageName == packageName || it == component } == true
-    }
-
-    private fun card() = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        background = cardBackground()
-        clipToOutline = true
-        outlineProvider = ViewOutlineProvider.BACKGROUND
-        elevation = 0f
-    }
-
-    private fun addCard(card: LinearLayout) {
-        val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
-        container.addView(
-            card,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = gutter
-                marginEnd = gutter
-                bottomMargin = resources.getDimensionPixelSize(R.dimen.settings_section_gap)
-            }
-        )
-    }
-
-    private fun cardBackground() = GradientDrawable().apply {
-        shape = GradientDrawable.RECTANGLE
-        cornerRadius = cardRadius()
-        setColor(cardColor())
-    }
-
-    private fun cardRadius(): Float {
-        val fallback = 28f * resources.displayMetrics.density
-        if (Build.VERSION.SDK_INT < 28) return fallback
-        val value = TypedValue()
-        if (!theme.resolveAttribute(android.R.attr.dialogCornerRadius, value, true)) return fallback
-        return if (value.type == TypedValue.TYPE_DIMENSION) value.getDimension(resources.displayMetrics) else fallback
-    }
-
-    private fun cardColor(): Int = colors.surfaceContainer.toArgb()
-
-    private fun attrColor(attr: Int): Int {
-        val typed = obtainStyledAttributes(intArrayOf(attr))
-        val color = typed.getColor(0, 0)
-        typed.recycle()
-        return color
     }
 
     /** Settings pages; [parent] is where Back goes when there is no history (after a restart). */

@@ -1,15 +1,14 @@
 package org.akshara.ime.settings
 
-import android.view.View
-import android.view.ViewGroup
-import android.widget.ScrollView
-import android.widget.TextView
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText as hasNodeText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import org.akshara.ime.R
 import org.akshara.ime.engine.InputMode
@@ -26,7 +25,7 @@ import org.robolectric.android.controller.ActivityController
 
 @RunWith(RobolectricTestRunner::class)
 class SettingsActivityTest {
-    /** Settings rows are Compose; page chrome (toolbar, headers, copy) is still Views. */
+    /** Settings is drawn entirely with Compose. */
     @get:Rule val compose = createEmptyComposeRule()
     private lateinit var controller: ActivityController<SettingsActivity>
     private lateinit var activity: SettingsActivity
@@ -42,7 +41,7 @@ class SettingsActivityTest {
         assertTrue(hasText(activity.getString(R.string.app_name)))
         for (page in listOf(R.string.enable_keyboard, R.string.select_keyboard, R.string.page_sinhala, R.string.page_preferences, R.string.page_correction, R.string.theme,
             R.string.page_emoji, R.string.page_clipboard, R.string.category_privacy, R.string.website_title, R.string.about_title)) {
-            assertTrue(activity.getString(page), hasRow(activity.getString(page)))
+            assertTrue(activity.getString(page), hasText(activity.getString(page)))
         }
         assertTrue(switches().isEmpty())   // toggles live on the pages, not the home list
     }
@@ -68,7 +67,7 @@ class SettingsActivityTest {
         clickRow(activity.getString(R.string.credits_title))
         val people = Contributor.load(activity)
         assertEquals(listOf("Lahiru Himesh Madusanka", "Srilal Siriwardhana", "Thimira Thenuwara"), people.map { it.name })
-        people.forEach { assertTrue(it.name, hasRow(it.name)) }
+        people.forEach { assertTrue(it.name, hasText(it.name)) }
     }
 
     @Test fun contributorLinkIsOptional() {
@@ -98,7 +97,7 @@ class SettingsActivityTest {
         @Suppress("DEPRECATION") activity.onBackPressed()
         assertTrue(hasText(activity.getString(R.string.clear_learning_title)))
         @Suppress("DEPRECATION") activity.onBackPressed()
-        assertTrue(hasRow(activity.getString(R.string.page_sinhala)))
+        assertTrue(hasText(activity.getString(R.string.page_sinhala)))
     }
 
     @Test fun aboutOpensIosMatchingPages() {
@@ -146,98 +145,65 @@ class SettingsActivityTest {
     }
 
     @Test fun navigatingBackRestoresScrollAndKeepsOnlyTheCurrentPage() {
-        layoutPage()
-        activity.findViewById<ScrollView>(R.id.settings_scroll).scrollTo(0, 160)
-        val homeY = activity.findViewById<ScrollView>(R.id.settings_scroll).scrollY
-        assertTrue(homeY > 0)
+        scrollTo(3)   // the Typing card, which holds Preferences
+        val home = activity.visibleItemIndex()
+        assertTrue(home > 0)
         openPage(R.string.page_preferences)
-        layoutPage()
-        activity.findViewById<ScrollView>(R.id.settings_scroll).scrollTo(0, 100)
-        val preferencesY = activity.findViewById<ScrollView>(R.id.settings_scroll).scrollY
-        assertTrue(preferencesY > 0)
-        @Suppress("DEPRECATION") activity.onBackPressed()
-        layoutPage()
-        assertEquals(homeY, activity.findViewById<ScrollView>(R.id.settings_scroll).scrollY)
+        scrollTo(2)
+        val preferences = activity.visibleItemIndex()
+        assertTrue(preferences > 0)
+        back()
+        assertEquals(home, activity.visibleItemIndex())
+        assertFalse(hasRow(activity.getString(R.string.category_keys)))   // the Preferences page is gone once Home settles
         openPage(R.string.page_preferences)
-        layoutPage()
-        assertEquals(preferencesY, activity.findViewById<ScrollView>(R.id.settings_scroll).scrollY)
-        assertEquals(1, activity.findViewById<ViewGroup>(R.id.settings_pages).childCount)
+        assertEquals(preferences, activity.visibleItemIndex())
     }
 
     @Test fun rapidBackAndOpenDoesNotLeaveAnOldPageOrDisableControls() {
-        layoutPage()
         openPage(R.string.page_sinhala)
-        layoutPage()
         @Suppress("DEPRECATION") activity.onBackPressed()
         openPage(R.string.page_correction)
-        layoutPage()
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper())
-            .idleFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
-        assertEquals(1, activity.findViewById<ViewGroup>(R.id.settings_pages).childCount)
         assertFalse(hasText(activity.getString(R.string.v2_archaic)))
         clickRow(activity.getString(R.string.suggestions))
         assertFalse(KeyboardPreferences(activity).suggestions)
     }
 
-    @Test fun forwardAndBackPagesAnimateFromOppositeEdges() {
-        layoutPage()
-        tapRowWithoutSettling(activity.getString(R.string.page_correction))
-        layoutPage()
-        assertTrue(activity.findViewById<ScrollView>(R.id.settings_scroll).translationX > 0f)
-        @Suppress("DEPRECATION") activity.onBackPressed()
-        layoutPage()
-        val home = activity.findViewById<ScrollView>(R.id.settings_scroll)
-        assertTrue(home.translationX < 0f)
-        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper())
-            .idleFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
-        assertEquals(0f, home.translationX, 0.01f)
+    @Test fun forwardAndBackPagesSlideFromOppositeEdges() {
+        val (enterForward, exitForward) = slideOffsets(forward = true, width = 1000)
+        assertTrue(enterForward > 0 && exitForward < 0)   // deeper: in from the end, old page drifts to the start
+        val (enterBack, exitBack) = slideOffsets(forward = false, width = 1000)
+        assertTrue(enterBack < 0 && exitBack > 0)         // back: in from the start
+        // Navigation itself settles on the new page and back again
+        openPage(R.string.page_correction)
+        assertTrue(hasText(activity.getString(R.string.category_suggestions)))
+        back()
+        assertTrue(hasText(activity.getString(R.string.app_name)))
     }
 
-    private fun layoutPage() {
-        root().measure(View.MeasureSpec.makeMeasureSpec(480, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(640, View.MeasureSpec.EXACTLY))
-        root().layout(0, 0, 480, 640)
-        root().viewTreeObserver.dispatchOnPreDraw()
-    }
-
-    private fun root(): View = activity.findViewById(android.R.id.content)
     private fun openPage(title: Int) = clickRow(activity.getString(title))
 
     private fun clickRow(title: String) {
+        reveal(title)
         compose.onAllNodesWithText(title).onFirst().performClick()
         compose.waitForIdle()
     }
-    /**
-     * Taps a row with a raw touch and runs only up to the navigation it posts, not the slide's later frames,
-     * so a test can see the page mid-way (Compose's own click helpers wait for animations to end).
-     */
-    private fun tapRowWithoutSettling(title: String) {
-        val node = { compose.onAllNodesWithText(title).onFirst().fetchSemanticsNode().boundsInWindow }
-        activity.findViewById<ScrollView>(R.id.settings_scroll).scrollBy(0, (node().center.y - 320f).toInt())
-        layoutPage()
-        val center = node().center
-        val decor = root()
-        val time = android.os.SystemClock.uptimeMillis()
-        for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
-            val event = android.view.MotionEvent.obtain(time, time, action, center.x, center.y, 0)
-            decor.dispatchTouchEvent(event)
-            event.recycle()
-        }
-        // Run queued work one task at a time, stopping as soon as the tap's navigation has run
-        val looper = org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper())
-        val before = activity.findViewById<ScrollView>(R.id.settings_scroll)
-        var guard = 0
-        while (activity.findViewById<ScrollView>(R.id.settings_scroll) === before && guard++ < 50) looper.runOneTask()
+    private fun back() {
+        @Suppress("DEPRECATION") activity.onBackPressed()
+        compose.waitForIdle()
+    }
+    private fun scrollTo(index: Int) {
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(index)
+        compose.waitForIdle()
     }
     private fun hasRow(title: String) = compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
     /** A row (its merged semantics) that shows both its title and [value]. */
     private fun rowShows(title: String, value: String) =
         compose.onAllNodes(hasNodeText(title) and hasNodeText(value)).fetchSemanticsNodes().isNotEmpty()
     private fun switches() = compose.onAllNodes(isToggleable()).fetchSemanticsNodes()
-    private fun hasText(value: String) = viewHasText(root(), value) || hasRow(value)
-    private fun viewHasText(view: View, value: String): Boolean {
-        if (view is TextView && view.text.toString() == value) return true
-        if (view is ViewGroup) for (i in 0 until view.childCount) if (viewHasText(view.getChildAt(i), value)) return true
-        return false
-    }
+    /** Pages are lazy lists: like a person would, scroll until [text] is on screen. False if the page has no such text. */
+    private fun reveal(text: String): Boolean = runCatching {
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasNodeText(text))
+        compose.waitForIdle()
+    }.isSuccess || hasRow(text)
+    private fun hasText(value: String) = reveal(value)
 }
