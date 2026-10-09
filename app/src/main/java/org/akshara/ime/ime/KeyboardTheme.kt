@@ -177,15 +177,19 @@ internal object KeyboardThemes {
         )
     }
 
+    /**
+     * Gboard's Dynamic color (2025 mapping): a tinted background, letter keys in one wallpaper tone, and
+     * every function key, Enter included, sharing one muted secondary tone (less vivid than before 2025).
+     */
     @RequiresApi(Build.VERSION_CODES.S)
     private fun dynamic(context: Context, dark: Boolean, highContrast: Boolean): KeyboardTheme {
         fun color(resource: Int) = ContextCompat.getColor(context, resource)
         return if (dark) {
             KeyboardTheme.from(
-                id = "dynamic",
+                id = ThemeCatalog.DYNAMIC,
                 background = color(android.R.color.system_neutral1_900),
-                key = color(android.R.color.system_neutral1_800),
-                function = color(android.R.color.system_neutral2_700),
+                key = color(android.R.color.system_neutral2_800),
+                function = color(android.R.color.system_accent2_700),
                 ink = color(android.R.color.system_neutral1_50),
                 dark = true,
                 highContrast = highContrast,
@@ -193,10 +197,10 @@ internal object KeyboardThemes {
             )
         } else {
             KeyboardTheme.from(
-                id = "dynamic",
-                background = color(android.R.color.system_neutral1_50),
-                key = color(android.R.color.system_neutral1_0),
-                function = color(android.R.color.system_neutral2_100),
+                id = ThemeCatalog.DYNAMIC,
+                background = color(android.R.color.system_neutral2_50),
+                key = color(android.R.color.system_neutral1_10),
+                function = color(android.R.color.system_accent2_100),
                 ink = color(android.R.color.system_neutral1_900),
                 dark = false,
                 highContrast = highContrast,

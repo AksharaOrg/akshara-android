@@ -43,6 +43,23 @@ class KeyboardThemeTest {
         assertFalse(KeyboardThemes.resolve(context, "light", highContrast = true, keyBorders = false).flatKeys)
     }
 
+    /** Gboard's 2025 Dynamic color: letters in one tone, every function key and Enter in one shared accent. */
+    @Test
+    @org.robolectric.annotation.Config(sdk = [34])
+    fun dynamicColorUsesTwoKeyTonesAndStaysReadable() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        for (night in listOf("notnight", "night")) {
+            org.robolectric.RuntimeEnvironment.setQualifiers(night)
+            val theme = KeyboardThemes.resolve(context, ThemeCatalog.DYNAMIC, highContrast = false)
+            assertTrue(theme.dynamic)
+            assertEquals(night == "night", theme.dark)
+            assertEquals(theme.function, theme.accent)
+            assertEquals(theme.ink, theme.accentInk)
+            assertTrue(ColorUtils.calculateContrast(theme.ink, theme.key) >= 4.5)
+            assertTrue(ColorUtils.calculateContrast(theme.ink, theme.function) >= 4.5)
+        }
+    }
+
     /** The tokens reproduce what each surface used to derive on its own. */
     @Test
     fun derivedTokensMatchTheColorsSurfacesUsedToCompute() {
