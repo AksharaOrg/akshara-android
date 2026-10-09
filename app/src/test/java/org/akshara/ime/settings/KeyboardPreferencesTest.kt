@@ -40,7 +40,7 @@ class KeyboardPreferencesTest {
         assertFalse(KeyboardPreferences(context).keyBorders())
         p.theme = "dark"
         assertTrue(p.keyBorders())   // a different theme keeps its own choice
-        assertFalse(p.keyBorders("system"))
+        assertFalse(p.keyBorders(org.akshara.ime.ime.ThemeCatalog.defaultId))
     }
     @Test fun valuesPersistAndReset() {
         KeyboardPreferences(context).apply { mode = InputMode.WIJESEKARA; highContrast = true }

@@ -46,8 +46,9 @@ class KeyboardPreferences(context: Context) {
         set(value) = store.edit().putString(KEYBOARD_SIZE, value).apply()
     var spatialDecoder: Boolean by bool(SPATIAL_DECODER, true)
     var debugOverlay: Boolean by bool(DEBUG_OVERLAY, false)
+    /** A [org.akshara.ime.ime.ThemeCatalog] id. */
     var theme: String
-        get() = store.getString(THEME, "system") ?: "system"
+        get() = store.getString(THEME, null) ?: org.akshara.ime.ime.ThemeCatalog.defaultId
         set(value) = store.edit().putString(THEME, value).apply()
     /** Gboard keeps Key borders per theme, so each theme remembers its own choice. */
     fun keyBorders(theme: String = this.theme) = store.getBoolean(KEY_BORDERS_PREFIX + theme, true)

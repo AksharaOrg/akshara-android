@@ -50,6 +50,10 @@ import org.akshara.ime.data.ClipboardHistoryStore
 import org.akshara.ime.data.LocalLearningStore
 import org.akshara.ime.engine.InputMode
 import org.akshara.ime.ime.AksharaInputMethodService
+import org.akshara.ime.ime.KeyboardThemes
+import org.akshara.ime.ime.ThemeCatalog
+import org.akshara.ime.ime.ThemeSection
+import org.akshara.ime.ime.ThemeSpec
 import org.akshara.ime.ime.TouchPersonalizationStore
 
 class SettingsActivity : Activity() {
@@ -235,7 +239,7 @@ class SettingsActivity : Activity() {
             }
         }
         section(R.string.category_tools) {
-            action(R.string.theme, 0, R.drawable.ic_palette, R.color.settings_icon_purple, summaryText = entryLabel(R.array.theme_entries, R.array.theme_values, prefs.theme)) {
+            action(R.string.theme, 0, R.drawable.ic_palette, R.color.settings_icon_purple, summaryText = themeName(ThemeCatalog.find(prefs.theme))) {
                 open(Page.THEME)
             }
             action(R.string.page_emoji, R.string.page_emoji_summary, R.drawable.ic_emoji, R.color.settings_icon_yellow) {
@@ -402,23 +406,129 @@ class SettingsActivity : Activity() {
         }
     }
 
+    /** Gboard's theme picker: sections of live previews; tapping one opens its Key borders choice and Apply. */
     private fun renderTheme() {
         toolbar(R.string.theme)
-        section(0) {
-            choice(R.string.theme, R.drawable.ic_palette, R.color.settings_icon_purple, R.array.theme_entries, R.array.theme_values, prefs.theme) {
-                if (it != prefs.theme) {
-                    prefs.theme = it
-                    recreate()   // re-reads the theme in attachBaseContext
-                }
-            }
-            toggle(R.string.key_borders, R.string.key_borders_summary, R.drawable.ic_palette, R.color.settings_icon_blue, prefs.keyBorders()) {
-                prefs.setKeyBorders(it)
-            }
+        for ((section, specs) in ThemeCatalog.available()) {
+            if (specs.isEmpty()) continue
+            layoutInflater.inflate(R.layout.settings_category, container, true)
+            container.getChildAt(container.childCount - 1).let { it as TextView }.setText(section.title)
+            themeGrid(specs)
+        }
+        section(R.string.theme_accessibility) {
             toggle(R.string.high_contrast, R.string.high_contrast_summary, R.drawable.ic_palette, R.color.settings_icon_gray, prefs.highContrast) {
                 prefs.highContrast = it
+                render()
             }
         }
     }
+
+    private fun themeName(spec: ThemeSpec?): String = when {
+        spec == null -> ""
+        spec.name != 0 -> getString(spec.name)
+        spec.section == ThemeSection.LIGHT_GRADIENTS -> getString(R.string.theme_light_gradient, spec.number)
+        else -> getString(R.string.theme_dark_gradient, spec.number)
+    }
+
+    /** System-following themes are previewed in the real system mode, not this screen's override. */
+    private fun previewTheme(spec: ThemeSpec, keyBorders: Boolean = prefs.keyBorders(spec.id)) =
+        KeyboardThemes.resolve(applicationContext, spec.id, prefs.highContrast, keyBorders)
+
+    private fun themeGrid(specs: List<ThemeSpec>) {
+        val gutter = resources.getDimensionPixelSize(R.dimen.settings_gutter)
+        val gap = dp(10)
+        val columns = 3
+        val current = prefs.theme
+        val accent = attrColor(android.R.attr.colorAccent)
+        specs.chunked(columns).forEach { rowSpecs ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            for (index in 0 until columns) {
+                val spec = rowSpecs.getOrNull(index)
+                val params = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (index > 0) marginStart = gap
+                }
+                if (spec == null) { row.addView(View(this), params); continue }
+                row.addView(themeCell(spec, spec.id == current, accent), params)
+            }
+            container.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = gutter; marginEnd = gutter; bottomMargin = gap
+            })
+        }
+    }
+
+    private fun themeCell(spec: ThemeSpec, selected: Boolean, accent: Int): View {
+        val name = themeName(spec)
+        val radius = dp(12).toFloat()
+        val frame = android.widget.FrameLayout(this).apply {
+            foreground = GradientDrawable().apply {
+                cornerRadius = radius
+                setStroke(if (selected) dp(3) else dp(1), if (selected) accent else ColorUtils.setAlphaComponent(attrColor(android.R.attr.textColorPrimary), 40))
+            }
+        }
+        frame.addView(ThemePreviewView(this).apply { theme = previewTheme(spec); cornerRadius = radius })
+        if (selected) {
+            frame.addView(TextView(this).apply {
+                text = "✓"
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                textSize = 12f
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(accent) }
+            }, android.widget.FrameLayout.LayoutParams(dp(22), dp(22), Gravity.TOP or Gravity.END).apply { setMargins(dp(5), dp(5), dp(5), dp(5)) })
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(frame)
+            if (spec.name != 0) addView(TextView(this@SettingsActivity).apply {
+                text = name
+                gravity = Gravity.CENTER
+                textSize = 12f
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(0, dp(4), 0, 0)
+            })
+            contentDescription = if (selected) getString(R.string.theme_selected, name) else name
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showThemeDialog(spec) }
+        }
+    }
+
+    /** Gboard's apply sheet: a large preview, the theme's own Key borders choice, and Apply. */
+    private fun showThemeDialog(spec: ThemeSpec) {
+        var borders = prefs.keyBorders(spec.id)
+        val preview = ThemePreviewView(this).apply { theme = previewTheme(spec, borders) }
+        val toggle = Switch(this).apply {
+            setText(R.string.key_borders)
+            textSize = 16f
+            isChecked = borders
+            setOnCheckedChangeListener { _, on ->
+                borders = on
+                preview.theme = previewTheme(spec, on)
+            }
+        }
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(8), dp(24), 0)
+            addView(preview)
+            addView(toggle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)).apply { topMargin = dp(8) })
+        }
+        AlertDialog.Builder(this)
+            .setTitle(themeName(spec))
+            .setView(body)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.theme_apply) { _, _ ->
+                val before = prefs.theme
+                prefs.setKeyBorders(borders, spec.id)
+                prefs.theme = spec.id
+                // Light and Dark also restyle this screen (attachBaseContext)
+                if (spec.id != before && (before in screenThemes || spec.id in screenThemes)) recreate() else render()
+            }
+            .show()
+    }
+
+    private val screenThemes = setOf(ThemeCatalog.LIGHT, ThemeCatalog.DARK)
+
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     private fun renderEmoji() {
         toolbar(R.string.page_emoji)

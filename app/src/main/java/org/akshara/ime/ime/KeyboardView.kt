@@ -219,7 +219,7 @@ class KeyboardView(
         }
 
     init {
-        orientation = VERTICAL; setBackgroundColor(bg)
+        orientation = VERTICAL; background = theme.backgroundDrawable()
         blockForceDark()
         clipChildren = false
         clipToPadding = false

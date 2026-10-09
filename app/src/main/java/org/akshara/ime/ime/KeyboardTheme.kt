@@ -3,6 +3,9 @@ package org.akshara.ime.ime
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
@@ -14,7 +17,7 @@ import androidx.core.graphics.ColorUtils
  */
 internal data class KeyboardTheme(
     val id: String,
-    /** Behind the keys, the suggestion rail and every panel. */
+    /** Behind the keys, the suggestion rail and every panel; for a gradient, its bottom color (it meets the navigation bar). */
     val background: Int,
     /** Letter keys. */
     val key: Int,
@@ -48,8 +51,14 @@ internal data class KeyboardTheme(
     val highContrast: Boolean,
     val dynamic: Boolean,
     /** Gboard's "Key borders": off draws letter and plain function keys flat on the background. */
-    val keyBorders: Boolean = true
+    val keyBorders: Boolean = true,
+    /** Top-to-bottom background stops; empty or one stop means a solid [background]. */
+    val gradient: List<Int> = emptyList()
 ) {
+    fun backgroundDrawable(): Drawable = if (gradient.size > 1) {
+        GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, gradient.toIntArray())
+    } else ColorDrawable(background)
+
     /** High contrast needs a shape to outline, so it always keeps borders. */
     val flatKeys: Boolean get() = !keyBorders && !highContrast
 
@@ -69,12 +78,15 @@ internal data class KeyboardTheme(
             dark: Boolean,
             highContrast: Boolean,
             dynamic: Boolean = false,
-            keyBorders: Boolean = true
+            keyBorders: Boolean = true,
+            gradient: List<Int> = emptyList()
         ): KeyboardTheme {
             val overlay = if (dark) Color.WHITE else Color.BLACK
             // Dark keys sit a touch lighter so they don't sink into the background, like Gboard
             val letter = if (dark && !highContrast) ColorUtils.blendARGB(key, ink, DARK_KEY_LIFT) else key
             val functionPressed = ColorUtils.blendARGB(function, overlay, PRESSED_BLEND)
+            // Keys may be translucent over a gradient; popups float above it, so they get the solid mix
+            val popup = ColorUtils.compositeColors(key, midBackground(background, gradient))
             return KeyboardTheme(
                 id = id,
                 background = background,
@@ -89,33 +101,37 @@ internal data class KeyboardTheme(
                 ink = ink,
                 hint = ColorUtils.setAlphaComponent(ink, 140),
                 surface = key,
-                popup = key,
+                popup = popup,
                 popupInk = if (dark) Color.WHITE else Color.rgb(25, 28, 33),
-                popupSelected = ColorUtils.blendARGB(key, overlay, SELECTED_BLEND),
+                popupSelected = ColorUtils.blendARGB(popup, overlay, SELECTED_BLEND),
                 divider = ColorUtils.setAlphaComponent(ink, 40),
                 highlight = PIN,
                 border = ink,
                 dark = dark,
                 highContrast = highContrast,
                 dynamic = dynamic,
-                keyBorders = keyBorders
+                keyBorders = keyBorders,
+                gradient = gradient
             )
         }
+
+        private fun midBackground(background: Int, gradient: List<Int>) =
+            if (gradient.size > 1) ColorUtils.blendARGB(gradient.first(), gradient.last(), .5f) else background
     }
 }
 
 internal object KeyboardThemes {
+    /** [theme] is a [ThemeCatalog] id; an unknown id falls back to System auto. */
     fun resolve(context: Context, theme: String, highContrast: Boolean, keyBorders: Boolean = true): KeyboardTheme {
-        val dark = when (theme) {
-            "dark" -> true
-            "light" -> false
-            else -> context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
-                Configuration.UI_MODE_NIGHT_YES
-        }
-        val resolved = if (theme == "system" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            dynamic(context, dark, highContrast)
-        } else {
-            fixed(dark, highContrast)
+        ThemeCatalog.find(theme)?.takeIf { it.section != ThemeSection.DEFAULT }?.let { return it.theme(highContrast, keyBorders) }
+        val systemDark = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
+            Configuration.UI_MODE_NIGHT_YES
+        val resolved = when (theme) {
+            ThemeCatalog.LIGHT -> fixed(false, highContrast)
+            ThemeCatalog.DARK -> fixed(true, highContrast)
+            ThemeCatalog.DYNAMIC -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamic(context, systemDark, highContrast)
+                else fixed(systemDark, highContrast)
+            else -> fixed(systemDark, highContrast)
         }
         return resolved.copy(keyBorders = keyBorders)
     }
