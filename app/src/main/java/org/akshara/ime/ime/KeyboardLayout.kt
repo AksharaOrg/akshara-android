@@ -409,7 +409,7 @@ internal object KeyboardLayoutFactory {
         }
         val extras = KeyAlternates.extras(id, mode, KeyboardLayer.LETTERS, shifted || caps)
         val hint = KeyAlternates.hint(id, mode, KeyboardLayer.LETTERS) ?: phoneticHint(id, mode, wijesekara, shifted, caps)
-            ?: extras.firstOrNull()?.first
+            ?: extras.firstOrNull()?.first?.takeUnless { wijesekara }
         val flick = extras.firstOrNull()?.second
         return KeyDef(id, label, output, KeyCode.CHAR, width, hint, extras, flick)
     }

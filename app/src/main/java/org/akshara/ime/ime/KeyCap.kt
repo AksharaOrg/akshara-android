@@ -143,7 +143,8 @@ internal class KeyCap(context: Context) : View(context) {
         fun visible(value: String?) = value?.takeIf {
             if (KeyTypography.isSinhala(it) || it.all(Char::isDigit)) hints else symbolHints
         }
-        return visible(key.hint) to visible(key.extras.firstOrNull()?.first?.takeIf { it != key.hint })
+        val second = key.hint?.let { primary -> key.extras.firstOrNull()?.first?.takeIf { it != primary } }
+        return visible(key.hint) to visible(second)
     }
 
     private fun drawHint(

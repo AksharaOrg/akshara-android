@@ -33,6 +33,9 @@ class KeyboardInteractionTest {
                 val w = findTagged(view, "w") as KeyCap
                 assertEquals(sinhala, "2" in w.visibleHints().toList())
                 assertEquals("2", w.spec!!.extras.first().second)
+                val comma = findTagged(view, ",") as KeyCap
+                assertEquals(null to null, comma.visibleHints())
+                assertEquals(";", comma.spec!!.extras.first().second)
             }
         }
     }
@@ -247,6 +250,12 @@ class KeyboardInteractionTest {
         layoutKeyboard(view)
         assertNotNull(findButton(view, "Rakaranshaya"))
         assertTrue(view.typingLayout()!!.keys.any { it.hint == "ඟ" })
+        val nya = findTagged(view, "[") as KeyCap
+        assertEquals("ඤ", nya.spec!!.label)
+        assertEquals("ඤ", nya.spec!!.output)
+        assertNull(nya.spec!!.hint)
+        assertEquals(null to null, nya.visibleHints())
+        assertEquals("{", nya.spec!!.extras.first().second)
         assertEquals(listOf("ඟ" to "ඟ"), KeyAlternates.extras(".", InputMode.WIJESEKARA, KeyboardLayer.LETTERS, false))
         assertEquals(listOf("@" to "@"), KeyAlternates.extras("a", InputMode.PHONETIC, KeyboardLayer.LETTERS, false))
         assertEquals(listOf("?" to "?"), KeyAlternates.extras("m", InputMode.PHONETIC, KeyboardLayer.LETTERS, false))
