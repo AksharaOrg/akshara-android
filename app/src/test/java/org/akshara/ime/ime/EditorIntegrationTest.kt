@@ -2,6 +2,7 @@ package org.akshara.ime.ime
 
 import android.text.InputType
 import android.widget.EditText
+import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
@@ -13,6 +14,22 @@ import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
 class EditorIntegrationTest {
+    @Test fun hardwareSpacesUseDoubleSpacePunctuation() {
+        val controller = Robolectric.buildService(AksharaInputMethodService::class.java).create()
+        val service = controller.get()
+        try {
+            val editor = EditText(ApplicationProvider.getApplicationContext())
+            val info = EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT }
+            ReflectionHelpers.setField(service, "mStartedInputConnection", editor.onCreateInputConnection(info)!!)
+            service.onStartInput(info, false)
+            service.onPasteText("Hi")
+            val space = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_SPACE)
+            assertTrue(service.onKeyDown(KeyEvent.KEYCODE_SPACE, space))
+            assertTrue(service.onKeyDown(KeyEvent.KEYCODE_SPACE, space))
+            assertEquals("Hi. ", editor.text.toString())
+        } finally { controller.destroy() }
+    }
+
     @Test fun typingDeletingAndReplacingSelectionInMiddlePreservesSuffix() {
         val controller = Robolectric.buildService(AksharaInputMethodService::class.java).create()
         val service = controller.get()

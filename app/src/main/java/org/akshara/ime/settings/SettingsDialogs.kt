@@ -1,5 +1,9 @@
 package org.akshara.ime.settings
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -117,13 +121,13 @@ private fun ThemeSheet(dialog: SettingsDialog.ThemeSheet, onDismiss: () -> Unit)
         scope.launch { state.hide() }.invokeOnCompletion { onDismiss(); then() }
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = state) {
-        Column(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 24.dp)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp)) {
             Text(dialog.title, style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.padding(top = 16.dp))
             AndroidView(
                 factory = { ThemePreviewView(it) },
                 update = { it.theme = dialog.preview(borders) },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.align(Alignment.CenterHorizontally).widthIn(max = 400.dp).fillMaxWidth().aspectRatio(1f / .62f)
             )
             Row(
                 Modifier

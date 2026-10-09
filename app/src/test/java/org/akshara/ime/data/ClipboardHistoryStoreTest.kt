@@ -84,6 +84,9 @@ class ClipboardHistoryStoreTest {
         clock += 2
         assertTrue(store.items().isEmpty())
         assertEquals(listOf("pinned"), store.pinnedItems())
+        assertEquals("[]", context.getSharedPreferences(ClipboardHistoryStore.FILE, 0).getString("items", null))
+        clock -= ClipboardHistoryStore.RECENT_LIFETIME_MS
+        assertTrue("Expired text must not reappear after the clock moves back", store.items().isEmpty())
     }
 
     @Test fun clipsSavedBeforeTimestampsAreKeptAndStartTheirHourNow() {

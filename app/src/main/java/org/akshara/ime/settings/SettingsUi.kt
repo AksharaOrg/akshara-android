@@ -29,10 +29,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -40,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.border
@@ -148,12 +146,11 @@ internal fun SettingsCard(rows: List<SettingsRow>) {
 
 @Composable
 private fun ToggleRow(row: SettingsRow.Toggle) {
-    var checked by remember(row.title) { mutableStateOf(row.checked) }
+    val checked = row.checked
     RowLayout(
         row,
         Modifier
             .toggleable(value = checked, enabled = row.enabled, role = Role.Switch) {
-                checked = it
                 row.onChange(it)
             }
             .alpha(if (row.enabled) 1f else .38f)
@@ -218,12 +215,11 @@ private fun RowLayout(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (row.icon != 0) {
-            val context = LocalContext.current
             Box(
                 Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(context.getColor(row.tint))),
+                    .background(colorResource(row.tint)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(painterResource(row.icon), null, tint = Color.White, modifier = Modifier.size(22.dp))

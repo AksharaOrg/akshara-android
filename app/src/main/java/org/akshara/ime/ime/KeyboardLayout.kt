@@ -295,7 +295,7 @@ internal object KeyboardLayoutFactory {
             }
             val q = KeyboardView.qwertyRows[0].mapIndexed { index, id ->
                 val letter = key(id)
-                if (topRow != "numbers" && (english || !literal)) {
+                if (editor == EditorLayout.TEXT && topRow != "numbers") {
                     val number = "1234567890"[index].toString()
                     // Sinhala keys keep their letter hint; KeyCap shows the number on the left
                     letter.copy(hint = if (english) number else letter.hint ?: number, extras = listOf(number to number) + letter.extras)

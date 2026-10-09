@@ -4,6 +4,7 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
@@ -36,6 +37,8 @@ internal class KeyCap(context: Context) : View(context) {
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT }
     private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.RIGHT }
     private val rect = RectF()
+    private val mainInkBounds = Rect()
+    private val hintInkBounds = Rect()
     private var icon: Drawable? = null
     private var iconRes = 0
     private var spaceProgress = 1f
@@ -85,6 +88,11 @@ internal class KeyCap(context: Context) : View(context) {
         }
         val text = if (flickActive && key.flickOutput != null) key.flickOutput else key.label
         val hint = key.hint?.takeIf { hints && !flickActive && !key.utility }
+        val prominentHint = hint?.length == 1 && !KeyTypography.isSinhala(hint) &&
+            KeyTypography.isLatinLetter(text)
+        var mainInkTop = height.toFloat()
+        var mainInkLeft = width.toFloat()
+        var mainInkRight = 0f
         if (text.isNotEmpty()) {
             val function = key.utility || text.length > 2 && !KeyTypography.isSinhala(text)
             labelPaint.color = inkFor(key)
@@ -96,41 +104,70 @@ internal class KeyCap(context: Context) : View(context) {
             }
             labelPaint.textSize = textSize
             val fm = labelPaint.fontMetrics
-            // Like Gboard, a hinted key keeps its label slightly low so the corner hint has room.
-            val centerY = height / 2f + if (hint.isNullOrEmpty()) 0f else dp(KeyTypography.HINT_LABEL_SHIFT_DP)
+            // English numbers and symbols share the same corner hint style and letter alignment.
+            val centerY = height / 2f +
+                (if (hint.isNullOrEmpty() || prominentHint) 0f else dp(KeyTypography.HINT_LABEL_SHIFT_DP)) -
+                (if (KeyTypography.isLatinLetter(text)) dp(1.5f) else 0f)
             val baseline = if (KeyTypography.isSinhala(text)) KeyTypography.sinhalaBaseline(centerY, fm) else KeyTypography.baseline(centerY, fm)
+            labelPaint.getTextBounds(text, 0, text.length, mainInkBounds)
+            mainInkTop = baseline + mainInkBounds.top
+            val mainStart = (width - labelPaint.measureText(text)) / 2f
+            mainInkLeft = mainStart + mainInkBounds.left
+            mainInkRight = mainStart + mainInkBounds.right
             canvas.drawText(text, width / 2f, baseline, labelPaint)
         }
         if (!hint.isNullOrEmpty()) {
             // A Sinhala letter hint takes the right corner, so the long-press number or symbol goes on the left
             val second = key.extras.firstOrNull()?.first?.takeIf { it != hint }
-            val inset = dp(KeyTypography.HINT_INSET_X_DP)
+            val inset = if (prominentHint) dp(1.5f) else dp(KeyTypography.HINT_INSET_DP)
             if (theme.keyShape == KeyShape.PILL) {
                 // Round tops have no corners, so hints sit side by side at the top centre (Gboard's round keys)
                 val gap = dp(2)
-                if (second == null) drawHint(canvas, hint, Paint.Align.CENTER, width / 2f)
+                if (second == null) drawHint(canvas, hint, Paint.Align.CENTER, width / 2f, prominentHint, mainInkTop, mainInkLeft, mainInkRight)
                 else {
-                    drawHint(canvas, second, Paint.Align.RIGHT, width / 2f - gap)
-                    drawHint(canvas, hint, Paint.Align.LEFT, width / 2f + gap)
+                    drawHint(canvas, second, Paint.Align.RIGHT, width / 2f - gap, false, mainInkTop, mainInkLeft, mainInkRight)
+                    drawHint(canvas, hint, Paint.Align.LEFT, width / 2f + gap, prominentHint, mainInkTop, mainInkLeft, mainInkRight)
                 }
             } else {
-                drawHint(canvas, hint, Paint.Align.RIGHT, width - inset)
-                second?.let { drawHint(canvas, it, Paint.Align.LEFT, inset) }
+                drawHint(canvas, hint, Paint.Align.RIGHT, width - inset, prominentHint, mainInkTop, mainInkLeft, mainInkRight)
+                second?.let { drawHint(canvas, it, Paint.Align.LEFT, inset, false, mainInkTop, mainInkLeft, mainInkRight) }
             }
         }
     }
 
-    private fun drawHint(canvas: Canvas, hint: String, align: Paint.Align, x: Float) {
-        hintPaint.color = theme.hint
+    private fun drawHint(
+        canvas: Canvas, hint: String, align: Paint.Align, x: Float,
+        prominentHint: Boolean = false, mainTop: Float = height.toFloat(),
+        mainLeft: Float = width.toFloat(), mainRight: Float = 0f
+    ) {
+        val sinhala = KeyTypography.isSinhala(hint)
+        hintPaint.color = ColorUtils.setAlphaComponent(theme.hint, if (prominentHint) 180 else if (sinhala) 175 else 140)
         hintPaint.typeface = KeyTypography.keyTypeface()
         hintPaint.textAlign = align
-        var hintSize = KeyTypography.hintPx(resources)
-        val maxHintWidth = width * 0.4f
-        while (hintSize > dp(7) && hintPaint.apply { textSize = hintSize }.measureText(hint) > maxHintWidth) {
+        var hintSize = KeyTypography.hintPx(resources, hint, prominentHint)
+        val maxHintWidth = width * if (sinhala) 0.44f else 0.4f
+        val top = dp(if (theme.keyShape == KeyShape.PILL) 5f else KeyTypography.HINT_INSET_DP) +
+            if (prominentHint) dp(1f) else 0f
+        var baseline: Float
+        while (true) {
+            hintPaint.textSize = hintSize
+            hintPaint.getTextBounds(hint, 0, hint.length, hintInkBounds)
+            baseline = if (sinhala) top - hintInkBounds.top else top - hintPaint.fontMetrics.ascent * 0.72f
+            val hintWidth = hintPaint.measureText(hint)
+            val start = when (align) {
+                Paint.Align.RIGHT -> x - hintWidth
+                Paint.Align.CENTER -> x - hintWidth / 2f
+                else -> x
+            }
+            val left = start + hintInkBounds.left
+            val right = start + hintInkBounds.right
+            val overlaps = baseline + hintInkBounds.bottom + dp(2f) > mainTop &&
+                right + dp(2f) > mainLeft && left - dp(2f) < mainRight
+            if (hintWidth <= maxHintWidth && left >= dp(1f) && right <= width - dp(1f) && !overlaps) break
+            if (hintSize <= dp(7f)) return
             hintSize *= 0.9f
         }
-        hintPaint.textSize = hintSize
-        canvas.drawText(hint, x, dp(KeyTypography.HINT_INSET_Y_DP) - hintPaint.fontMetrics.ascent * 0.72f, hintPaint)
+        canvas.drawText(hint, x, baseline, hintPaint)
     }
 
     override fun drawableStateChanged() {

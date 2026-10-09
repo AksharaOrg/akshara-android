@@ -27,8 +27,8 @@ android {
         applicationId = "lk.org.akshara.keyboard"
         minSdk = 26
         targetSdk = 36
-        versionCode = 28
-        versionName = "1.0"
+        versionCode = 29
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -49,9 +49,6 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isIncludeAndroidResources = true }
-    // Lifecycle's LiveData lint check (pulled in by Compose) is built for a newer lint than AGP 8.7 ships and
-    // crashes release builds. The app uses no LiveData; drop this once AGP is upgraded.
-    lint { disable += "NullSafeMutableLiveData" }
 }
 
 dependencies {

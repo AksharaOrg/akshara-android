@@ -58,8 +58,11 @@ class ClipboardHistoryStore(context: Context, private val now: () -> Long = Syst
     fun clear() = prefs.edit().remove(ITEMS).remove(PINNED).apply()
 
     private fun recent(): List<Clip> {
-        val cutoff = now() - RECENT_LIFETIME_MS
-        return read(ITEMS).filter { it.time in cutoff..now() }
+        val time = now()
+        val stored = read(ITEMS)
+        val active = stored.filter { it.time in (time - RECENT_LIFETIME_MS)..time }
+        if (active.size != stored.size) persist(ITEMS, active)
+        return active
     }
 
     private fun sanitize(text: String): String? {

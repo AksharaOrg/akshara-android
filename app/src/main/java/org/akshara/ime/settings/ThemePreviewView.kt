@@ -29,7 +29,7 @@ internal class ThemePreviewView(context: Context) : View(context) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
-        setMeasuredDimension(width, (width * aspect).toInt())
+        setMeasuredDimension(width, resolveSize((width * aspect).toInt(), heightMeasureSpec))
     }
 
     override fun onDraw(canvas: Canvas) {

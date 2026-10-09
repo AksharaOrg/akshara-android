@@ -1,5 +1,6 @@
 package org.akshara.ime.ime
 
+import android.annotation.SuppressLint
 import android.content.ClipboardManager
 import android.content.ClipData
 import android.content.ClipDescription
@@ -351,6 +352,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             val editedWord = currentWordAtCursor()
             val editing = isEditingExistingWord(editedWord)
             val typed = if (editing) editedWord.text else currentLatinPrefix()
+            if (typed.isNotEmpty() && value == typed) {
+                rejectedCorrections.add(typed.lowercase(java.util.Locale.ROOT))
+            }
             val nextCharacter = currentInputConnection?.getTextAfterCursor(editedWord.suffix.length + 1, 0)
                 ?.getOrNull(editedWord.suffix.length)
             val separator = if (editedWord.suffix.isEmpty() && nextCharacter == null) " " else ""
@@ -469,6 +473,8 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         val theme = KeyboardThemes.resolve(this, prefs.theme, prefs.highContrast)
         val chipBackground = Icon.createWithResource(this, R.drawable.inline_autofill_chip)
             .setTint(theme.surface)
+        // These public Builder methods are inherited from a restricted AndroidX base class.
+        @SuppressLint("RestrictedApi")
         val chip = ViewStyle.Builder()
             .setBackground(chipBackground)
             .setLayoutMargin(0, (2 * resources.displayMetrics.density).toInt(), 0,
@@ -559,12 +565,12 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (event != null && event.isPrintingKey && !event.isCtrlPressed && !event.isAltPressed) {
-            onCharacter(event.unicodeChar.toChar().toString()); return true
-        }
         if (keyCode == KeyEvent.KEYCODE_DEL) { onBackspace(); return true }
         if (keyCode == KeyEvent.KEYCODE_SPACE) { onSpace(); return true }
         if (keyCode == KeyEvent.KEYCODE_ENTER) { onEnter(); return true }
+        if (event != null && event.isPrintingKey && !event.isCtrlPressed && !event.isAltPressed) {
+            onCharacter(event.unicodeChar.toChar().toString()); return true
+        }
         return super.onKeyDown(keyCode, event)
     }
 

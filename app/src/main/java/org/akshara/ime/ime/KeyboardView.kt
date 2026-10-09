@@ -232,7 +232,7 @@ class KeyboardView(
                 WindowInsetsCompat.Type.tappableElement()
             val system = insets.getInsetsIgnoringVisibility(types).bottom
             val resource = navigationBarFallback()
-            val bottom = maxOf(system + dp(2), resource + dp(2), dp(KeyboardGeometry.BOTTOM_PAD_DP))
+            val bottom = maxOf(system + dp(5), resource + dp(5), dp(KeyboardGeometry.BOTTOM_PAD_DP))
                 .coerceAtMost(dp(64))
             val params = homePad.layoutParams as LayoutParams
             if (params.height != bottom) {
@@ -551,6 +551,7 @@ class KeyboardView(
     }
 
     private fun keepSuggestionRail() = inlineAutofill.visibility == VISIBLE || inlinePinned.visibility == VISIBLE ||
+        editorLayout in numericEditors ||
         editorLayout in setOf(EditorLayout.TEXT, EditorLayout.URI, EditorLayout.EMAIL) && layer in setOf(
             KeyboardLayer.LETTERS, KeyboardLayer.NUMBERS, KeyboardLayer.SYMBOLS, KeyboardLayer.CLIPBOARD
         )
@@ -585,37 +586,55 @@ class KeyboardView(
 
     private fun renderNativePad() {
         val rows = when (editorLayout) {
-            EditorLayout.PHONE -> listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), listOf("+","0","#"))
-            EditorLayout.DATETIME -> listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), listOf("/","0",":"))
-            else -> listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"), buildList {
-                if (editorLayout == EditorLayout.SIGNED_NUMBER || editorLayout == EditorLayout.SIGNED_DECIMAL) add("−")
-                add("0")
-                if (editorLayout == EditorLayout.DECIMAL || editorLayout == EditorLayout.SIGNED_DECIMAL) add(".")
-            })
+            EditorLayout.PHONE -> listOf(
+                listOf("1", "2", "3", "−"), listOf("4", "5", "6", "␣"),
+                listOf("7", "8", "9", "Delete"), listOf("* #", "0", ".", "Enter")
+            )
+            EditorLayout.DATETIME -> listOf(
+                listOf("1", "2", "3", "−"), listOf("4", "5", "6", ":"),
+                listOf("7", "8", "9", "Delete"), listOf("/", "0", ".", "Enter")
+            )
+            else -> listOf(
+                listOf("1", "2", "3", "−"), listOf("4", "5", "6", "+"),
+                listOf("7", "8", "9", "Delete"), listOf(",", "0", ".", "Enter")
+            )
         }
-        val pad = LinearLayout(context).apply { orientation = HORIZONTAL }
-        val digits = LinearLayout(context).apply { orientation = VERTICAL }
-        rows.forEachIndexed { rowIndex, values ->
-            val row = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER }
+        val pad = LinearLayout(context).apply { orientation = VERTICAL; setPadding(dp(2), 0, dp(2), 0) }
+        rows.forEach { values ->
+            val row = LinearLayout(context).apply { orientation = HORIZONTAL }
             values.forEach { value ->
-                val weight = if (rowIndex == 3 && value == "0") 4 - values.size.toFloat() else 1f
-                row.addView(button(value, KeyRole.LETTER, value) { actions.onCharacter(if (value == "−") "-" else value) }, LayoutParams(0, keyHeight(), weight).keyMargins())
+                val view = when (value) {
+                    "Delete" -> backspaceButton()
+                    "Enter" -> enterButton()
+                    else -> button(value, if (value.length == 1 && value[0].isDigit()) KeyRole.LETTER else KeyRole.FUNCTION, value) {
+                        val output = when (value) { "−" -> "-"; "␣" -> " "; "* #" -> "*"; else -> value }
+                        actions.onCharacter(output)
+                    }.apply {
+                        setOnLongClickListener(when (value) {
+                            "* #" -> View.OnLongClickListener { nativeKeyFeedback(); actions.onCharacter("#"); true }
+                            "0" -> if (editorLayout == EditorLayout.PHONE) View.OnLongClickListener {
+                                nativeKeyFeedback(); actions.onCharacter("+"); true
+                            } else null
+                            else -> null
+                        })
+                    }
+                }
+                val role = when {
+                    value == "Enter" -> KeyRole.ACCENT
+                    value.length == 1 && value[0].isDigit() -> KeyRole.LETTER
+                    else -> KeyRole.FUNCTION
+                }
+                view.background = keyBackground(role, radiusDp = 28)
+                if (view is Button) view.textSize = when {
+                    value.length == 1 && value[0].isDigit() -> 26f
+                    value == "Enter" -> 17f
+                    else -> 22f
+                }
+                row.addView(view, LayoutParams(0, nativeKeyHeight(), 1f).nativeKeyMargins())
             }
-            digits.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, rowHeight()))
+            pad.addView(row, LayoutParams(LayoutParams.MATCH_PARENT, nativeRowHeight()))
         }
-        pad.addView(digits, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 3.2f))
-        val actionsColumn = LinearLayout(context).apply { orientation = VERTICAL }
-        actionsColumn.addView(backspaceButton(), LayoutParams(LayoutParams.MATCH_PARENT, rowHeight() * 2).keyMargins())
-        actionsColumn.addView(enterButton(), LayoutParams(LayoutParams.MATCH_PARENT, rowHeight() * 2).keyMargins())
-        pad.addView(actionsColumn, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, .8f))
         body.addView(pad, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        if (editorLayout == EditorLayout.PHONE) {
-            val extras = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER }
-            extras.addView(button("*", KeyRole.FUNCTION, "Asterisk") { actions.onCharacter("*") }, LayoutParams(0, dp(46), 1f).keyMargins())
-            extras.addView(button("(", KeyRole.FUNCTION, "Left parenthesis") { actions.onCharacter("(") }, LayoutParams(0, dp(46), 1f).keyMargins())
-            extras.addView(button(")", KeyRole.FUNCTION, "Right parenthesis") { actions.onCharacter(")") }, LayoutParams(0, dp(46), 1f).keyMargins())
-            body.addView(extras, LayoutParams(LayoutParams.MATCH_PARENT, dp(52)))
-        }
     }
 
     private fun renderEmoji() {
@@ -1094,7 +1113,7 @@ class KeyboardView(
     private fun backspaceButton(): ImageButton {
         val b = iconButton(org.akshara.ime.R.drawable.ic_key_backspace, KeyRole.FUNCTION, "Delete") { }
         var repeats = 0
-        b.setOnClickListener { actions.onBackspace() }
+        b.setOnClickListener { nativeKeyFeedback(); actions.onBackspace() }
         val repeat = object : Runnable { override fun run() { repeats++; actions.onBackspace(repeats > 20); handler.postDelayed(this, if (repeats > 20) 45 else 80) } }
         b.setOnTouchListener { _, event -> when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> { repeats = 0; handler.postDelayed(repeat, 420); true }
@@ -1123,12 +1142,12 @@ class KeyboardView(
         "↵" -> iconButton(org.akshara.ime.R.drawable.ic_key_enter, KeyRole.ACCENT, "Enter") { actions.onEnter() }
         "⌕" -> iconButton(org.akshara.ime.R.drawable.ic_key_search, KeyRole.ACCENT, "Enter") { actions.onEnter() }
         else -> button(enterLabel, KeyRole.ACCENT, "Enter") { actions.onEnter() }
-    }
+    }.apply { setOnClickListener { nativeKeyFeedback(); actions.onEnter() } }
     private fun button(label: String, role: KeyRole, description: String, click: () -> Unit) = Button(context).apply {
         text = label; textSize = if (label.length > 10) 13f else 20f; isAllCaps = false; gravity = Gravity.CENTER
         setTextColor(inkFor(role)); contentDescription = description; minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
         background = keyBackground(role)
-        stateListAnimator = null; setOnClickListener { click() }
+        stateListAnimator = null; setOnClickListener { nativeKeyFeedback(); click() }
         accessibilityDelegate = object : AccessibilityDelegate() { override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) { super.onInitializeAccessibilityNodeInfo(host, info); info.className = Button::class.java.name } }
     }
     private fun iconButton(icon: Int, role: KeyRole, description: String, click: () -> Unit) = ImageButton(context).apply {
@@ -1142,6 +1161,15 @@ class KeyboardView(
         val horizontal = KeyboardMetrics.marginPx(prefs.keySpacing, resources.displayMetrics.density, false)
         val vertical = KeyboardMetrics.marginPx(prefs.keySpacing, resources.displayMetrics.density, true)
         setMargins(horizontal, vertical, horizontal, vertical)
+    }
+    private fun LayoutParams.nativeKeyMargins() = apply {
+        val horizontal = KeyboardMetrics.marginPx(prefs.keySpacing, resources.displayMetrics.density, false)
+        val vertical = dp(3)
+        setMargins(horizontal, vertical, horizontal, vertical)
+    }
+    private fun nativeKeyFeedback() {
+        actions.onPressFeedback()
+        if (prefs.haptics) performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
     }
     private fun usesTypingPanel() = editorLayout !in numericEditors && layer != KeyboardLayer.EMOJI && layer != KeyboardLayer.CLIPBOARD
     private fun suggestionKeySliver() = (KeyboardGeometry.SLIVER_DP * resources.displayMetrics.density).toInt()
@@ -1159,10 +1187,10 @@ class KeyboardView(
     }
     private enum class KeyRole { LETTER, FUNCTION, ACCENT, GHOST }
     private fun inkFor(role: KeyRole) = if (role == KeyRole.ACCENT) theme.accentInk else ink
-    private fun keyBackground(role: KeyRole): StateListDrawable {
+    private fun keyBackground(role: KeyRole, radiusDp: Int = 8): StateListDrawable {
         fun shape(color: Int) = GradientDrawable().apply {
-            // Number pad keys are about 48dp tall; a too-large radius is clamped to a pill
-            cornerRadius = theme.keyShape.radius(dp(48).toFloat(), dp(48).toFloat(), dp(8).toFloat()); setColor(color)
+            // Preserve the numeric pad's pill caps while respecting the selected theme.
+            cornerRadius = theme.keyShape.radius(dp(nativeKeyHeightDp()).toFloat(), dp(nativeKeyHeightDp()).toFloat(), dp(radiusDp).toFloat()); setColor(color)
             setStroke(if (theme.highContrast) dp(2) else 0, theme.border)
         }
         val (base, pressed) = when (role) {
@@ -1178,8 +1206,9 @@ class KeyboardView(
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun suggestionRailHeight() = KeyboardGeometry.railHeightPx(isLandscape(), resources.displayMetrics.density).toInt()
-    private fun keyHeight() = if (isLandscape()) dp(42) else dp(48)
-    private fun rowHeight() = if (isLandscape()) dp(48) else dp(56)
+    private fun nativeKeyHeightDp() = if (isLandscape()) 46 else 53
+    private fun nativeKeyHeight() = dp(nativeKeyHeightDp())
+    private fun nativeRowHeight() = if (isLandscape()) dp(52) else dp(59)
     private fun emojiGridHeight(rows: Int) = EmojiBoard.gridHeight(context, rows, isLandscape())
     private fun auxiliaryHeight() = (KeyboardGeometry.rowHeightPx(prefs.keyboardSize, isLandscape(), resources.displayMetrics.density) *
         KeyboardLayoutFactory.typingRows(mode, KeyboardLayer.LETTERS, false, false, editorLayout,

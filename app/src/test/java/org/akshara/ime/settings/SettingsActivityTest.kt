@@ -1,5 +1,9 @@
 package org.akshara.ime.settings
 
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText as hasNodeText
 import androidx.compose.ui.test.isToggleable
@@ -132,6 +136,27 @@ class SettingsActivityTest {
         assertTrue(KeyboardPreferences(activity).suggestions)
         clickRow(activity.getString(R.string.suggestions))
         assertFalse(KeyboardPreferences(activity).suggestions)
+    }
+
+    @Test fun switchesRefreshWhenPreferencesChangeWhileSettingsIsPaused() {
+        openPage(R.string.page_correction)
+        val title = activity.getString(R.string.suggestions)
+        clickRow(title)
+        compose.onNode(hasNodeText(title) and isToggleable()).assertIsOff()
+        KeyboardPreferences(activity).suggestions = true
+        controller.pause().resume()
+        compose.waitForIdle()
+        compose.onNode(hasNodeText(title) and isToggleable()).assertIsOn()
+    }
+
+    @Test @org.robolectric.annotation.Config(qualifiers = "land")
+    fun themeSheetCanApplyInLandscape() {
+        openPage(R.string.theme)
+        clickRow(activity.getString(R.string.theme_light))
+        compose.onAllNodesWithText(activity.getString(R.string.theme_apply)).onFirst()
+            .performScrollTo().assertIsDisplayed().performClick()
+        compose.waitForIdle()
+        assertEquals("light", KeyboardPreferences(activity).theme)
     }
 
     @Test fun listChoiceUpdatesSummary() {

@@ -659,7 +659,7 @@ class SettingsActivity : ComponentActivity() {
         fun toggle(title: Int, summary: Int, icon: Int, tint: Int, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
             rows += SettingsRow.Toggle(
                 getString(title), summary.takeIf { it != 0 }?.let(::getString), icon, tint, checked, enabled
-            ) { on -> onChange(on) }
+            ) { on -> onChange(on); render() }
         }
 
         fun choice(title: Int, icon: Int, tint: Int, entries: Int, values: Int, current: String, onPick: (String) -> Unit) {
