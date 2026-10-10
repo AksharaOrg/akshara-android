@@ -5,6 +5,7 @@ import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.LinearLayout
 import androidx.test.core.app.ApplicationProvider
+import org.akshara.ime.data.ClipboardHistoryStore
 import org.akshara.ime.engine.InputMode
 import org.akshara.ime.settings.KeyboardPreferences
 import org.junit.Assert.*
@@ -14,6 +15,31 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class KeyboardInteractionTest {
+    @Test fun symbolHintsAreIndependentOfSinhalaHintsAndKeepAlternates() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val prefs = KeyboardPreferences(context)
+        for (english in listOf(false, true)) {
+            for (symbols in listOf(false, true)) for (sinhala in listOf(false, true)) {
+                prefs.symbolHints = symbols
+                prefs.keyHints = sinhala
+                val view = KeyboardView(context, idleActions(), prefs)
+                view.configure(InputMode.PHONETIC, false, "Done", english = english)
+                layoutKeyboard(view)
+                val m = findTagged(view, "m") as KeyCap
+                val hints = m.visibleHints().toList().filterNotNull()
+                assertEquals(symbols, "?" in hints)
+                assertEquals(!english && sinhala, hints.any(KeyTypography::isSinhala))
+                assertEquals("?", m.spec!!.extras.first().second)
+                val w = findTagged(view, "w") as KeyCap
+                assertEquals(sinhala, "2" in w.visibleHints().toList())
+                assertEquals("2", w.spec!!.extras.first().second)
+                val comma = findTagged(view, ",") as KeyCap
+                assertEquals(null to null, comma.visibleHints())
+                assertEquals(";", comma.spec!!.extras.first().second)
+            }
+        }
+    }
+
     @Test fun numericPadsUseFourEvenColumnsAndKeepActionsEasyToReach() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val typed = StringBuilder()
@@ -66,9 +92,10 @@ class KeyboardInteractionTest {
         val view = KeyboardView(context, idleActions(), KeyboardPreferences(context))
         view.configure(InputMode.PHONETIC, false, "Done")
         layoutKeyboard(view)
-        val q = view.typingLayout()!!.keyById("q")!!
-        assertEquals("1", q.extras.first().second)
-        assertNotEquals("1", q.hint)
+        val w = view.typingLayout()!!.keyById("w")!!
+        assertEquals("2", w.extras.first().second)
+        assertEquals(KeyboardLayoutFactory.phoneticHint("w", InputMode.PHONETIC, false, false, false), w.hint)
+        assertNotEquals("2", w.hint)
     }
 
     @Test @org.robolectric.annotation.Config(qualifiers = "land")
@@ -223,8 +250,18 @@ class KeyboardInteractionTest {
         layoutKeyboard(view)
         assertNotNull(findButton(view, "Rakaranshaya"))
         assertTrue(view.typingLayout()!!.keys.any { it.hint == "ඟ" })
+        val nya = findTagged(view, "[") as KeyCap
+        assertEquals("ඤ", nya.spec!!.label)
+        assertEquals("ඤ", nya.spec!!.output)
+        assertNull(nya.spec!!.hint)
+        assertEquals(null to null, nya.visibleHints())
+        assertEquals("{", nya.spec!!.extras.first().second)
         assertEquals(listOf("ඟ" to "ඟ"), KeyAlternates.extras(".", InputMode.WIJESEKARA, KeyboardLayer.LETTERS, false))
-        assertTrue(KeyAlternates.extras("a", InputMode.PHONETIC, KeyboardLayer.LETTERS, false).any { it.first == "à" })
+        assertEquals(listOf("@" to "@"), KeyAlternates.extras("a", InputMode.PHONETIC, KeyboardLayer.LETTERS, false))
+        assertEquals(listOf("?" to "?"), KeyAlternates.extras("m", InputMode.PHONETIC, KeyboardLayer.LETTERS, false))
+        assertEquals(listOf("?" to "?"), KeyAlternates.extras("m", InputMode.PHONETIC, KeyboardLayer.LETTERS, true))
+        assertTrue(KeyAlternates.extras("m", InputMode.WIJESEKARA, KeyboardLayer.LETTERS, false).isEmpty())
+        assertTrue(KeyAlternates.extras("e", InputMode.PHONETIC, KeyboardLayer.LETTERS, false).isEmpty())   // no accented letters
         assertNull(findButton(view, "z, '"))
     }
     @Test fun phoneticKeysMatchGboardProportionsAndOwnLeftoverHits() {
@@ -332,6 +369,73 @@ class KeyboardInteractionTest {
         layoutKeyboard(closed)
         val hidden = findButton(closed, "Clipboard history")
         assertTrue(hidden == null || hidden.visibility != View.VISIBLE)
+    }
+
+    @Test fun clipboardBoardPinsUnpinsClearsAndOpensClipboardSettings() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().clear().commit()
+        context.getSharedPreferences(ClipboardHistoryStore.FILE, 0).edit().clear().commit()
+        val prefs = KeyboardPreferences(context)
+        prefs.clipboardHistory = true
+        val store = ClipboardHistoryStore(context)
+        store.add("older")
+        store.add("clip")
+        var clipboardSettings = 0
+        var settings = 0
+        val actions = object : KeyboardActions by idleActions() {
+            override fun onSettings() { settings++ }
+            override fun onClipboardSettings() { clipboardSettings++ }
+        }
+        val view = KeyboardView(context, actions, prefs)
+        view.configure(InputMode.PHONETIC, false, "↵")
+        view.setClipboardItems(store.items(), store.pinnedItems())
+        layoutKeyboard(view)
+        findButton(view, "Clipboard history")!!.performClick()
+        layoutKeyboard(view)
+
+        // One gear: on the clipboard board it opens the Clipboard settings page with a single tap
+        findButton(view, "Keyboard settings")!!.performClick()
+        assertEquals(1, clipboardSettings)
+        assertEquals(0, settings)
+
+        // Recent rows offer an outlined Pin; pinned rows show Unpin, which moves the clip back to Recent
+        assertNull(findButton(view, "Unpin"))
+        findButton(view, "Pin")!!.performClick()
+        layoutKeyboard(view)
+        assertEquals(listOf("clip"), store.pinnedItems())
+        assertTrue(findText(view, "Pinned 1"))
+        clickText(view, "Pinned 1")
+        layoutKeyboard(view)
+        findButton(view, "Unpin")!!.performClick()
+        layoutKeyboard(view)
+        assertEquals(emptyList<String>(), store.pinnedItems())
+        assertEquals(listOf("clip", "older"), store.items())
+
+        // Clear asks first; Cancel keeps the clips, Clear removes them
+        clickText(view, "Recent 2")
+        layoutKeyboard(view)
+        findButton(view, "Clear recent clips")!!.performClick()
+        layoutKeyboard(view)
+        assertTrue(findText(view, "Clear all recent clips?"))
+        clickText(view, "Cancel")
+        layoutKeyboard(view)
+        assertEquals(2, store.items().size)
+        findButton(view, "Clear recent clips")!!.performClick()
+        clickText(view, "Clear")
+        layoutKeyboard(view)
+        assertTrue(store.items().isEmpty())
+        assertTrue(findText(view, "Recent 0"))
+    }
+
+    private fun clickText(view: View, value: String) {
+        fun find(v: View): View? {
+            if (v.visibility != View.VISIBLE) return null
+            if (v is TextView && v.isClickable && v.text.toString() == value) return v
+            if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i))?.let { return it }
+            return null
+        }
+        assertNotNull("no visible '$value'", find(view))
+        find(view)!!.performClick()
     }
 
     @Test fun optionalRowsGrowTheRenderedKeyboardInEveryLayout() {

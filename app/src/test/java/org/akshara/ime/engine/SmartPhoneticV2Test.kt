@@ -43,6 +43,7 @@ class SmartPhoneticV2Test {
         "repaya_zwj" -> SmartPhoneticV2.Options(repayaZwj = true)
         "classical" -> SmartPhoneticV2.Options(classical = true)
         "rakaransaya_u" -> SmartPhoneticV2.Options(rakaransayaU = true)
+        "retroflex_d" -> SmartPhoneticV2.Options(retroflexD = true)
         else -> error("unknown option $name")
     }
 
@@ -61,6 +62,18 @@ class SmartPhoneticV2Test {
         ).forEach { (roman, expected) -> assertEquals(roman, expected, SmartPhoneticV2.transliterate(roman)) }
         assertEquals("හොඳ", lexicon.candidates("honda").first())
         assertEquals("ක්${z}රමය", lexicon.candidates("kramaya").first())
+    }
+
+    /** R-01: retroflexD swaps the d keys to the older keyboard convention. */
+    @Test fun retroflexDSwapsTheDKeys() {
+        val singlish = SmartPhoneticV2.Options(retroflexD = true)
+        assertEquals("බඩ", SmartPhoneticV2.transliterate("bada", singlish))
+        assertEquals("කොහොමද", SmartPhoneticV2.transliterate("kohomadha", singlish))
+        assertEquals("ධර්මය", SmartPhoneticV2.transliterate("Dharmaya", singlish))
+        assertEquals("ඪ", SmartPhoneticV2.transliterate("Da", singlish))
+        assertEquals("හොඳ", SmartPhoneticV2.transliterate("hozdha", singlish))
+        assertEquals("ද", SmartPhoneticV2.transliterate("da"))
+        assertEquals("කොහොමද", lexicon.candidates("kohomada", options = singlish).first())   // Space still finds කොහොමද
     }
 
     /** R-07: after ම න ල, ර takes plain hal (දුම්රිය, not දුම්‍රිය); `classical` keeps ම්‍ර. */

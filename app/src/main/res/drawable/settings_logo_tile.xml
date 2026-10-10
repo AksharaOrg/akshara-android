@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The logo's own tile colour; also the outline the logo image is clipped to. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="@color/akshara_icon_background" />
-    <corners android:radius="@dimen/settings_logo_radius" />
-</shape>

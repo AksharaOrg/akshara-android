@@ -58,7 +58,9 @@
     <string name="english_one_word">English for one word</string>
     <string name="english_one_word_summary">Swipe up on Space for one Latin word</string>
     <string name="smart_phonetic_v2">Grammar-correct Smart Phonetic</string>
-    <string name="smart_phonetic_v2_summary">Grammar-correct spelling: d types ද, D types ඩ. Space picks the dictionary spelling; Backspace undoes it. Turn off for the classic Smart Phonetic</string>
+    <string name="smart_phonetic_v2_summary">Grammar-correct spelling. Space picks the dictionary spelling; Backspace undoes it. Turn off for the classic Smart Phonetic</string>
+    <string name="v2_retroflex_d">Type ඩ with d</string>
+    <string name="v2_retroflex_d_summary">On: d types ඩ and dh types ද, as on older Singlish keyboards (D ඪ, Dh ධ). Off: d types ද, dh ධ, D ඩ</string>
     <string name="v2_rakaransaya_u">Write kruura as ක්‍රූර</string>
     <string name="v2_rakaransaya_u_summary">C + r + u as rakaransaya + ු (ක්‍රූර) instead of the usual ෘ / ෲ (කෲර)</string>
     <string name="v2_repaya_zwj">Joined repaya</string>
@@ -73,7 +75,7 @@
     <string name="emoji_picker_summary">Show the built-in emoji picker button on the suggestion bar</string>
     <string name="skin_tone">Preferred skin tone</string>
     <string name="clipboard_history">Clipboard history</string>
-    <string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device. Pin clips from the keyboard to keep them.</string>
+    <string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device for 1 hour. Pin clips from the keyboard to keep them.</string>
     <string name="clipboard_preview">Quick paste preview</string>
     <string name="clipboard_preview_summary">Show recently copied text or a compatible image on the suggestion bar. Disabled by default.</string>
     <string name="space_punctuation_keys">Comma and period beside Space</string>
@@ -82,6 +84,8 @@
     <string name="inline_autofill_summary">Show password-manager and form-fill suggestions in the keyboard bar</string>
     <string name="key_hints">Sinhala key hints</string>
     <string name="key_hints_summary">Show the Sinhala letter each key types in its corner</string>
+    <string name="symbol_hints">Symbol key hints</string>
+    <string name="symbol_hints_summary">Show long-press symbols such as @ and ? on letter keys. Long-press still works when hints are hidden.</string>
     <string name="show_with_hardware_keyboard">Show on-screen keyboard</string>
     <string name="show_with_hardware_keyboard_summary">Keep the keyboard on screen while a physical keyboard is connected</string>
     <string name="theme">Theme</string>
@@ -97,6 +101,42 @@
     <string name="one_handed">One-handed layout</string>
     <string name="haptics">Vibrate on keypress</string>
     <string name="key_sounds">Sound on keypress</string>
+    <string name="theme_section_default">Default</string>
+    <string name="theme_section_colors">Colors</string>
+    <string name="theme_section_light_gradients">Light gradients</string>
+    <string name="theme_section_dark_gradients">Dark gradients</string>
+    <string name="theme_accessibility">Accessibility</string>
+    <string name="theme_keys">Keys</string>
+    <string name="key_shape">Key shape</string>
+    <string name="theme_apply">Apply</string>
+    <string name="theme_show_all">%1$s, show all</string>
+    <string name="theme_show_less">%1$s, show less</string>
+    <string name="theme_selected">%1$s, selected</string>
+    <string name="theme_dynamic">Dynamic color</string>
+    <string name="theme_system">System auto</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light_gradient">Light gradient %1$d</string>
+    <string name="theme_dark_gradient">Dark gradient %1$d</string>
+    <string name="theme_color_snow">Snow</string>
+    <string name="theme_color_sand">Sand</string>
+    <string name="theme_color_blush">Blush</string>
+    <string name="theme_color_mint">Mint</string>
+    <string name="theme_color_sky">Sky</string>
+    <string name="theme_color_lavender">Lavender</string>
+    <string name="theme_color_black">Black</string>
+    <string name="theme_color_slate">Slate</string>
+    <string name="theme_color_midnight">Midnight</string>
+    <string name="theme_color_forest">Forest</string>
+    <string name="theme_color_plum">Plum</string>
+    <string name="theme_color_espresso">Espresso</string>
+    <string name="theme_color_blue">Blue</string>
+    <string name="theme_color_teal">Teal</string>
+    <string name="theme_color_green">Green</string>
+    <string name="theme_color_red">Red</string>
+    <string name="theme_color_pink">Pink</string>
+    <string name="theme_color_purple">Purple</string>
+    <string name="key_borders">Key borders</string>
     <string name="high_contrast">High-contrast keys</string>
     <string name="high_contrast_summary">Add stronger outlines to key surfaces</string>
     <string name="clear_learning_title">Clear learned words</string>
@@ -144,7 +184,7 @@
     <string name="privacy_permissions_title">Permissions</string>
     <string name="privacy_permissions_body">Akshara has no internet permission. Vibration is used only for keypress haptics. The keyboard can read text fields while it is open, which Android requires for any IME.</string>
     <string name="privacy_clipboard_title">Clipboard history</string>
-    <string name="privacy_clipboard_body">Clipboard features are disabled by default. Quick paste shows the latest copied text or compatible image while the keyboard is open. Images are copied temporarily into the app cache so Android can grant the receiving app access, then removed automatically. Clipboard history can save copied text on this device. Clipboard content is never shown in password fields or sent over the network.</string>
+    <string name="privacy_clipboard_body">Clipboard features are disabled by default. Quick paste shows the latest copied text or compatible image while the keyboard is open. Images are copied temporarily into the app cache so Android can grant the receiving app access, then removed automatically. Clipboard history can save copied text on this device: recent clips are removed after 1 hour, pinned clips stay until you delete them. Clipboard content is never shown in password fields or sent over the network.</string>
     <string name="privacy_predictions_title">Predictions</string>
     <string name="privacy_predictions_body">Word suggestions use compact models bundled with the app. Source corpora are not included and never leave your device.</string>
     <string name="privacy_diagnostics_title">Diagnostics</string>
@@ -206,4 +246,19 @@
         <item>KEYBOARD</item>
         <item>DISABLED</item>
     </string-array>
+    <!-- Clipboard board on the keyboard -->
+    <string name="clip_title">Clipboard</string>
+    <string name="clip_back">Back</string>
+    <string name="clip_recent">Recent %1$d</string>
+    <string name="clip_pinned">Pinned %1$d</string>
+    <string name="clip_clear">Clear recent clips</string>
+    <string name="clip_clear_question">Clear all recent clips?</string>
+    <string name="clip_clear_confirm">Clear</string>
+    <string name="clip_cancel">Cancel</string>
+    <string name="clip_empty_recent">Copied text shows here for 1 hour. Pin a clip to keep it.</string>
+    <string name="clip_empty_pinned">Pinned clips stay until you unpin or delete them. Tap a clip to paste it.</string>
+    <string name="clip_paste">Paste %1$s</string>
+    <string name="clip_pin">Pin</string>
+    <string name="clip_unpin">Unpin</string>
+    <string name="clip_delete">Delete</string>
 </resources>

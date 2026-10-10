@@ -9,7 +9,7 @@ internal object KeyTypography {
     const val LATIN_LETTER_SP = 27.5f
     const val SINHALA_SP = 21.5f
     const val HINT_SP = 9f
-    const val LATIN_NUMBER_HINT_SP = 12.5f
+    const val LATIN_HINT_SP = 12.5f
     const val SINHALA_HINT_SP = 12f
     const val HINT_INSET_DP = 3f
     const val HINT_LABEL_SHIFT_DP = 4f
@@ -28,9 +28,9 @@ internal object KeyTypography {
         return sp * resources.displayMetrics.scaledDensity
     }
 
-    fun hintPx(resources: Resources, hint: String, latinNumber: Boolean = false) =
+    fun hintPx(resources: Resources, hint: String, latinHint: Boolean = false) =
         (when {
-            latinNumber -> LATIN_NUMBER_HINT_SP
+            latinHint -> LATIN_HINT_SP
             isSinhala(hint) -> SINHALA_HINT_SP
             else -> HINT_SP
         }) * resources.displayMetrics.scaledDensity

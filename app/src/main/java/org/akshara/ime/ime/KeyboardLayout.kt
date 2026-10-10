@@ -288,18 +288,17 @@ internal object KeyboardLayoutFactory {
             }
         } else {
             fun key(id: String) = letterDef(id, mode, false, shifted, caps, KeyboardGeometry.LETTER).let {
-                if (literal) it.copy(label = it.output, hint = null,
-                    extras = if (english && editor == EditorLayout.TEXT) KeyAlternates.extras(id, InputMode.PHONETIC, KeyboardLayer.LETTERS, shifted || caps) else emptyList(),
-                    flickOutput = null) else it
+                if (literal) {
+                    val extras = if (english && editor == EditorLayout.TEXT) KeyAlternates.extras(id, InputMode.PHONETIC, KeyboardLayer.LETTERS, shifted || caps) else emptyList()
+                    it.copy(label = it.output, hint = extras.firstOrNull()?.first, extras = extras, flickOutput = null)
+                } else it
             }
             val q = KeyboardView.qwertyRows[0].mapIndexed { index, id ->
                 val letter = key(id)
                 if (editor == EditorLayout.TEXT && topRow != "numbers") {
                     val number = "1234567890"[index].toString()
-                    letter.copy(
-                        hint = if (english) number else letter.hint,
-                        extras = listOf(number to number) + letter.extras
-                    )
+                    // Sinhala keys keep their letter hint; KeyCap shows the number on the left
+                    letter.copy(hint = if (english) number else letter.hint ?: number, extras = listOf(number to number) + letter.extras)
                 } else letter
             }
             val a = KeyboardView.qwertyRows[1].map(::key)
@@ -410,6 +409,7 @@ internal object KeyboardLayoutFactory {
         }
         val extras = KeyAlternates.extras(id, mode, KeyboardLayer.LETTERS, shifted || caps)
         val hint = KeyAlternates.hint(id, mode, KeyboardLayer.LETTERS) ?: phoneticHint(id, mode, wijesekara, shifted, caps)
+            ?: extras.firstOrNull()?.first?.takeUnless { wijesekara }
         val flick = extras.firstOrNull()?.second
         return KeyDef(id, label, output, KeyCode.CHAR, width, hint, extras, flick)
     }

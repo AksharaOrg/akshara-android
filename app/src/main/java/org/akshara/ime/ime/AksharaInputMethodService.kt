@@ -1,5 +1,6 @@
 package org.akshara.ime.ime
 
+import android.annotation.SuppressLint
 import android.content.ClipboardManager
 import android.content.ClipData
 import android.content.ClipDescription
@@ -66,6 +67,8 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private var secureEditor = true
     private var clipboardEligible = false
     private var latestClipboard: ClipData? = null
+    /** The copy last pasted or typed past from the quick paste chip; it is not offered again. */
+    private var handledClipboard: String? = null
     private data class StagedImage(val source: Uri, val content: Uri, val mimeType: String)
     private var stagedImage: StagedImage? = null
     private var stagingSource: Uri? = null
@@ -191,7 +194,10 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     }
 
     override fun onCharacter(value: String) {
-        if (latestClipboard != null) clearClipboardPreview()
+        if (latestClipboard != null) {
+            handledClipboard = latestClipboard?.let(::clipboardSource)
+            clearClipboardPreview()
+        }
         validatePreview()
         if (persistentEnglish) {
             commitComposition()
@@ -403,8 +409,14 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         val extracted = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0) ?: return
         val next = (extracted.selectionEnd + delta).coerceIn(0, extracted.text.length); ic.setSelection(next, next)
     }
-    override fun onSettings() {
-        startActivity(Intent(this, org.akshara.ime.settings.SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    override fun onSettings() = openSettings(null)
+    override fun onClipboardSettings() = openSettings(org.akshara.ime.settings.SettingsActivity.PAGE_CLIPBOARD)
+
+    private fun openSettings(page: String?) {
+        val intent = Intent(this, org.akshara.ime.settings.SettingsActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        page?.let { intent.putExtra(org.akshara.ime.settings.SettingsActivity.EXTRA_PAGE, it) }
+        startActivity(intent)
     }
     override fun onClipboardOpen() {
         refreshClipboard()
@@ -440,6 +452,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             val text = clipboardText(clip) ?: return
             onPasteText(text)
         }
+        handledClipboard = clipboardSource(clip)
         latestClipboard = null
         stagedImage = null
         stagingSource = null
@@ -457,17 +470,19 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !prefs.inlineAutofill) return null
         if (UiVersions.INLINE_UI_VERSION_1 !in UiVersions.getVersions(uiExtras)) return null
-        val palette = KeyboardPaletteResolver.resolve(this, prefs.theme, prefs.highContrast)
+        val theme = KeyboardThemes.resolve(this, prefs.theme, prefs.highContrast)
         val chipBackground = Icon.createWithResource(this, R.drawable.inline_autofill_chip)
-            .setTint(palette.key)
+            .setTint(theme.surface)
+        // These public Builder methods are inherited from a restricted AndroidX base class.
+        @SuppressLint("RestrictedApi")
         val chip = ViewStyle.Builder()
             .setBackground(chipBackground)
             .setLayoutMargin(0, (2 * resources.displayMetrics.density).toInt(), 0,
                 (2 * resources.displayMetrics.density).toInt())
             .build()
-        val title = TextViewStyle.Builder().setTextColor(palette.ink).setTextSize(14f).build()
+        val title = TextViewStyle.Builder().setTextColor(theme.ink).setTextSize(14f).build()
         val subtitle = TextViewStyle.Builder()
-            .setTextColor(ColorUtils.setAlphaComponent(palette.ink, 190))
+            .setTextColor(ColorUtils.setAlphaComponent(theme.ink, 190))
             .setTextSize(12f)
             .build()
         val styles = UiVersions.newStylesBuilder()
@@ -842,7 +857,7 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
     private fun captureClipboardHistory(clip: ClipData) {
         if (!prefs.clipboardHistory || !clipboardEligible || secureEditor || clip.itemCount == 0) return
         if (currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0) return
-        clipboardText(clip)?.let(clipboardHistory::add)
+        clipboardText(clip)?.let { clipboardHistory.capture(it, clip.description.timestamp.toString()) }
     }
 
     private fun refreshClipboard(fresh: Boolean = false) {
@@ -865,7 +880,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             return
         }
         captureClipboardHistory(clip)
-        val next = clip.takeIf { prefs.clipboardPreview && (fresh || isRecentClipboard(it.description)) }
+        val next = clip.takeIf {
+            prefs.clipboardPreview && (fresh || isRecentClipboard(it.description)) && clipboardSource(it) != handledClipboard
+        }
         if (fresh || next?.getItemAt(0)?.uri != latestClipboard?.getItemAt(0)?.uri) {
             stagedImage = null
             stagingSource = null
@@ -899,6 +916,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         clipboardGeneration++
         if (::keyboard.isInitialized) keyboard.setClipboardPreview(null)
     }
+
+    /** Identifies one copy: the same clip read again has the same source, a new copy of the same text does not. */
+    private fun clipboardSource(clip: ClipData) = "${clip.description.timestamp}:${clip.getItemAt(0)?.let { it.uri ?: it.text }}"
 
     private fun clipboardText(clip: ClipData): String? {
         if (clip.itemCount == 0) return null
@@ -983,7 +1003,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         if (key == "persistent_english" && persistentEnglish == prefs.persistentEnglish) return
         commitComposition()
         val recreate = key == null || key == KeyboardPreferences.THEME || key == "high_contrast" || key == KeyboardPreferences.KEY_HINTS ||
-            key == KeyboardPreferences.SMART_PHONETIC_V2
+            key == KeyboardPreferences.SYMBOL_HINTS ||
+            key == KeyboardPreferences.SMART_PHONETIC_V2 ||
+            key.startsWith(KeyboardPreferences.KEY_BORDERS_PREFIX) || key == KeyboardPreferences.KEY_SHAPE
         if (recreate) {
             keyboard = KeyboardView(this, this, prefs)
             setInputView(keyboard)
@@ -1035,7 +1057,9 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
             win.isNavigationBarContrastEnforced = false
             win.decorView.isForceDarkAllowed = false
         }
-        win.navigationBarColor = if (::keyboard.isInitialized) keyboard.keyboardBackground() else android.graphics.Color.TRANSPARENT
+        // Gradients and glows run under the bar (the keyboard pads for it); a solid theme paints the bar itself
+        win.navigationBarColor = if (::keyboard.isInitialized && !keyboard.drawsUnderNavigationBar()) keyboard.keyboardBackground()
+            else android.graphics.Color.TRANSPARENT
     }
 
     companion object {

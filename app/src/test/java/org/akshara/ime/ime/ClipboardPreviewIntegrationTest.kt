@@ -9,7 +9,9 @@ import android.widget.EditText
 import androidx.test.core.app.ApplicationProvider
 import org.akshara.ime.settings.KeyboardPreferences
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,6 +48,54 @@ class ClipboardPreviewIntegrationTest {
             clipboard.setPrimaryClip(ClipData.newPlainText("URL", "https://akshara.org.lk"))
             service.onClipboardPreviewPaste()
             assertEquals("https://akshara.org.lk", editor.text.toString())
+        } finally {
+            service.onFinishInputView(true)
+            controller.destroy()
+        }
+    }
+
+    @Test fun aDeletedClipDoesNotComeBackWhileItIsStillCopied() {
+        KeyboardPreferences(context).clipboardHistory = true
+        val store = org.akshara.ime.data.ClipboardHistoryStore(context)
+        context.getSharedPreferences(org.akshara.ime.data.ClipboardHistoryStore.FILE, 0).edit().clear().commit()
+        (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+            .setPrimaryClip(ClipData.newPlainText("Word", "now"))
+        withTextEditor { service, _ ->
+            assertEquals(listOf("now"), store.items())
+            store.remove("now")
+            service.onClipboardOpen()
+            service.onStartInputView(service.currentInputEditorInfo, false)
+            assertEquals(emptyList<String>(), store.items())
+        }
+    }
+
+    @Test fun aPastedQuickPasteClipIsNotOfferedAgain() {
+        KeyboardPreferences(context).clipboardPreview = true
+        withTextEditor { service, editor ->
+            (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                .setPrimaryClip(ClipData.newPlainText("Word", "hello"))
+            assertNotNull(ReflectionHelpers.getField<ClipData?>(service, "latestClipboard"))
+            service.onClipboardPreviewPaste()
+            assertEquals("hello", editor.text.toString())
+            service.onStartInput(service.currentInputEditorInfo, false)
+            service.onStartInputView(service.currentInputEditorInfo, false)
+            assertNull(ReflectionHelpers.getField<ClipData?>(service, "latestClipboard"))
+        }
+    }
+
+    private fun withTextEditor(test: (AksharaInputMethodService, EditText) -> Unit) {
+        val controller = Robolectric.buildService(AksharaInputMethodService::class.java).create()
+        val service = controller.get()
+        try {
+            val editor = EditText(context)
+            val info = EditorInfo().apply { inputType = InputType.TYPE_CLASS_TEXT }
+            val connection = editor.onCreateInputConnection(info)!!
+            ReflectionHelpers.setField(service, "mStartedInputConnection", connection)
+            ReflectionHelpers.setField(service, "mInputEditorInfo", info)
+            service.onCreateInputView()
+            service.onStartInput(info, false)
+            service.onStartInputView(info, false)
+            test(service, editor)
         } finally {
             service.onFinishInputView(true)
             controller.destroy()

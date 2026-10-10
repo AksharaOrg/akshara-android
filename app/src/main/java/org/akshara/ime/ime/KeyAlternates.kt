@@ -9,7 +9,8 @@ internal object KeyAlternates {
             wijesekara(identity)?.let { return it }
         }
         punctuation(identity)?.let { return it.map { value -> value to value } }
-        if (layer == KeyboardLayer.LETTERS) latin(identity, shifted)?.let { return it.map { value -> value to value } }
+        // Wijesekara keys type different letters, so the QWERTY symbol positions don't apply there
+        if (layer == KeyboardLayer.LETTERS && mode != InputMode.WIJESEKARA) letterSymbol(identity)?.let { return listOf(it to it) }
         if (layer == KeyboardLayer.NUMBERS || layer == KeyboardLayer.SYMBOLS) {
             numbers(identity)?.let { return it.map { value -> value to value } }
         }
@@ -45,20 +46,11 @@ internal object KeyAlternates {
         else -> null
     }
 
-    private fun latin(identity: String, shifted: Boolean): List<String>? {
-        val values = when (identity.lowercase()) {
-            "a" -> listOf("à", "á", "â", "ä", "æ", "ã", "å", "ā")
-            "e" -> listOf("è", "é", "ê", "ë", "ē", "ė", "ę")
-            "i" -> listOf("ì", "í", "î", "ï", "ī")
-            "o" -> listOf("ò", "ó", "ô", "ö", "ø", "õ", "œ", "ō")
-            "u" -> listOf("ù", "ú", "û", "ü", "ū")
-            "c" -> listOf("ç", "ć", "č")
-            "n" -> listOf("ñ", "ń")
-            "s" -> listOf("ß", "ś", "š")
-            "y" -> listOf("ÿ")
-            else -> null
-        } ?: return null
-        return if (shifted) values.map { it.uppercase() } else values
+    /** Gboard's "long-press for symbols" on the second and third letter rows. */
+    private fun letterSymbol(identity: String): String? = when (identity.lowercase()) {
+        "a" -> "@"; "s" -> "#"; "d" -> "$"; "f" -> "_"; "g" -> "&"; "h" -> "-"; "j" -> "+"; "k" -> "("; "l" -> ")"
+        "z" -> "*"; "x" -> "\""; "c" -> "'"; "v" -> ":"; "b" -> ";"; "n" -> "!"; "m" -> "?"
+        else -> null
     }
 
     private fun numbers(identity: String): List<String>? = when (identity) {

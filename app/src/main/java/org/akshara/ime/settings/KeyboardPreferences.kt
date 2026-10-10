@@ -46,9 +46,17 @@ class KeyboardPreferences(context: Context) {
         set(value) = store.edit().putString(KEYBOARD_SIZE, value).apply()
     var spatialDecoder: Boolean by bool(SPATIAL_DECODER, true)
     var debugOverlay: Boolean by bool(DEBUG_OVERLAY, false)
+    /** A [org.akshara.ime.ime.ThemeCatalog] id. */
     var theme: String
-        get() = store.getString(THEME, "system") ?: "system"
+        get() = store.getString(THEME, null) ?: org.akshara.ime.ime.ThemeCatalog.defaultId
         set(value) = store.edit().putString(THEME, value).apply()
+    /** Gboard keeps Key borders per theme, so each theme remembers its own choice. */
+    fun keyBorders(theme: String = this.theme) = store.getBoolean(KEY_BORDERS_PREFIX + theme, true)
+    fun setKeyBorders(on: Boolean, theme: String = this.theme) = store.edit().putBoolean(KEY_BORDERS_PREFIX + theme, on).apply()
+    /** An [org.akshara.ime.ime.KeyShape] id; one choice for every theme. */
+    var keyShape: String
+        get() = store.getString(KEY_SHAPE, "rectangular") ?: "rectangular"
+        set(value) = store.edit().putString(KEY_SHAPE, value).apply()
     var skinTone: String
         get() = store.getString(SKIN_TONE, "") ?: ""
         set(value) = store.edit().putString(SKIN_TONE, value).apply()
@@ -60,6 +68,7 @@ class KeyboardPreferences(context: Context) {
     var persistentEnglish: Boolean by bool(PERSISTENT_ENGLISH, false)
     var inlineAutofill: Boolean by bool(INLINE_AUTOFILL, true)
     var keyHints: Boolean by bool(KEY_HINTS, true)
+    var symbolHints: Boolean by bool(SYMBOL_HINTS, true)
     var showWithHardwareKeyboard: Boolean by bool(SHOW_WITH_HARDWARE_KEYBOARD, true)
     /** On by default: the grammar-correct v2 romanization. Off is the classic (v1) Smart Phonetic. */
     var smartPhoneticV2: Boolean by bool(SMART_PHONETIC_V2, true)
@@ -67,10 +76,13 @@ class KeyboardPreferences(context: Context) {
     var v2Classical: Boolean by bool(V2_CLASSICAL, false)
     var v2RakaransayaU: Boolean by bool(V2_RAKARANSAYA_U, false)
     var v2Archaic: Boolean by bool(V2_ARCHAIC, false)
+    /** Off: d types ද, dh ධ, D ඩ. On: the older keyboard convention, d types ඩ and dh ද. */
+    var v2RetroflexD: Boolean by bool(V2_RETROFLEX_D, false)
 
     val smartPhoneticOptions: SmartPhoneticV2.Options
         get() = SmartPhoneticV2.Options(
-            archaic = v2Archaic, repayaZwj = v2RepayaZwj, classical = v2Classical, rakaransayaU = v2RakaransayaU
+            archaic = v2Archaic, repayaZwj = v2RepayaZwj, classical = v2Classical, rakaransayaU = v2RakaransayaU,
+            retroflexD = v2RetroflexD
         )
 
     fun register(listener: SharedPreferences.OnSharedPreferenceChangeListener) =
@@ -100,6 +112,8 @@ class KeyboardPreferences(context: Context) {
         private const val KEY_SPACING = "key_spacing"; private const val KEYBOARD_SIZE = "keyboard_size"
         private const val SPATIAL_DECODER = "spatial_decoder"; private const val DEBUG_OVERLAY = "debug_overlay"
         const val THEME = "theme"; private const val SKIN_TONE = "skin_tone"
+        const val KEY_BORDERS_PREFIX = "key_borders_"
+        const val KEY_SHAPE = "key_shape"
         private const val DEVELOPER = "developer_unlocked"
         private const val DOUBLE_SPACE = "double_space_period"
         private const val SMART_QUOTES = "smart_quotes"
@@ -108,11 +122,13 @@ class KeyboardPreferences(context: Context) {
         private const val PERSISTENT_ENGLISH = "persistent_english"
         private const val INLINE_AUTOFILL = "inline_autofill"
         const val KEY_HINTS = "key_hints"
+        const val SYMBOL_HINTS = "symbol_hints"
         const val SHOW_WITH_HARDWARE_KEYBOARD = "show_with_hardware_keyboard"
         const val SMART_PHONETIC_V2 = "smart_phonetic_v2"
         const val V2_REPAYA_ZWJ = "smart_phonetic_v2_repaya_zwj"
         const val V2_CLASSICAL = "smart_phonetic_v2_classical"
         const val V2_RAKARANSAYA_U = "smart_phonetic_v2_rakaransaya_u"
         const val V2_ARCHAIC = "smart_phonetic_v2_archaic"
+        const val V2_RETROFLEX_D = "smart_phonetic_v2_retroflex_d"
     }
 }

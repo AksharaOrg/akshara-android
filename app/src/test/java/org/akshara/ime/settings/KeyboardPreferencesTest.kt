@@ -17,13 +17,14 @@ class KeyboardPreferencesTest {
         val p = KeyboardPreferences(context); assertEquals(InputMode.SMART_PHONETIC, p.mode); assertTrue(p.suggestions); assertFalse(p.clipboardHistory)
         assertTrue(p.doubleSpacePeriod); assertTrue(p.smartQuotes); assertTrue(p.smartPunctuation); assertFalse(p.englishForOneWord)
         assertFalse(p.clipboardPreview); assertTrue(p.spacePunctuationKeys); assertTrue(p.emojiPicker)
+        assertTrue(p.symbolHints)
     }
     @Test fun grammarCorrectSmartPhoneticIsTheDefault() {
         val p = KeyboardPreferences(context)
         assertTrue(p.smartPhoneticV2)
         assertEquals(SmartPhoneticV2.Options(), p.smartPhoneticOptions)
-        p.v2RakaransayaU = true; p.v2Archaic = true
-        assertEquals(SmartPhoneticV2.Options(archaic = true, rakaransayaU = true), KeyboardPreferences(context).smartPhoneticOptions)
+        p.v2RakaransayaU = true; p.v2Archaic = true; p.v2RetroflexD = true
+        assertEquals(SmartPhoneticV2.Options(archaic = true, rakaransayaU = true, retroflexD = true), KeyboardPreferences(context).smartPhoneticOptions)
     }
     @Test fun emojiPlacementMigratesLegacyDisabledAndPersistsNewChoice() {
         context.getSharedPreferences(KeyboardPreferences.FILE, 0).edit().putBoolean("emoji_picker", false).commit()
@@ -33,9 +34,26 @@ class KeyboardPreferencesTest {
         KeyboardPreferences(context).reset()
         assertEquals(EmojiButtonPlacement.TOOLBAR, KeyboardPreferences(context).emojiButtonPlacement)
     }
+    @Test fun keyShapeIsOneChoiceForEveryTheme() {
+        val p = KeyboardPreferences(context)
+        assertEquals("rectangular", p.keyShape)
+        p.keyShape = "pill"
+        p.theme = "dark"
+        assertEquals("pill", KeyboardPreferences(context).keyShape)
+    }
+    @Test fun keyBordersAreRememberedPerTheme() {
+        val p = KeyboardPreferences(context)
+        assertTrue(p.keyBorders())
+        p.setKeyBorders(false)
+        assertFalse(KeyboardPreferences(context).keyBorders())
+        p.theme = "dark"
+        assertTrue(p.keyBorders())   // a different theme keeps its own choice
+        assertFalse(p.keyBorders(org.akshara.ime.ime.ThemeCatalog.defaultId))
+    }
     @Test fun valuesPersistAndReset() {
-        KeyboardPreferences(context).apply { mode = InputMode.WIJESEKARA; highContrast = true }
-        KeyboardPreferences(context).apply { assertEquals(InputMode.WIJESEKARA, mode); assertTrue(highContrast); reset() }
+        KeyboardPreferences(context).apply { mode = InputMode.WIJESEKARA; highContrast = true; symbolHints = false }
+        KeyboardPreferences(context).apply { assertEquals(InputMode.WIJESEKARA, mode); assertTrue(highContrast); assertFalse(symbolHints); reset() }
         assertEquals(InputMode.SMART_PHONETIC, KeyboardPreferences(context).mode)
+        assertTrue(KeyboardPreferences(context).symbolHints)
     }
 }
