@@ -1,5 +1,9 @@
 package org.akshara.ime.settings
 
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -230,6 +234,45 @@ class SettingsActivityTest {
         assertTrue(hasText(activity.getString(R.string.category_suggestions)))
         back()
         assertTrue(hasText(activity.getString(R.string.app_name)))
+    }
+
+    @Test fun searchMatchesDescriptionsAndOpensTheSettingWithBackToResults() {
+        compose.onNodeWithContentDescription(activity.getString(R.string.search_settings)).performClick()
+        compose.onNode(hasSetTextAction()).performTextReplacement("BORDER")
+        compose.waitForIdle()
+        val title = activity.getString(R.string.spatial_decoder)
+        assertTrue(hasText(title))
+        clickRow(title)
+        clickRow(title)
+        assertFalse(KeyboardPreferences(activity).spatialDecoder)
+        back()
+        compose.onNode(hasSetTextAction()).assertTextContains("BORDER")
+        assertTrue(hasText(title))
+        back()
+        assertTrue(hasText(activity.getString(R.string.page_sinhala)))
+    }
+
+    @Test fun searchHasAnEmptyStateAndClearRestoresTheHint() {
+        compose.onNodeWithContentDescription(activity.getString(R.string.search_settings)).performClick()
+        compose.onNode(hasSetTextAction()).performTextReplacement("zzzz no such setting")
+        compose.waitForIdle()
+        assertTrue(hasText(activity.getString(R.string.search_no_results)))
+        compose.onNodeWithContentDescription(activity.getString(R.string.search_clear)).performClick()
+        compose.waitForIdle()
+        assertTrue(hasText(activity.getString(R.string.search_hint)))
+    }
+
+    @Test fun searchQuerySurvivesActivityRecreation() {
+        compose.onNodeWithContentDescription(activity.getString(R.string.search_settings)).performClick()
+        compose.onNode(hasSetTextAction()).performTextReplacement("clipboard preview")
+        compose.waitForIdle()
+        val state = android.os.Bundle()
+        controller.saveInstanceState(state).pause().stop().destroy()
+        controller = Robolectric.buildActivity(SettingsActivity::class.java).create(state).start().restoreInstanceState(state).resume().visible()
+        activity = controller.get()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).assertTextContains("clipboard preview")
+        assertTrue(hasText(activity.getString(R.string.clipboard_preview)))
     }
 
     private fun openPage(title: Int) = clickRow(activity.getString(title))

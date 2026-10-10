@@ -60,6 +60,31 @@ class TouchDecoderTest {
         assertEquals(".", decoder.decode(onPeriodCap, period.visual.centerY, board, centers).selected?.id)
     }
 
+    @Test fun outsideTouchesNeverSnapToAnEdgeKey() {
+        for (decoder in listOf(RectangularTouchDecoder(), SpatialTouchDecoder())) {
+            for ((x, y) in listOf(-1f to 25f, 101f to 25f, 25f to -1f, 25f to 51f, Float.NaN to 25f)) {
+                assertEquals(null, decoder.decode(x, y, layout, centers).selected)
+            }
+        }
+    }
+
+    @Test fun languageCannotStealControlOrLetterEdgeTaps() {
+        val enter = right.copy(action = KeyCode.ENTER, output = "")
+        val board = layout.copy(keys = listOf(left, enter))
+        val decoder = SpatialTouchDecoder()
+        assertEquals("q", decoder.decode(49f, 25f, board, centers, LanguageScorer { 100000f }).selected?.id)
+        assertEquals("w", decoder.decode(51f, 25f, board, centers, LanguageScorer { 100000f }).selected?.id)
+    }
+
+    @Test fun languageCannotPromoteADistantCandidate() {
+        val distant = key("e", 100f, 150f).copy(
+            logical = Bounds(0f, 50f, 50f, 100f), visual = Bounds(3f, 53f, 47f, 97f))
+        val board = layout.copy(keys = listOf(left, right, distant), height = 100f, rows = 2)
+        val result = SpatialTouchDecoder().decode(50f, 40f, board, centers,
+            LanguageScorer { if (it == "e") 1000000f else 0f })
+        assertTrue(result.selected?.id in listOf("q", "w"))
+    }
+
     private fun key(id: String, left: Float, right: Float) = KeySpec(
         id, id, id, KeyCode.CHAR,
         Bounds(left, 0f, right, 50f),

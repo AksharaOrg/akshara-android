@@ -103,6 +103,11 @@ internal class TouchController(
 
     fun pointerDown(x: Float, y: Float) {
         val board = layout ?: return
+        if (state != PointerState.IDLE) pointerCancel()
+        if (!board.acceptsTouch(x, y)) {
+            state = PointerState.CANCELLED
+            return
+        }
         downX = x; downY = y; lastX = x; lastY = y
         downAt = scheduler.now()
         path.clear()
@@ -115,7 +120,7 @@ internal class TouchController(
         selected = hysteresis.select(x, y, lastDecode.selected, board.letterWidth, centers())
         state = PointerState.PRESSED
         listener.onPressed(selected)
-        listener.onHaptic()
+        if (selected != null) listener.onHaptic()
         selected?.let { key ->
             if (key.action == KeyCode.CHAR) listener.onPreview(key)
             if (key.action == KeyCode.DELETE) {
@@ -145,6 +150,10 @@ internal class TouchController(
                 val key = selected
                 val absDx = kotlin.math.abs(dx)
                 val absDy = kotlin.math.abs(dy)
+                if (absDx > board.letterWidth * 0.5f || absDy > board.rowHeight * 0.5f) {
+                    scheduler.cancel(LONG_PRESS)
+                    scheduler.cancel(SPACE_LONG_PRESS)
+                }
                 if (key?.action == KeyCode.SPACE &&
                     absDy > KeyboardGeometry.SPACE_SWIPE_DP * density &&
                     absDy > absDx * 1.2f
@@ -169,10 +178,21 @@ internal class TouchController(
                     state = PointerState.FLICK
                     listener.onFlick(key, true)
                 } else {
+                    if (!board.acceptsTouch(x, y)) {
+                        cancelPress()
+                        return
+                    }
                     lastDecode = decode(x, y, board)
                     val next = hysteresis.select(x, y, lastDecode.selected, board.letterWidth, centers())
                     if (next?.id != selected?.id) {
+                        // Sliding onto or away from a control must not delete, submit, or switch layouts.
+                        if (key?.action != KeyCode.CHAR || next?.action != KeyCode.CHAR) {
+                            cancelPress()
+                            return
+                        }
                         scheduler.cancel(LONG_PRESS)
+                        scheduler.cancel(SPACE_LONG_PRESS)
+                        scheduler.cancel(REPEAT)
                         selected = next
                         listener.onPressed(selected)
                         selected?.let { listener.onFlick(it, false) }
@@ -219,7 +239,7 @@ internal class TouchController(
             }
             else -> Unit
         }
-        if (key?.action == KeyCode.CHAR && state == PointerState.PRESSED && learningEnabled && lastDecode.clearCenter) {
+        if (key?.action == KeyCode.CHAR && state == PointerState.PRESSED && learningEnabled && lastDecode.clearCenter && lastDecode.selected?.id == key.id) {
             personalization?.learn(key, lastX, lastY, true)
             lastCharId = key.id
             lastCharAt = scheduler.now()
@@ -232,6 +252,11 @@ internal class TouchController(
         if (state == PointerState.DELETE_SWIPE) listener.onCancelPreviewDelete()
         listener.onHidePicker()
         finish()
+    }
+
+    private fun cancelPress() {
+        pointerCancel()
+        state = PointerState.CANCELLED
     }
 
     private fun commit(key: KeySpec) {
@@ -262,7 +287,7 @@ internal class TouchController(
 
     private fun openPicker() {
         val key = selected ?: return
-        if (key.extras.isEmpty()) return
+        if (state != PointerState.PRESSED || key.extras.isEmpty()) return
         state = PointerState.LONG_PRESS
         listener.onShowPicker(key)
     }
@@ -276,6 +301,7 @@ internal class TouchController(
     }
 
     private fun repeatDelete() {
+        if (state != PointerState.PRESSED || selected?.action != KeyCode.DELETE) return
         repeats++
         listener.onBackspace(repeats > KeyboardGeometry.DELETE_WORD_AFTER)
         val delay = if (repeats > KeyboardGeometry.DELETE_WORD_AFTER) 45L else KeyboardGeometry.DELETE_REPEAT_MS

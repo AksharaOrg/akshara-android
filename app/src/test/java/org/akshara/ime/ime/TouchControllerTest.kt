@@ -68,6 +68,52 @@ class TouchControllerTest {
         assertTrue(recorder.commits.isEmpty())
     }
 
+    @Test fun slidingOffDeleteCancelsRepeatAndRelease() {
+        val recorder = Recorder()
+        val scheduler = FakeScheduler()
+        val controller = controller(recorder, scheduler)
+        val delete = key("delete", 50f, 100f).copy(action = KeyCode.DELETE, extras = emptyList(), flickOutput = null)
+        controller.layout = controller.layout!!.copy(keys = listOf(key("q", 0f, 50f), delete))
+        controller.pointerDown(75f, 25f)
+        controller.pointerMove(75f, -30f, 75f)
+        scheduler.advance(1000)
+        controller.pointerUp()
+        assertEquals(0, recorder.deletes)
+        assertTrue(recorder.commits.isEmpty())
+    }
+
+    @Test fun slidingFromLetterOntoDeleteDoesNotDelete() {
+        val recorder = Recorder()
+        val controller = controller(recorder)
+        val delete = key("delete", 50f, 100f).copy(action = KeyCode.DELETE, extras = emptyList(), flickOutput = null)
+        controller.layout = controller.layout!!.copy(keys = listOf(key("q", 0f, 50f), delete))
+        controller.pointerDown(25f, 25f)
+        controller.pointerMove(90f, 25f, 90f)
+        controller.pointerUp()
+        assertEquals(0, recorder.deletes)
+        assertTrue(recorder.commits.isEmpty())
+    }
+
+    @Test fun outsideDownCannotSlideIntoAKey() {
+        val recorder = Recorder()
+        val controller = controller(recorder)
+        controller.pointerDown(-10f, 25f)
+        controller.pointerMove(25f, 25f, 25f)
+        controller.pointerUp()
+        assertTrue(recorder.commits.isEmpty())
+    }
+
+    @Test fun cancelledLongPressAndDeleteDoNotFireLater() {
+        val recorder = Recorder()
+        val scheduler = FakeScheduler()
+        val controller = controller(recorder, scheduler)
+        controller.pointerDown(25f, 25f)
+        controller.pointerCancel()
+        scheduler.advance(1000)
+        assertTrue(!recorder.picker)
+        assertTrue(recorder.commits.isEmpty())
+    }
+
     private fun key(id: String, left: Float, right: Float) = KeySpec(
         id, id, id, KeyCode.CHAR,
         Bounds(left, 0f, right, 50f),
@@ -108,6 +154,7 @@ class TouchControllerTest {
         val commits = mutableListOf<String>()
         var picker = false
         var picked: String? = null
+        var deletes = 0
         var cursor = 0
         val swipes = mutableListOf<String>()
         override fun onPressed(key: KeySpec?) = Unit
@@ -118,7 +165,7 @@ class TouchControllerTest {
         override fun onMovePicker(rawX: Float) = Unit
         override fun onHidePicker(): String? { picker = false; return picked }
         override fun onCommit(output: String) { commits += output }
-        override fun onBackspace(word: Boolean) = Unit
+        override fun onBackspace(word: Boolean) { deletes++ }
         override fun onSpace() { commits += " " }
         override fun onEnter() = Unit
         override fun onShift() = Unit

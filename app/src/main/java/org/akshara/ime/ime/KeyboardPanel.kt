@@ -55,6 +55,7 @@ internal class KeyboardPanel(
         debug = false
     )
     private var debugFrame: TouchController.DebugFrame? = null
+    private var activePointerId = MotionEvent.INVALID_POINTER_ID
     private var downElapsed = 0L
     private var pressShownElapsed = 0L
     private val debugPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -157,14 +158,29 @@ internal class KeyboardPanel(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                activePointerId = event.getPointerId(0)
                 downElapsed = SystemClock.elapsedRealtime()
                 pressShownElapsed = 0L
                 controller.language = LanguageScorer { actions.languageScoreForKey(it) }
                 controller.pointerDown(event.x, event.y)
             }
-            MotionEvent.ACTION_MOVE -> controller.pointerMove(event.x, event.y, event.rawX)
-            MotionEvent.ACTION_UP -> controller.pointerUp()
-            MotionEvent.ACTION_CANCEL -> controller.pointerCancel()
+            MotionEvent.ACTION_MOVE -> {
+                val index = event.findPointerIndex(activePointerId)
+                if (index >= 0) controller.pointerMove(event.getX(index), event.getY(index), event.getX(index) + event.rawX - event.x)
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> Unit // Ignore extra fingers; never transfer an in-progress press.
+            MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP -> {
+                val index = event.actionIndex
+                if (event.getPointerId(index) == activePointerId) {
+                    controller.pointerMove(event.getX(index), event.getY(index), event.getX(index) + event.rawX - event.x)
+                    controller.pointerUp()
+                    activePointerId = MotionEvent.INVALID_POINTER_ID
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                controller.pointerCancel()
+                activePointerId = MotionEvent.INVALID_POINTER_ID
+            }
             else -> return false
         }
         return true
@@ -279,6 +295,8 @@ internal class KeyboardPanel(
     }
 
     override fun onDetachedFromWindow() {
+        controller.pointerCancel()
+        activePointerId = MotionEvent.INVALID_POINTER_ID
         scheduler.cancelAll()
         popups.dismiss()
         super.onDetachedFromWindow()

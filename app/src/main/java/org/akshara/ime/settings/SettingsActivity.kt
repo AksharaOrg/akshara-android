@@ -39,6 +39,7 @@ import org.akshara.ime.ime.TouchPersonalizationStore
 class SettingsActivity : ComponentActivity() {
     private lateinit var prefs: KeyboardPreferences
     private var page = Page.HOME
+    private var searchQuery = ""
     private val colors by lazy { SettingsColors.scheme(this) }
     /** The open dialog or sheet, drawn over the page. */
     private var dialog by mutableStateOf<SettingsDialog?>(null)
@@ -75,11 +76,12 @@ class SettingsActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         prefs = KeyboardPreferences(this)
         onBackPressedDispatcher.addCallback(this, backCallback)
+        searchQuery = state?.getString(STATE_SEARCH).orEmpty()
         page = (state?.getString(STATE_PAGE) ?: intent?.getStringExtra(EXTRA_PAGE)).toPage() ?: Page.HOME
         window.decorView.setBackgroundColor(colors.surface.toArgb())
         setContent {
             SettingsTheme {
-                SettingsScreen(shown, { key -> listStates.getOrPut(key) { LazyListState() } }, ::navigateUp)
+                SettingsScreen(shown, { key -> listStates.getOrPut(key) { LazyListState() } }, ::navigateUp, { open(Page.SEARCH) })
                 SettingsDialogHost(dialog) { dialog = null }
             }
         }
@@ -88,6 +90,7 @@ class SettingsActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString(STATE_PAGE, page.name)
+        outState.putString(STATE_SEARCH, searchQuery)
     }
 
     /** The keyboard opens Settings on a page (its clipboard gear opens Clipboard); Back then leads Home. */
@@ -123,7 +126,18 @@ class SettingsActivity : ComponentActivity() {
         updateBackCallback()
         pageTitle = null
         blocks.clear()
-        when (page) {
+        buildPage(page)
+        shown = Shown(PageContent(page.name, pageTitle, blocks.toList(),
+            if (page == Page.SEARCH) SettingsSearch(searchQuery) { query ->
+                searchQuery = query
+                listStates[Page.SEARCH.name] = LazyListState()
+                render()
+            } else null), forward)
+    }
+
+    private fun buildPage(target: Page) {
+        when (target) {
+            Page.SEARCH -> renderSearch()
             Page.HOME -> renderHome()
             Page.SINHALA -> renderSinhala()
             Page.PREFERENCES -> renderPreferences()
@@ -139,7 +153,55 @@ class SettingsActivity : ComponentActivity() {
             Page.DIAGNOSTICS -> renderDiagnostics()
             Page.DEVELOPER -> renderDeveloper()
         }
-        shown = Shown(PageContent(page.name, pageTitle, blocks.toList()), forward)
+    }
+
+    /** Use the rendered titles and summaries as the index so search follows the visible settings. */
+    private fun renderSearch() {
+        val results = mutableListOf<SettingsRow>()
+        val terms = searchQuery.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (terms.isNotEmpty()) {
+            val pages = listOf(Page.SINHALA, Page.PREFERENCES, Page.CORRECTION, Page.THEME,
+                Page.EMOJI, Page.CLIPBOARD, Page.DATA, Page.ABOUT) +
+                if (BuildConfig.DEBUG || prefs.developerUnlocked) listOf(Page.DEVELOPER) else emptyList()
+            for (target in pages) {
+                blocks.clear()
+                pageTitle = null
+                buildPage(target)
+                val title = pageTitle.orEmpty()
+                var category = ""
+                val pageBlocks = blocks.toList()
+                var matched = false
+                pageBlocks.forEachIndexed { index, block ->
+                    if (block is PageBlock.Category) category = block.title
+                    if (block is PageBlock.Card) for (row in block.rows) {
+                        val text = listOf(row.title, row.summary.orEmpty(), title, category).joinToString(" ")
+                        if (terms.all { text.contains(it, ignoreCase = true) }) {
+                            matched = true
+                            results += SettingsRow.Action(row.title,
+                                listOf(title, category).filter { it.isNotEmpty() }.distinct().joinToString(" › "),
+                                row.icon.takeIf { it != 0 } ?: R.drawable.ic_keyboard,
+                                row.tint.takeIf { it != 0 } ?: R.color.settings_icon_blue, chevron = true,
+                                onClick = { openSearchResult(target, index) })
+                        }
+                    }
+                }
+                if (!matched && terms.all { title.contains(it, ignoreCase = true) }) {
+                    results += SettingsRow.Action(title, null, R.drawable.ic_keyboard, R.color.settings_icon_blue,
+                        chevron = true, onClick = { openSearchResult(target, 0) })
+                }
+            }
+        }
+        blocks.clear()
+        pageTitle = getString(R.string.search_settings)
+        blocks += if (results.isEmpty()) PageBlock.Copy(getString(
+            if (terms.isEmpty()) R.string.search_hint else R.string.search_no_results))
+        else PageBlock.Card(results)
+    }
+
+    private fun openSearchResult(target: Page, index: Int) {
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(window.decorView.windowToken, 0)
+        listStates[target.name] = LazyListState(index)
+        open(target)
     }
 
     /** The current page's first visible item, so tests can check scroll positions survive navigation. */
@@ -734,11 +796,12 @@ class SettingsActivity : ComponentActivity() {
     /** Settings pages; [parent] is where Back goes when there is no history (after a restart). */
     private enum class Page(val parent: Page? = null) {
         HOME,
-        SINHALA(HOME), PREFERENCES(HOME), CORRECTION(HOME), THEME(HOME), EMOJI(HOME), CLIPBOARD(HOME), DATA(HOME),
+        SEARCH(HOME), SINHALA(HOME), PREFERENCES(HOME), CORRECTION(HOME), THEME(HOME), EMOJI(HOME), CLIPBOARD(HOME), DATA(HOME),
         ABOUT(HOME), PRIVACY(ABOUT), NOTICES(ABOUT), CREDITS(ABOUT), DIAGNOSTICS(ABOUT), DEVELOPER(ABOUT)
     }
 
     companion object {
+        private const val STATE_SEARCH = "settings_search"
         private const val STATE_PAGE = "settings_page"
         /** Opens Settings on this page, for example [PAGE_CLIPBOARD]. */
         const val EXTRA_PAGE = "org.akshara.ime.settings.PAGE"

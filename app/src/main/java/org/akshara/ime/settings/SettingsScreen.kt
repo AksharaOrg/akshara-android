@@ -17,6 +17,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -69,8 +78,10 @@ internal sealed interface PageBlock {
     ) : PageBlock
 }
 
+internal data class SettingsSearch(val query: String, val onQuery: (String) -> Unit)
+
 /** One rendered page: [key] identifies it for transitions and scroll memory; Home has no [title]. */
-internal data class PageContent(val key: String, val title: String?, val blocks: List<PageBlock>)
+internal data class PageContent(val key: String, val title: String?, val blocks: List<PageBlock>, val search: SettingsSearch? = null)
 
 /** The page being shown and whether it was reached going deeper ([forward]) or back up. */
 internal data class Shown(val page: PageContent, val forward: Boolean)
@@ -80,14 +91,14 @@ internal data class Shown(val page: PageContent, val forward: Boolean)
  * large Material 3 top bar that collapses as the list scrolls.
  */
 @Composable
-internal fun SettingsScreen(shown: Shown, listState: (String) -> LazyListState, onBack: () -> Unit) {
+internal fun SettingsScreen(shown: Shown, listState: (String) -> LazyListState, onBack: () -> Unit, onSearch: () -> Unit) {
     AnimatedContent(
         targetState = shown,
         contentKey = { it.page.key },
         transitionSpec = { pageTransition(targetState.forward) },
         label = "settings page"
     ) { target ->
-        SettingsPage(target.page, listState(target.page.key), onBack)
+        SettingsPage(target.page, listState(target.page.key), onBack, onSearch)
     }
 }
 
@@ -108,18 +119,49 @@ private fun AnimatedContentTransitionScope<Shown>.pageTransition(forward: Boolea
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsPage(page: PageContent, state: LazyListState, onBack: () -> Unit) {
+private fun SettingsPage(page: PageContent, state: LazyListState, onBack: () -> Unit, onSearch: () -> Unit) {
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     Scaffold(
         modifier = if (page.title != null) Modifier.nestedScroll(scroll.nestedScrollConnection) else Modifier,
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            if (page.title != null) {
+            if (page.search != null) {
+                val focus = remember { FocusRequester() }
+                LaunchedEffect(Unit) { focus.requestFocus() }
+                Column {
+                    TopAppBar(
+                        title = { Text(stringResource(R.string.search_settings)) },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(painterResource(R.drawable.ic_nav_back), stringResource(R.string.navigate_up))
+                            }
+                        }
+                    )
+                    OutlinedTextField(
+                        value = page.search.query,
+                        onValueChange = page.search.onQuery,
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.search_settings)) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        trailingIcon = {
+                            if (page.search.query.isNotEmpty()) IconButton(onClick = { page.search.onQuery("") }) {
+                                Icon(painterResource(R.drawable.ic_close), stringResource(R.string.search_clear))
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).focusRequester(focus)
+                    )
+                }
+            } else if (page.title != null) {
                 LargeTopAppBar(
                     title = { Text(page.title) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(painterResource(R.drawable.ic_nav_back), stringResource(R.string.navigate_up))
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onSearch) {
+                            Icon(painterResource(R.drawable.ic_key_search), stringResource(R.string.search_settings))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -134,12 +176,12 @@ private fun SettingsPage(page: PageContent, state: LazyListState, onBack: () -> 
         // Rows stay below the top bar (it collapses instead); the list still runs under the navigation bar
         LazyColumn(
             state = state,
-            modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()),
+            modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).imePadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = padding.calculateBottomPadding() + 24.dp)
         ) {
             itemsIndexed(page.blocks) { index, block ->
                 when (block) {
-                    is PageBlock.Logo -> Logo(block)
+                    is PageBlock.Logo -> Logo(block, onSearch)
                     is PageBlock.Category -> Category(block.title, first = index == 0)
                     is PageBlock.Card -> Column(Modifier.padding(bottom = 16.dp)) { SettingsCard(block.rows) }
                     is PageBlock.Copy -> CopyCard(block.text)
@@ -179,7 +221,7 @@ private fun CopyCard(text: String) {
 }
 
 @Composable
-private fun Logo(block: PageBlock.Logo) {
+private fun Logo(block: PageBlock.Logo, onSearch: () -> Unit) {
     val radius = dimensionResource(R.dimen.settings_logo_radius)
     @Composable
     fun mark(size: androidx.compose.ui.unit.Dp) = Image(
@@ -212,9 +254,12 @@ private fun Logo(block: PageBlock.Logo) {
         Row(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 24.dp), verticalAlignment = Alignment.CenterVertically) {
             mark(dimensionResource(R.dimen.settings_logo_size))
             Spacer(Modifier.width(16.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(stringResource(R.string.app_name), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
                 Text(block.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = onSearch) {
+                Icon(painterResource(R.drawable.ic_key_search), stringResource(R.string.search_settings))
             }
         }
     }

@@ -21,7 +21,8 @@ method as **Akshara Sinhala**.
 - Adjustable key spacing and keyboard height
 - Full-width and one-handed layouts
 - Configurable vibration, key sounds, and high-contrast keys
-- Forgiving touch detection with local touch personalization
+- Forgiving touch detection with local touch personalization and accidental-drag guards
+- Search settings by name or description
 
 ## Privacy
 

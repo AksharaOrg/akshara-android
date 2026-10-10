@@ -26,6 +26,7 @@ internal class RectangularTouchDecoder : TouchDecoder {
         centers: (KeySpec) -> Pair<Float, Float>,
         language: LanguageScorer?
     ): DecodeResult {
+        if (!layout.acceptsTouch(x, y)) return DecodeResult(null, emptyList(), null, false)
         val containing = layout.keys.filter { it.logical.contains(x, y) }
         val selected = when {
             containing.size == 1 -> containing[0]
@@ -34,7 +35,7 @@ internal class RectangularTouchDecoder : TouchDecoder {
                 val radius = layout.letterWidth * KeyboardGeometry.SEARCH_KEYS
                 layout.keys
                     .map { it to hypot(centers(it).first - x, centers(it).second - y) }
-                    .filter { it.second <= radius }
+                    .filter { it.first.action == KeyCode.CHAR && it.second <= radius }
                     .minByOrNull { it.second }
                     ?.first
             }
@@ -55,6 +56,7 @@ internal class SpatialTouchDecoder(
         centers: (KeySpec) -> Pair<Float, Float>,
         language: LanguageScorer?
     ): DecodeResult {
+        if (!layout.acceptsTouch(x, y)) return DecodeResult(null, emptyList(), null, false)
         val containing = layout.keys.filter { it.logical.contains(x, y) }
         val inside = containing.singleOrNull()
         val sigmaX = layout.letterWidth * KeyboardGeometry.SIGMA_X
@@ -62,6 +64,9 @@ internal class SpatialTouchDecoder(
         if (inside != null && inside.action == KeyCode.SPACE) {
             val visualOther = layout.keys.firstOrNull { it.id != inside.id && it.visual.contains(x, y) }
             return locked(visualOther ?: inside, x, y, centers, sigmaX, sigmaY, inside, visualOther == null)
+        }
+        if (inside != null && inside.action != KeyCode.CHAR) {
+            return locked(inside, x, y, centers, sigmaX, sigmaY, inside, false)
         }
         if (inside != null) {
             val (cx, cy) = centers(inside)
@@ -71,13 +76,17 @@ internal class SpatialTouchDecoder(
                 return locked(inside, x, y, centers, sigmaX, sigmaY, inside, true)
             }
         }
-        val scored = nearby(x, y, layout, centers, sigmaX, sigmaY).toMutableList()
+        val scored = nearby(x, y, layout, centers, sigmaX, sigmaY)
+            .filter { it.key.action == KeyCode.CHAR }.toMutableList()
         if (scored.isEmpty()) {
             return DecodeResult(inside, emptyList(), inside, false)
         }
         val ambiguous = scored.size > 1 &&
             scored[0].spatial / scored[1].spatial.coerceAtLeast(1e-6f) < KeyboardGeometry.AMBIGUITY_RATIO
         if (ambiguous && language != null) {
+            // Language can resolve close neighbours, never promote a distant key.
+            val bestSpatial = scored.first().spatial
+            scored.removeAll { bestSpatial / it.spatial.coerceAtLeast(1e-6f) >= KeyboardGeometry.AMBIGUITY_RATIO }
             for (i in scored.indices) {
                 val item = scored[i]
                 val lang = language.score(item.key.output).coerceAtLeast(0f)
@@ -135,3 +144,8 @@ private fun gaussian(x: Float, y: Float, cx: Float, cy: Float, sigmaX: Float, si
     val dy = (y - cy) / sigmaY.coerceAtLeast(1f)
     return exp(-0.5f * (dx * dx + dy * dy))
 }
+
+/** Keep the top-row suggestion sliver, but never snap touches outside the board onto a key. */
+internal fun KeyboardLayout.acceptsTouch(x: Float, y: Float): Boolean =
+    x.isFinite() && y.isFinite() && x >= 0f && x < width &&
+        y >= (keys.minOfOrNull { it.logical.top } ?: 0f) && y < height
