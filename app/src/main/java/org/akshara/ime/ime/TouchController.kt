@@ -90,6 +90,10 @@ internal class TouchController(
     private var lastY = 0f
     private var downAt = 0L
     private var selected: KeySpec? = null
+    val pressedKey: KeySpec? get() = selected
+    private val centerProvider: (KeySpec) -> Pair<Float, Float> = { key ->
+        personalization?.center(key) ?: (key.geometricCenterX to key.geometricCenterY)
+    }
     private var lastDecode = DecodeResult(null, emptyList(), null, false)
     private var repeats = 0
     private var lastCursorSteps = 0
@@ -117,7 +121,7 @@ internal class TouchController(
         swipeClusters = 0
         hysteresis.reset()
         lastDecode = decode(x, y, board)
-        selected = hysteresis.select(x, y, lastDecode.selected, board.letterWidth, centers())
+        selected = hysteresis.select(x, y, lastDecode.selected, board.letterWidth, centerProvider)
         state = PointerState.PRESSED
         listener.onPressed(selected)
         if (selected != null) listener.onHaptic()
@@ -137,6 +141,8 @@ internal class TouchController(
     fun pointerMove(x: Float, y: Float, rawX: Float) {
         if (state == PointerState.IDLE || state == PointerState.CANCELLED) return
         val board = layout ?: return
+        // UP often repeats the last MOVE (or DOWN); do not score the same tap twice.
+        if (state == PointerState.PRESSED && x == lastX && y == lastY) return
         lastX = x; lastY = y
         record(x, y)
         val dx = x - downX
@@ -183,7 +189,7 @@ internal class TouchController(
                         return
                     }
                     lastDecode = decode(x, y, board)
-                    val next = hysteresis.select(x, y, lastDecode.selected, board.letterWidth, centers())
+                    val next = hysteresis.select(x, y, lastDecode.selected, board.letterWidth, centerProvider)
                     if (next?.id != selected?.id) {
                         // Sliding onto or away from a control must not delete, submit, or switch layouts.
                         if (key?.action != KeyCode.CHAR || next?.action != KeyCode.CHAR) {
@@ -326,11 +332,7 @@ internal class TouchController(
     }
 
     private fun decode(x: Float, y: Float, board: KeyboardLayout) =
-        decoder.decode(x, y, board, centers(), if (learningEnabled) language else null)
-
-    private fun centers(): (KeySpec) -> Pair<Float, Float> = { key ->
-        personalization?.center(key) ?: (key.geometricCenterX to key.geometricCenterY)
-    }
+        decoder.decode(x, y, board, centerProvider, if (learningEnabled) language else null)
 
     private fun record(x: Float, y: Float) {
         if (!debug) return

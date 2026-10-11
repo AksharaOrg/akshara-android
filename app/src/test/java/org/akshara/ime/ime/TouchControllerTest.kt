@@ -114,6 +114,25 @@ class TouchControllerTest {
         assertTrue(recorder.commits.isEmpty())
     }
 
+    @Test fun stationaryMoveAndReleaseCoordinatesDoNotDecodeAgain() {
+        val recorder = Recorder()
+        val controller = controller(recorder)
+        val decoder = RectangularTouchDecoder()
+        var decodes = 0
+        controller.decoder = object : TouchDecoder {
+            override fun decode(x: Float, y: Float, layout: KeyboardLayout,
+                centers: (KeySpec) -> Pair<Float, Float>, language: LanguageScorer?): DecodeResult {
+                decodes++
+                return decoder.decode(x, y, layout, centers, language)
+            }
+        }
+        controller.pointerDown(25f, 25f)
+        repeat(20) { controller.pointerMove(25f, 25f, 25f) }
+        controller.pointerUp()
+        assertEquals(1, decodes)
+        assertEquals(listOf("q"), recorder.commits)
+    }
+
     private fun key(id: String, left: Float, right: Float) = KeySpec(
         id, id, id, KeyCode.CHAR,
         Bounds(left, 0f, right, 50f),

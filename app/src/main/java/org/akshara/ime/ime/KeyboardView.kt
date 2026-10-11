@@ -375,10 +375,11 @@ class KeyboardView(
                     return dispatchToPanel(event)
                 }
             }
-            MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+            MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_POINTER_UP,
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (sliverPanel != null) {
                     val handled = dispatchToPanel(event)
-                    if (event.actionMasked != MotionEvent.ACTION_MOVE) sliverPanel = null
+                    if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) sliverPanel = null
                     return handled
                 }
             }
@@ -1176,7 +1177,8 @@ class KeyboardView(
     private fun isLandscape() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     private fun inSuggestionSliver(y: Float): Boolean {
         val sliver = suggestionKeySliver()
-        return y >= rail.bottom - sliver && y < rail.bottom + sliver
+        val panelTop = body.top + panel.top
+        return y >= panelTop - sliver && y < panelTop + sliver
     }
     private fun dispatchToPanel(event: MotionEvent): Boolean {
         val transformed = MotionEvent.obtain(event)

@@ -601,7 +601,7 @@ class KeyboardInteractionTest {
         override fun onGlobe() = Unit; override fun onModeRequested(mode: InputMode) = Unit
         override fun onHide() = Unit; override fun onCursorDelta(delta: Int) = Unit
     }
-    @Test fun extraFingerCannotTakeOverOrDuplicateAPress() {
+    @Test fun overlappingLettersBothCommitWithoutDuplicatingRetiredPointer() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val typed = mutableListOf<String>()
         val prefs = KeyboardPreferences(context)
@@ -633,7 +633,7 @@ class KeyboardInteractionTest {
         send(android.view.MotionEvent.ACTION_POINTER_UP, listOf(7, 9), listOf(q, w))
         send(android.view.MotionEvent.ACTION_MOVE, listOf(9), listOf(w))
         send(android.view.MotionEvent.ACTION_UP, listOf(9), listOf(w))
-        assertEquals(listOf("q"), typed)
+        assertEquals(listOf("q", "w"), typed)
     }
 
     @Test fun releaseCoordinatesCancelASlideOntoDeleteWithoutAMoveEvent() {

@@ -750,6 +750,10 @@ class AksharaInputMethodService : InputMethodService(), KeyboardActions {
         if (!::keyboard.isInitialized) return
         val info = currentInputEditorInfo
         val enabled = prefs.autoCapitalization && persistentEnglish && editorLayout == EditorLayout.TEXT && !secureEditor
+        if (!enabled) {
+            keyboard.setAutoCapitalization(false)
+            return // Avoid a synchronous editor IPC on every Sinhala, email, and password keystroke.
+        }
         val requested = info?.inputType?.and(InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_CAP_WORDS or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES) ?: 0
         val mode = if (requested != 0) requested else InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         val connection = currentInputConnection

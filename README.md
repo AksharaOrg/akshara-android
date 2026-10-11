@@ -52,6 +52,16 @@ from a terminal:
 ./gradlew testDebugUnitTest assembleDebug lintDebug
 ```
 
+For real-device rapid-typing checks (including a device connected with Wi-Fi ADB), run:
+
+```sh
+./gradlew connectedDebugAndroidTest
+```
+
+The device tests inject overlapping two-finger key presses in both release orders
+and report the decoder's border-tap time and allocation cost. They select Akshara
+as the active input method for the test.
+
 The debug APK is generated at:
 
 ```text

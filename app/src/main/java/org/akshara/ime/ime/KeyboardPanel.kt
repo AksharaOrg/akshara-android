@@ -45,6 +45,8 @@ internal class KeyboardPanel(
     private var rowHeight = 0f
     private val caps = ArrayList<KeyCap>(40)
     private val personalization = TouchPersonalizationStore(context)
+    private val centerProvider: (KeySpec) -> Pair<Float, Float> = { personalization.center(it) }
+    private val languageScorer = LanguageScorer { actions.languageScoreForKey(it) }
     private val scheduler = HandlerScheduler(Handler(Looper.getMainLooper()))
     private val controller = TouchController(
         decoder = SpatialTouchDecoder(),
@@ -109,7 +111,7 @@ internal class KeyboardPanel(
         invalidate()
     }
 
-    fun keyAt(x: Float, y: Float): KeySpec? = layout?.let { controller.decoder.decode(x, y, it, centers()).selected }
+    fun keyAt(x: Float, y: Float): KeySpec? = layout?.let { controller.decoder.decode(x, y, it, centerProvider).selected }
 
     fun resetPersonalization() = personalization.reset()
 
@@ -158,17 +160,29 @@ internal class KeyboardPanel(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                activePointerId = event.getPointerId(0)
-                downElapsed = SystemClock.elapsedRealtime()
-                pressShownElapsed = 0L
-                controller.language = LanguageScorer { actions.languageScoreForKey(it) }
-                controller.pointerDown(event.x, event.y)
+                beginPress(event, 0)
             }
             MotionEvent.ACTION_MOVE -> {
                 val index = event.findPointerIndex(activePointerId)
                 if (index >= 0) controller.pointerMove(event.getX(index), event.getY(index), event.getX(index) + event.rawX - event.x)
             }
-            MotionEvent.ACTION_POINTER_DOWN -> Unit // Ignore extra fingers; never transfer an in-progress press.
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                val nextIndex = event.actionIndex
+                val next = keyAt(event.getX(nextIndex), event.getY(nextIndex))
+                val activeIndex = event.findPointerIndex(activePointerId)
+                if (activeIndex >= 0) {
+                    controller.pointerMove(event.getX(activeIndex), event.getY(activeIndex),
+                        event.getX(activeIndex) + event.rawX - event.x)
+                }
+                // Finish a normal tap in press order. The old finger's later UP is ignored.
+                // Same-key contacts and fingers arriving during a gesture do not take over.
+                if (next != null && next.id != controller.pressedKey?.id &&
+                    (controller.state == PointerState.IDLE || controller.state == PointerState.CANCELLED ||
+                        controller.state == PointerState.PRESSED)) {
+                    controller.pointerUp()
+                    beginPress(event, nextIndex)
+                }
+            }
             MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP -> {
                 val index = event.actionIndex
                 if (event.getPointerId(index) == activePointerId) {
@@ -184,6 +198,14 @@ internal class KeyboardPanel(
             else -> return false
         }
         return true
+    }
+
+    private fun beginPress(event: MotionEvent, index: Int) {
+        activePointerId = event.getPointerId(index)
+        downElapsed = SystemClock.elapsedRealtime()
+        pressShownElapsed = 0L
+        controller.language = languageScorer
+        controller.pointerDown(event.getX(index), event.getY(index))
     }
 
     override fun dispatchDraw(canvas: Canvas) {
@@ -303,7 +325,6 @@ internal class KeyboardPanel(
     }
 
     private fun capFor(key: KeySpec) = caps.firstOrNull { it.spec?.id == key.id && it.visibility == VISIBLE }
-    private fun centers(): (KeySpec) -> Pair<Float, Float> = { personalization.center(it) }
 
     private fun activate(spec: KeySpec) {
         when (spec.action) {
