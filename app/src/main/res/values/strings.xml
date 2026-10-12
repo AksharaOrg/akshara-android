@@ -1,4 +1,8 @@
 <resources>
+    <string name="search_settings">Search settings</string>
+    <string name="search_clear">Clear search</string>
+    <string name="search_hint">Find settings by name or description.</string>
+    <string name="search_no_results">No matching settings. Try another word.</string>
     <string name="app_name">Akshara</string>
     <string name="subtype_sinhala">Sinhala (Akshara)</string>
     <string name="reset">Reset</string>

@@ -601,6 +601,65 @@ class KeyboardInteractionTest {
         override fun onGlobe() = Unit; override fun onModeRequested(mode: InputMode) = Unit
         override fun onHide() = Unit; override fun onCursorDelta(delta: Int) = Unit
     }
+    @Test fun overlappingLettersBothCommitWithoutDuplicatingRetiredPointer() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val typed = mutableListOf<String>()
+        val prefs = KeyboardPreferences(context)
+        prefs.reset()
+        val view = KeyboardView(context, object : KeyboardActions by idleActions() {
+            override fun onCharacter(value: String) { typed += value }
+        }, prefs)
+        view.configure(InputMode.PHONETIC, false, "Done")
+        layoutKeyboard(view)
+        val panel = findTagged(view, "q")!!.parent as KeyboardPanel
+        val q = panel.layout!!.keyById("q")!!
+        val w = panel.layout!!.keyById("w")!!
+        val time = android.os.SystemClock.uptimeMillis()
+        fun send(action: Int, ids: List<Int>, keys: List<KeySpec>) {
+            val properties = ids.map { id -> android.view.MotionEvent.PointerProperties().apply {
+                this.id = id; toolType = android.view.MotionEvent.TOOL_TYPE_FINGER
+            } }.toTypedArray()
+            val coords = keys.map { key -> android.view.MotionEvent.PointerCoords().apply {
+                x = key.geometricCenterX; y = key.geometricCenterY; pressure = 1f; size = 0.1f
+            } }.toTypedArray()
+            val event = android.view.MotionEvent.obtain(time, time + 20, action, ids.size, properties, coords,
+                0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0)
+            panel.onTouchEvent(event)
+            event.recycle()
+        }
+        send(android.view.MotionEvent.ACTION_DOWN, listOf(7), listOf(q))
+        send(android.view.MotionEvent.ACTION_POINTER_DOWN or (1 shl android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+            listOf(7, 9), listOf(q, w))
+        send(android.view.MotionEvent.ACTION_POINTER_UP, listOf(7, 9), listOf(q, w))
+        send(android.view.MotionEvent.ACTION_MOVE, listOf(9), listOf(w))
+        send(android.view.MotionEvent.ACTION_UP, listOf(9), listOf(w))
+        assertEquals(listOf("q", "w"), typed)
+    }
+
+    @Test fun releaseCoordinatesCancelASlideOntoDeleteWithoutAMoveEvent() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val typed = mutableListOf<String>()
+        var deleted = 0
+        val prefs = KeyboardPreferences(context)
+        prefs.reset()
+        val view = KeyboardView(context, object : KeyboardActions by idleActions() {
+            override fun onCharacter(value: String) { typed += value }
+            override fun onBackspace(word: Boolean) { deleted++ }
+        }, prefs)
+        view.configure(InputMode.PHONETIC, false, "Done")
+        layoutKeyboard(view)
+        val panel = findTagged(view, "m")!!.parent as KeyboardPanel
+        fun send(action: Int, key: KeySpec) {
+            val event = android.view.MotionEvent.obtain(0, 20, action, key.geometricCenterX, key.geometricCenterY, 0)
+            panel.onTouchEvent(event)
+            event.recycle()
+        }
+        send(android.view.MotionEvent.ACTION_DOWN, panel.layout!!.keyById("m")!!)
+        send(android.view.MotionEvent.ACTION_UP, panel.layout!!.keys.first { it.action == KeyCode.DELETE })
+        assertEquals(0, deleted)
+        assertTrue(typed.isEmpty())
+    }
+
     private fun layoutKeyboard(view: KeyboardView, width: Int = 1080) {
         view.measure(
             View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),

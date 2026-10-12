@@ -12,6 +12,8 @@ internal data class KeyboardLayout(
     val letterWidth: Float,
     val rows: Int
 ) {
+    val touchTop: Float = keys.minOfOrNull { it.logical.top } ?: 0f
+
     fun keyAtLogical(x: Float, y: Float): KeySpec? = keys.firstOrNull { it.logical.contains(x, y) }
     fun keyById(id: String): KeySpec? = keys.firstOrNull { it.id == id }
     fun rowKeys(row: Int): List<KeySpec> = keys.filter { it.row == row }

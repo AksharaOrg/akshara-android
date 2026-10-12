@@ -91,6 +91,10 @@ internal class TouchController(
     private var lastY = 0f
     private var downAt = 0L
     private var selected: KeySpec? = null
+    val pressedKey: KeySpec? get() = selected
+    private val centerProvider: (KeySpec) -> Pair<Float, Float> = { key ->
+        personalization?.center(key) ?: (key.geometricCenterX to key.geometricCenterY)
+    }
     private var lastDecode = DecodeResult(null, emptyList(), null, false)
     private var repeats = 0
     private var lastCursorSteps = 0
@@ -104,6 +108,11 @@ internal class TouchController(
 
     fun pointerDown(x: Float, y: Float) {
         val board = layout ?: return
+        if (state != PointerState.IDLE) pointerCancel()
+        if (!board.acceptsTouch(x, y)) {
+            state = PointerState.CANCELLED
+            return
+        }
         downX = x; downY = y; lastX = x; lastY = y
         downAt = scheduler.now()
         path.clear()
@@ -113,10 +122,10 @@ internal class TouchController(
         swipeClusters = 0
         hysteresis.reset()
         lastDecode = decode(x, y, board)
-        selected = hysteresis.select(x, y, lastDecode.selected, board.letterWidth, centers())
+        selected = hysteresis.select(x, y, lastDecode.selected, board.letterWidth, centerProvider)
         state = PointerState.PRESSED
         listener.onPressed(selected)
-        listener.onHaptic()
+        if (selected != null) listener.onHaptic()
         selected?.let { key ->
             if (key.action == KeyCode.CHAR) listener.onPreview(key)
             if (key.action == KeyCode.DELETE) {
@@ -135,6 +144,8 @@ internal class TouchController(
     fun pointerMove(x: Float, y: Float, rawX: Float) {
         if (state == PointerState.IDLE || state == PointerState.CANCELLED) return
         val board = layout ?: return
+        // UP often repeats the last MOVE (or DOWN); do not score the same tap twice.
+        if (state == PointerState.PRESSED && x == lastX && y == lastY) return
         lastX = x; lastY = y
         record(x, y)
         val dx = x - downX
@@ -148,6 +159,10 @@ internal class TouchController(
                 val key = selected
                 val absDx = kotlin.math.abs(dx)
                 val absDy = kotlin.math.abs(dy)
+                if (absDx > board.letterWidth * 0.5f || absDy > board.rowHeight * 0.5f) {
+                    scheduler.cancel(LONG_PRESS)
+                    scheduler.cancel(SPACE_LONG_PRESS)
+                }
                 if (key?.action == KeyCode.SPACE &&
                     absDy > KeyboardGeometry.SPACE_SWIPE_DP * density &&
                     absDy > absDx * 1.2f
@@ -172,10 +187,21 @@ internal class TouchController(
                     state = PointerState.FLICK
                     listener.onFlick(key, true)
                 } else {
+                    if (!board.acceptsTouch(x, y)) {
+                        cancelPress()
+                        return
+                    }
                     lastDecode = decode(x, y, board)
-                    val next = hysteresis.select(x, y, lastDecode.selected, board.letterWidth, centers())
+                    val next = hysteresis.select(x, y, lastDecode.selected, board.letterWidth, centerProvider)
                     if (next?.id != selected?.id) {
+                        // Sliding onto or away from a control must not delete, submit, or switch layouts.
+                        if (key?.action != KeyCode.CHAR || next?.action != KeyCode.CHAR) {
+                            cancelPress()
+                            return
+                        }
                         scheduler.cancel(LONG_PRESS)
+                        scheduler.cancel(SPACE_LONG_PRESS)
+                        scheduler.cancel(REPEAT)
                         selected = next
                         listener.onPressed(selected)
                         selected?.let { listener.onFlick(it, false) }
@@ -222,7 +248,7 @@ internal class TouchController(
             }
             else -> Unit
         }
-        if (key?.action == KeyCode.CHAR && state == PointerState.PRESSED && learningEnabled && lastDecode.clearCenter) {
+        if (key?.action == KeyCode.CHAR && state == PointerState.PRESSED && learningEnabled && lastDecode.clearCenter && lastDecode.selected?.id == key.id) {
             personalization?.learn(key, lastX, lastY, true)
             lastCharId = key.id
             lastCharAt = scheduler.now()
@@ -235,6 +261,11 @@ internal class TouchController(
         if (state == PointerState.DELETE_SWIPE) listener.onCancelPreviewDelete()
         listener.onHidePicker()
         finish()
+    }
+
+    private fun cancelPress() {
+        pointerCancel()
+        state = PointerState.CANCELLED
     }
 
     private fun commit(key: KeySpec) {
@@ -265,7 +296,7 @@ internal class TouchController(
 
     private fun openPicker() {
         val key = selected ?: return
-        if (key.extras.isEmpty()) return
+        if (state != PointerState.PRESSED || key.extras.isEmpty()) return
         state = PointerState.LONG_PRESS
         listener.onShowPicker(key)
     }
@@ -288,6 +319,7 @@ internal class TouchController(
     }
 
     private fun repeatDelete() {
+        if (state != PointerState.PRESSED || selected?.action != KeyCode.DELETE) return
         repeats++
         listener.onBackspace(repeats > KeyboardGeometry.DELETE_WORD_AFTER)
         val delay = if (repeats > KeyboardGeometry.DELETE_WORD_AFTER) 45L else KeyboardGeometry.DELETE_REPEAT_MS
@@ -312,11 +344,7 @@ internal class TouchController(
     }
 
     private fun decode(x: Float, y: Float, board: KeyboardLayout) =
-        decoder.decode(x, y, board, centers(), if (learningEnabled) language else null)
-
-    private fun centers(): (KeySpec) -> Pair<Float, Float> = { key ->
-        personalization?.center(key) ?: (key.geometricCenterX to key.geometricCenterY)
-    }
+        decoder.decode(x, y, board, centerProvider, if (learningEnabled) language else null)
 
     private fun record(x: Float, y: Float) {
         if (!debug) return
