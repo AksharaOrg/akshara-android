@@ -4,8 +4,8 @@ import android.content.Context
 import android.util.AtomicFile
 import org.json.JSONObject
 import java.io.File
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 /**
@@ -30,6 +30,9 @@ class LocalLearningStore(context: Context) {
     @Volatile private var wordsSnapshot: Map<String, Int> = emptyMap()
     @Volatile private var loaded = false
     private var saveScheduled = false
+    private var pendingSave: ScheduledFuture<*>? = null
+    private var saveToken = 0
+    private var migrationPending = false
     /** Bumped by [clear]; a save that started before it must not bring the data back. */
     private var generation = 0
 
@@ -68,7 +71,9 @@ class LocalLearningStore(context: Context) {
 
     /** Writes pending changes before returning. For tests. */
     internal fun flushNow() {
-        synchronized(this) { saveScheduled = false }
+        synchronized(this) {
+            pendingSave?.cancel(false); pendingSave = null; saveScheduled = false; saveToken++
+        }
         save()
     }
 
@@ -78,7 +83,11 @@ class LocalLearningStore(context: Context) {
             contexts.clear()
             wordsSnapshot = emptyMap()
             loaded = true
+            pendingSave?.cancel(false)
+            pendingSave = null
             saveScheduled = false
+            saveToken++
+            migrationPending = false
             generation++
             file.delete()
         }
@@ -87,13 +96,13 @@ class LocalLearningStore(context: Context) {
 
     private fun load() {
         if (loaded) return
-        loaded = true
         if (file.baseFile.exists()) {
             runCatching { read(JSONObject(String(file.readFully(), Charsets.UTF_8))) }
         } else {
             migrate()
         }
         wordsSnapshot = HashMap(words)
+        loaded = true
     }
 
     private fun read(root: JSONObject) {
@@ -128,14 +137,22 @@ class LocalLearningStore(context: Context) {
             .take(MAX_CONTEXTS)
             .reversed()   // most used last, as the most recently used
             .forEach { (previous, followers) -> contexts[previous] = followers.also { trim(it, MAX_FOLLOWERS) } }
+        migrationPending = true
         save()
-        prefs.edit().clear().apply()
     }
 
     private fun scheduleSave(delayMs: Long) {
+        // Keep one task, timed from the latest edit. Otherwise every word leaves a
+        // queued task that can save in the middle of continuous typing.
+        pendingSave?.cancel(false)
         saveScheduled = true
-        saver.schedule(Runnable {
-            synchronized(this) { if (!saveScheduled) return@Runnable; saveScheduled = false }
+        val token = ++saveToken
+        pendingSave = saver.schedule(Runnable {
+            synchronized(this) {
+                if (!saveScheduled || token != saveToken) return@Runnable
+                saveScheduled = false
+                pendingSave = null
+            }
             save()
         }, delayMs, TimeUnit.MILLISECONDS)
     }
@@ -155,11 +172,18 @@ class LocalLearningStore(context: Context) {
             }.toString()
         }
         val stream = runCatching { file.startWrite() }.getOrNull() ?: return
-        runCatching {
+        val saved = runCatching {
             stream.write(json.toByteArray(Charsets.UTF_8))
             file.finishWrite(stream)
         }.onFailure { file.failWrite(stream) }
-        synchronized(this) { if (generation != savedGeneration) file.delete() }
+        synchronized(this) {
+            if (generation != savedGeneration) file.delete()
+            else if (saved.isSuccess && migrationPending) {
+                // Delete the only recovery copy only after the new file is durable.
+                legacy().edit().clear().apply()
+                migrationPending = false
+            }
+        }
     }
 
     private fun legacy() = app.getSharedPreferences(LEGACY_FILE, Context.MODE_PRIVATE)
@@ -183,8 +207,8 @@ class LocalLearningStore(context: Context) {
         private const val FOLLOWERS = "followers"
 
         /** One background thread for all stores; daemon so it never keeps the process alive. */
-        private val saver: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { task ->
+        private val saver = ScheduledThreadPoolExecutor(1) { task ->
             Thread(task, "akshara-learning").apply { isDaemon = true }
-        }
+        }.apply { removeOnCancelPolicy = true }
     }
 }

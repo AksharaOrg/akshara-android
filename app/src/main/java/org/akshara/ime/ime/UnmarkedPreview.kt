@@ -16,7 +16,10 @@ internal class UnmarkedPreview {
         if (!before.endsWith(text)) return false
         val around = ic.textAround(before.length, 0) ?: return false
         if (around.selected) return false
-        if (end != null && around.cursor != null && around.cursor != end) return false
+        // Older editors (and implementations without a surrounding-text offset) need
+        // the extracted cursor position too: identical nearby text is not a cursor anchor.
+        val cursor = around.cursor ?: if (end != null) ic.cursorOffset() else null
+        if (end != null && cursor != null && cursor != end) return false
         // Editors may return more or less text than asked for: the end must match, and include all of our text
         val got = around.before
         return if (got.length >= before.length) got.endsWith(before) else got.length >= text.length && before.endsWith(got)

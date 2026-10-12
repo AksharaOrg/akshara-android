@@ -47,6 +47,17 @@ class LocalLearningStoreTest {
         assertTrue(file.exists())
     }
 
+    @Test fun continuousTypingDefersTheSaveUntilTheLatestPause() {
+        val store = LocalLearningStore(context)
+        repeat(4) {
+            store.record("වචනය$it", null)
+            Thread.sleep(600)
+        }
+        assertFalse("save delay starts at the latest word, not the first", file.exists())
+        store.flushNow()
+        assertEquals(4, LocalLearningStore(context).words().size)
+    }
+
     @Test fun dataFromOlderVersionsMovesToTheNewFileOnce() {
         legacy.edit()
             .putString("words", """{"මම":5,"යනවා":2}""")
@@ -59,6 +70,25 @@ class LocalLearningStoreTest {
         assertTrue(file.exists())
         assertTrue("old preferences are cleared", legacy.all.isEmpty())
         assertEquals(1, LocalLearningStore(context).followers("අපි")["යමු"])
+    }
+
+    @Test fun failedMigrationKeepsTheLegacyWordsForARetry() {
+        legacy.edit().putString("words", """{"මම":5}""").commit()
+        // AtomicFile cannot open its staging file when that path is a directory.
+        val staging = File(file.path + ".new")
+        assertTrue(staging.mkdir())
+        try {
+            val store = LocalLearningStore(context)
+            assertEquals(5, store.words()["මම"])
+            store.flushNow()
+            assertFalse(file.exists())
+            assertFalse("a failed save must not erase the source", legacy.all.isEmpty())
+        } finally { staging.deleteRecursively() }
+        val retry = LocalLearningStore(context)
+        assertEquals(5, retry.words()["මම"])
+        retry.flushNow()
+        assertTrue(legacy.all.isEmpty())
+        assertEquals(5, LocalLearningStore(context).words()["මම"])
     }
 
     @Test fun precedingWordsAreCappedKeepingTheMostRecent() {
