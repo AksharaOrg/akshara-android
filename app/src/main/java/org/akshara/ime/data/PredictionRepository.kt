@@ -4,6 +4,10 @@ import android.content.Context
 import org.akshara.ime.R
 import org.akshara.ime.engine.SinhalaEngine
 import org.akshara.ime.engine.SmartPhoneticV2
+import java.io.File
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import kotlin.math.ln
 
 data class Candidate(val text: String, val score: Double)
@@ -16,7 +20,7 @@ class PredictionRepository(private val context: Context, private val learning: L
     private val unigramFrequency = HashMap<String, Int>()
     private val starts = mutableListOf<Pair<String, Int>>()
     private val trigrams = mutableMapOf<String, MutableList<Pair<String, Int>>>()
-    private var bigrams: BigramTable? = null
+    @Volatile private var bigrams: BigramTable? = null
     private var sounds: SoundLexicon? = null
 
     fun warmup() {
@@ -24,7 +28,12 @@ class PredictionRepository(private val context: Context, private val learning: L
         if (!bigramsReady) Thread({ ensureBigrams() }, "akshara-bigrams").apply { isDaemon = true; start() }
     }
 
-    @Synchronized private fun ensureLoaded() {
+    // Checked before locking: every suggestion pass calls this, and the lock is only needed for the first load
+    private fun ensureLoaded() {
+        if (!loaded) synchronized(this) { loadTables() }
+    }
+
+    private fun loadTables() {
         if (loaded) return
         readPairs(R.raw.sinhala_frequency_model).let { rows ->
             entries.addAll(rows)
@@ -38,14 +47,19 @@ class PredictionRepository(private val context: Context, private val learning: L
         loaded = true
     }
 
-    @Synchronized private fun ensureBigrams() {
-        if (bigramsReady) return
-        try {
-            bigrams = BigramTable.load(context, R.raw.sinhala_next_word_model)
-        } catch (_: Throwable) {
-            bigrams = null
+    private val bigramLock = Any()
+
+    // Its own lock: reading the 19 MB next-word table must not hold up suggestions
+    private fun ensureBigrams() {
+        synchronized(bigramLock) {
+            if (bigramsReady) return
+            try {
+                bigrams = BigramTable.load(context, R.raw.sinhala_next_word_model)
+            } catch (_: Throwable) {
+                bigrams = null
+            }
+            bigramsReady = true
         }
-        bigramsReady = true
     }
 
     /** Scores words by frequency, the user's own words, and what follows the preceding one or two words. */
@@ -225,10 +239,16 @@ class PredictionRepository(private val context: Context, private val learning: L
         } }
     }
 
-    private class BigramTable(private val data: ByteArray, private val ranges: Map<String, IntRange>) {
+    /**
+     * The bundled next-word counts (19 MB of `previous\tword\tcount` lines grouped by previous word).
+     *
+     * The table is memory-mapped from a copy unpacked once per install into app storage, so it costs no heap and
+     * the system can drop its pages under memory pressure. Only the offsets of each group are kept in memory.
+     */
+    private class BigramTable(private val data: ByteBuffer, private val ranges: Map<String, IntRange>) {
         fun followers(previous: String): List<Pair<String, Int>> {
             val range = ranges[previous] ?: return emptyList()
-            val chunk = String(data, range.first, range.last - range.first + 1, Charsets.UTF_8)
+            val chunk = text(data, range.first, range.last - range.first + 1)
             val found = ArrayList<Pair<String, Int>>(32)
             chunk.lineSequence().forEach { line ->
                 if (line.isEmpty()) return@forEach
@@ -243,14 +263,16 @@ class PredictionRepository(private val context: Context, private val learning: L
         }
 
         companion object {
+            private const val PREFIX = "next_words_"
+
             fun load(context: Context, raw: Int): BigramTable {
-                val data = context.resources.openRawResource(raw).use { it.readBytes() }
+                val data = mapped(context, raw) ?: ByteBuffer.wrap(context.resources.openRawResource(raw).use { it.readBytes() })
+                val size = data.limit()
                 val ranges = HashMap<String, IntRange>(32_000)
                 var lineStart = 0
                 var firstTab = -1
                 var groupStart = 0
                 var currentKey: String? = null
-                fun keyAt(start: Int, tab: Int) = String(data, start, tab - start, Charsets.UTF_8)
                 fun finish(lineEnd: Int) {
                     val tab = firstTab
                     firstTab = -1
@@ -259,7 +281,7 @@ class PredictionRepository(private val context: Context, private val learning: L
                         lineStart = nextStart
                         return
                     }
-                    val key = keyAt(lineStart, tab)
+                    val key = text(data, lineStart, tab - lineStart)
                     if (key != currentKey) {
                         currentKey?.let { ranges[it] = groupStart until lineStart }
                         currentKey = key
@@ -267,16 +289,42 @@ class PredictionRepository(private val context: Context, private val learning: L
                     }
                     lineStart = nextStart
                 }
-                for (i in data.indices) {
-                    when (data[i]) {
+                for (i in 0 until size) {
+                    when (data.get(i)) {
                         '\t'.code.toByte() -> if (firstTab < 0) firstTab = i
                         '\n'.code.toByte() -> finish(i)
                     }
                 }
-                if (lineStart < data.size) finish(data.size)
-                currentKey?.let { ranges[it] = groupStart until data.size }
+                if (lineStart < size) finish(size)
+                currentKey?.let { ranges[it] = groupStart until size }
                 return BigramTable(data, ranges)
             }
+
+            /** Decodes [length] bytes at [offset]; a duplicate keeps concurrent readers' positions apart. */
+            fun text(data: ByteBuffer, offset: Int, length: Int): String {
+                val bytes = ByteArray(length)
+                (data.duplicate().position(offset) as ByteBuffer).get(bytes)
+                return String(bytes, Charsets.UTF_8)
+            }
+
+            /**
+             * Maps an unpacked copy of [raw]. Resources in the APK are compressed and can't be mapped directly; the
+             * copy is named after the install time, so an app update (which may ship new counts) unpacks again.
+             */
+            private fun mapped(context: Context, raw: Int): ByteBuffer? = runCatching {
+                val installed = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
+                val directory = context.noBackupFilesDir
+                val file = File(directory, "$PREFIX$installed.tsv")
+                if (!file.exists()) {
+                    directory.listFiles()?.filter { it.name.startsWith(PREFIX) }?.forEach { it.delete() }
+                    val partial = File(directory, "${file.name}.partial")
+                    context.resources.openRawResource(raw).use { input ->
+                        partial.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
+                    }
+                    check(partial.renameTo(file))
+                }
+                RandomAccessFile(file, "r").use { it.channel.map(FileChannel.MapMode.READ_ONLY, 0, it.length()) }
+            }.getOrNull()
         }
     }
 }

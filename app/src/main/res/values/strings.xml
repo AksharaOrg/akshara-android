@@ -82,8 +82,8 @@
     <string name="clipboard_summary">Show a clipboard key on the suggestion bar. Copied text stays on this device for 1 hour. Pin clips from the keyboard to keep them.</string>
     <string name="clipboard_preview">Quick paste preview</string>
     <string name="clipboard_preview_summary">Show recently copied text or a compatible image on the suggestion bar. Disabled by default.</string>
-    <string name="space_punctuation_keys">Comma and period beside Space</string>
-    <string name="space_punctuation_keys_summary">Keep comma on the left and period on the right of the space bar</string>
+    <string name="space_punctuation_keys">Comma and period keys</string>
+    <string name="space_punctuation_keys_summary">Show comma beside ?123 and period beside the space bar</string>
     <string name="inline_autofill">Inline autofill</string>
     <string name="inline_autofill_summary">Show password-manager and form-fill suggestions in the keyboard bar</string>
     <string name="key_hints">Sinhala key hints</string>
@@ -211,6 +211,9 @@
     <string name="notices_english_frequency_title">English word frequencies</string>
     <string name="notices_english_frequency_body">English completions and autocorrection use the 25,000-word frequency export from aparrish/wordfreq-en-25000, derived from rspeer/wordfreq. The bundled data is available under CC BY-SA 4.0; required upstream source attributions are included with the app.</string>
     <string name="notices_english_frequency_source">wordfreq source and attribution</string>
+    <string name="notices_icons_title">Material Symbols</string>
+    <string name="notices_icons_body">Keyboard icons are Material Symbols Rounded by Google, licensed under the Apache License 2.0.</string>
+    <string name="notices_icons_source">Source and license</string>
     <string name="notices_privacy_title">Privacy</string>
     <string name="notices_privacy_body">The source corpus is not included in the app. Predictions use the compact on-device models bundled with Akshara.</string>
     <string name="diagnostics_app_title">App</string>
@@ -235,6 +238,7 @@
     <string name="link_corpus_doi">https://doi.org/10.57967/hf/6460</string>
     <string name="link_cc_by">https://creativecommons.org/licenses/by/4.0/</string>
     <string name="link_english_frequency">https://github.com/aparrish/wordfreq-en-25000</string>
+    <string name="link_material_symbols" translatable="false">https://github.com/google/material-design-icons</string>
     <string name="keyboard_settings">Keyboard Settings</string>
     <string name="keyboard_settings_summary">Layout, features, typing and appearance</string>
     <string name="feedback_title">Sound &amp; Haptics</string>

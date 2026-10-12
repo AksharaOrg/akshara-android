@@ -102,7 +102,9 @@ internal data class KeyboardTheme(
             gradient: List<Int> = emptyList(),
             glows: List<Glow> = emptyList(),
             /** The Enter key's color; null uses the function key color. */
-            accent: Int? = null
+            accent: Int? = null,
+            /** The Enter icon's color; null picks white or near-black, whichever contrasts more with [accent]. */
+            accentInk: Int? = null
         ): KeyboardTheme {
             val overlay = if (dark) Color.WHITE else Color.BLACK
             // Dark keys sit a touch lighter so they don't sink into the background, like Gboard
@@ -120,7 +122,7 @@ internal data class KeyboardTheme(
                 ghostPressed = ColorUtils.blendARGB(Color.TRANSPARENT, overlay, PRESSED_BLEND),
                 accent = accent ?: function,
                 accentPressed = accent?.let { ColorUtils.blendARGB(it, overlay, PRESSED_BLEND) } ?: functionPressed,
-                accentInk = accent?.let { onAccent(it) } ?: ink,
+                accentInk = accentInk ?: accent?.let { onAccent(it) } ?: ink,
                 ink = ink,
                 hint = ColorUtils.setAlphaComponent(ink, 140),
                 surface = key,

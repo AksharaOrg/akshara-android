@@ -44,13 +44,14 @@ class EmojiSearchQueryTest {
         }
     }
 
-    @Test fun emojiKeyPrecedesCommaInEveryLanguageLayout() {
+    @Test fun commaPrecedesEmojiKeyInEveryLanguageLayout() {
         for (mode in InputMode.entries) for (english in listOf(false, true)) for (punctuation in listOf(false, true)) {
             val row = KeyboardLayoutFactory.typingRows(mode, KeyboardLayer.LETTERS, false, false,
                 EditorLayout.TEXT, "none", true, "Enter", "Space", false, "EN", punctuation, english).last()
             val index = row.keys.indexOfFirst { it.action == KeyCode.EMOJI }
             assertTrue(index >= 0)
-            assertEquals(",", row.keys[index + 1].output)
+            assertEquals(",", row.keys[1].output)   // beside ?123, like Gboard
+            assertTrue(index > 1)
             assertEquals(1f, row.keys.sumOf { it.widthFraction.toDouble() }.toFloat(), 0.001f)
         }
     }

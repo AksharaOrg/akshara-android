@@ -12,6 +12,8 @@ class EmojiRepository(context: Context) {
     private val groups = mutableMapOf<String, String>()
     private val order = mutableMapOf<String, Int>()
     private val names = mutableMapOf<String, String>()
+    /** The emoji this phone's font can draw, or null when that couldn't be determined. */
+    private var drawable: Set<String>? = null
     init {
         val text = context.resources.openRawResource(R.raw.sinhala_emoji_index).bufferedReader().use { it.readText() }
         runCatching {
@@ -36,6 +38,15 @@ class EmojiRepository(context: Context) {
             val terms = row.getJSONArray(3)
             names[emoji] = (0 until terms.length()).joinToString(" ") { terms.getString(it) }.lowercase()
         }
+        // Newer emoji show as an empty box on phones whose font predates them; offer only what this phone can draw
+        val paint = android.graphics.Paint()
+        val supported = (catalog + extraFlags()).filterTo(HashSet()) { paint.hasGlyph(it) }
+        // Where the font can't be asked (unit tests, unusual devices) the answer is empty or tiny: keep everything
+        if (supported.size >= catalog.size / 2) {
+            drawable = supported
+            catalog.retainAll(supported)
+            index.values.forEach { it.retainAll(supported) }
+        }
     }
     val allEmoji: List<String> get() = catalog.toList()
     private val englishNames: Map<String, String> by lazy {
@@ -55,7 +66,7 @@ class EmojiRepository(context: Context) {
             FLAGS to Pair("🏁", mutableListOf())
         )
         catalog.forEach { emoji -> buckets.getValue(categoryFor(emoji)).second.add(emoji) }
-        extraFlags().forEach { emoji ->
+        extraFlags().filter { drawable?.contains(it) ?: true }.forEach { emoji ->
             val list = buckets.getValue(FLAGS).second
             if (list.none { it == emoji }) list.add(emoji)
         }

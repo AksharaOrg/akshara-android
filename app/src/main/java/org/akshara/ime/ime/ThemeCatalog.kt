@@ -30,6 +30,8 @@ internal data class ThemeSpec(
     val ink: Int = 0,
     /** The Enter key; Gboard gives every theme its own accent. */
     val accent: Int? = null,
+    /** The Enter icon's color, when it must not be chosen by contrast alone (bold hues keep white, like Gboard). */
+    val accentInk: Int? = null,
     val dark: Boolean = false
 ) {
     fun theme(highContrast: Boolean, keyBorders: Boolean) = KeyboardTheme.from(
@@ -43,7 +45,8 @@ internal data class ThemeSpec(
         keyBorders = keyBorders,
         gradient = gradient,
         glows = glows,
-        accent = accent
+        accent = accent,
+        accentInk = accentInk
     )
 }
 
@@ -118,6 +121,22 @@ internal object ThemeCatalog {
         ThemeSpec("color_$id", ThemeSection.COLORS, name, gradient = listOf(readable(rgb(bg), ink)),
             key = readable(rgb(key), ink), function = readable(rgb(function), ink), ink = ink, accent = readableAccent(rgb(accent)), dark = dark)
 
+    /**
+     * Bold hues with white labels, styled like Gboard's: Shift, Delete and ?123 a shade darker than the letter keys
+     * (not darker than the background), and Enter a vivid version of the hue with a white icon. Enter shows icons,
+     * so its icon needs WCAG's 3:1 for graphics rather than 4.5:1 for text.
+     */
+    private fun bold(id: String, name: Int, bg: Number, key: Number, accent: Number): ThemeSpec {
+        val background = readable(rgb(bg), Color.WHITE)
+        val letter = readable(rgb(key), Color.WHITE)
+        return ThemeSpec("color_$id", ThemeSection.COLORS, name, gradient = listOf(background), key = letter,
+            function = ColorUtils.blendARGB(letter, background, BOLD_FUNCTION_SHADE), ink = Color.WHITE,
+            accent = readable(rgb(accent), Color.WHITE, min = ICON_CONTRAST), accentInk = Color.WHITE, dark = true)
+    }
+
+    private const val BOLD_FUNCTION_SHADE = 0.35f
+    private const val ICON_CONTRAST = 3.0
+
     private val colors = listOf(
         // Light
         solid("snow", R.string.theme_color_snow, 0xFFFFFF, 0xF1F3F4, 0xDADCE0, darkInk, 0x1B6EF3, false),
@@ -134,12 +153,12 @@ internal object ThemeCatalog {
         solid("plum", R.string.theme_color_plum, 0x24152A, 0x3A2343, 0x4E3159, rgb(0xF3E6F7), 0xD59BEA, true),
         solid("espresso", R.string.theme_color_espresso, 0x241B16, 0x3A2C24, 0x4E3D33, rgb(0xF4EBE4), 0xE0A47A, true),
         // Bold hues with white labels
-        solid("blue", R.string.theme_color_blue, 0x1A56C4, 0x3A70D6, 0x1546A3, Color.WHITE, 0x8EC5FF, true),
-        solid("teal", R.string.theme_color_teal, 0x00796B, 0x26897C, 0x00625A, Color.WHITE, 0x80CBC4, true),
-        solid("green", R.string.theme_color_green, 0x2E7D32, 0x4A9150, 0x24682A, Color.WHITE, 0xA5D6A7, true),
-        solid("red", R.string.theme_color_red, 0xC62828, 0xD24545, 0xA61F1F, Color.WHITE, 0xFF8A65, true),
-        solid("pink", R.string.theme_color_pink, 0xC2185B, 0xCF3C74, 0xA0124B, Color.WHITE, 0xF48FB1, true),
-        solid("purple", R.string.theme_color_purple, 0x5E35B1, 0x7350C0, 0x4D2A96, Color.WHITE, 0xB39DDB, true)
+        bold("blue", R.string.theme_color_blue, 0x1A56C4, 0x3A70D6, 0x4285F4),
+        bold("teal", R.string.theme_color_teal, 0x00796B, 0x26897C, 0x26A69A),
+        bold("green", R.string.theme_color_green, 0x2E7D32, 0x4A9150, 0x43A047),
+        bold("red", R.string.theme_color_red, 0xC62828, 0xD24545, 0xF44336),
+        bold("pink", R.string.theme_color_pink, 0xC2185B, 0xCF3C74, 0xEC407A),
+        bold("purple", R.string.theme_color_purple, 0x5E35B1, 0x7350C0, 0x7E57C2)
     )
 
     // Light gradients: soft, muted two-tone washes (top to bottom) with frosted keys.

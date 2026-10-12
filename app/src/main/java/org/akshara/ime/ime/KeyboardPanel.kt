@@ -274,8 +274,8 @@ internal class KeyboardPanel(
     override fun onShowPicker(key: KeySpec) {
         val cap = capFor(key) ?: return
         pickerKey = cap
-        val choices = listOf(key.label.ifEmpty { key.output } to key.output) + key.extras
-        popups.showPicker(cap, choices, theme)
+        // Only the extras: the key's own letter is a plain tap away
+        popups.showPicker(cap, key.extras, theme)
     }
 
     override fun onMovePicker(rawX: Float) {
@@ -290,6 +290,7 @@ internal class KeyboardPanel(
     override fun onBackspace(word: Boolean) = actions.onBackspace(word)
     override fun onSpace() = actions.onSpace()
     override fun onSpaceLongPress() = actions.onSpaceLongPress()
+    override fun onKeyboardPicker() = actions.onKeyboardPicker()
     override fun onEnter() = actions.onEnter()
     override fun onShift() = onShift.invoke()
     override fun onLayer(layer: KeyboardLayer) = onLayer.invoke(layer)

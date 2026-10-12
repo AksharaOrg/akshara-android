@@ -40,7 +40,18 @@ internal class EmojiCell(context: Context, ink: Int) : TextView(context) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val size = MeasureSpec.getSize(widthMeasureSpec)
-        setMeasuredDimension(size, size)
+        // Size the emoji from the cell: a fixed text size overflowed narrow cells (dense screens, larger font or
+        // display size), and an emoji wider than its cell can't be centred, so rows looked uneven
+        val fitted = minOf(size * FILL, android.util.TypedValue.applyDimension(
+            android.util.TypedValue.COMPLEX_UNIT_SP, KeyboardGeometry.EMOJI_TEXT_SP, resources.displayMetrics))
+        if (size > 0 && kotlin.math.abs(textSize - fitted) > 0.5f) setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, fitted)
+        val exact = MeasureSpec.makeMeasureSpec(size, MeasureSpec.EXACTLY)
+        super.onMeasure(exact, exact)
+    }
+
+    private companion object {
+        /** Emoji glyphs are about as wide as their text size; this leaves a small margin inside the cell. */
+        const val FILL = 0.72f
     }
 }
 

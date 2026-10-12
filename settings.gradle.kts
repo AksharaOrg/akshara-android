@@ -11,3 +11,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "AksharaAndroid"
 include(":app")
+include(":baselineprofile")

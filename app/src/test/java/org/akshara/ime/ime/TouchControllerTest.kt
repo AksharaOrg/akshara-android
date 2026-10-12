@@ -39,6 +39,25 @@ class TouchControllerTest {
         assertEquals(listOf("à"), recorder.commits)
     }
 
+    @Test fun languageKeySwitchesOnTapAndOpensTheKeyboardPickerWhenHeld() {
+        val language = KeySpec("language", "EN", "", KeyCode.LANGUAGE, Bounds(0f, 50f, 100f, 100f), Bounds(4f, 54f, 96f, 96f), 1)
+        val layout = KeyboardLayout(listOf(key("q", 0f, 0f), language), 100f, 100f, 50f, 50f, 2)
+        val recorder = Recorder()
+        val scheduler = FakeScheduler()
+        val controller = controller(recorder, scheduler)
+        controller.layout = layout
+        controller.pointerDown(50f, 75f)
+        controller.pointerUp()
+        assertEquals(1, recorder.languageSwitches)
+        assertEquals(0, recorder.keyboardPickers)
+
+        controller.pointerDown(50f, 75f)
+        scheduler.advance(KeyboardGeometry.LANGUAGE_SWITCH_HOLD_MS)
+        assertEquals(1, recorder.keyboardPickers)
+        controller.pointerUp()
+        assertEquals("holding does not also switch language", 1, recorder.languageSwitches)
+    }
+
     @Test fun spaceDragDoesNotInsertSpaces() {
         val recorder = Recorder()
         val space = KeySpec("space", " ", " ", KeyCode.SPACE, Bounds(0f, 50f, 100f, 100f), Bounds(4f, 54f, 96f, 96f), 1)
@@ -191,7 +210,10 @@ class TouchControllerTest {
         override fun onLayer(layer: KeyboardLayer) = Unit
         override fun onEmoji() = Unit
         override fun onGlobe() = Unit
-        override fun onLanguageSwitch() = Unit
+        var languageSwitches = 0
+        var keyboardPickers = 0
+        override fun onLanguageSwitch() { languageSwitches++ }
+        override fun onKeyboardPicker() { keyboardPickers++ }
         override fun onHaptic() = Unit
         override fun onCursorDelta(delta: Int) { cursor += delta }
         override fun onCursorTick() = Unit

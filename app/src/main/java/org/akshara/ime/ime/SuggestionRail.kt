@@ -147,11 +147,17 @@ internal class SuggestionRail(
         setEmojiVisible(false)
     }
 
+    private var actionsLaidOut = false
+    private var previewBound = false
+    private var previewLabel: String? = null
+    private var previewImage = false
+
     fun setEmptyTitle(title: String) {
-        empty.text = title
+        if (empty.text.toString() != title) empty.text = title
     }
 
     fun setClipboardVisible(visible: Boolean) {
+        if ((clipboard.visibility == VISIBLE) == visible && actionsLaidOut) return
         clipboard.visibility = if (visible) VISIBLE else GONE
         clipboard.isClickable = visible
         clipboard.isFocusable = visible
@@ -160,6 +166,7 @@ internal class SuggestionRail(
     }
 
     fun setEmojiVisible(visible: Boolean) {
+        if ((emoji.visibility == VISIBLE) == visible && actionsLaidOut) return
         emoji.visibility = if (visible) VISIBLE else GONE
         emoji.isClickable = visible
         emoji.isFocusable = visible
@@ -168,11 +175,15 @@ internal class SuggestionRail(
     }
 
     fun setClipboardPreview(label: String?, image: Boolean = false) {
+        if (previewBound && label == previewLabel && image == previewImage) return
+        previewBound = true
+        previewLabel = label
+        previewImage = image
         previewVisible = !label.isNullOrBlank()
         clipboardPreview.text = label.orEmpty()
         clipboardPreview.contentDescription = label?.let { "Paste $it" }
         clipboardPreview.setCompoundDrawablesWithIntrinsicBounds(
-            if (image) org.akshara.ime.R.drawable.ic_doc else org.akshara.ime.R.drawable.ic_key_clipboard,
+            if (image) org.akshara.ime.R.drawable.ic_key_image else org.akshara.ime.R.drawable.ic_key_clipboard,
             0, 0, 0
         )
         clipboardPreview.compoundDrawables.filterNotNull().forEach { drawable ->
@@ -184,6 +195,7 @@ internal class SuggestionRail(
     }
 
     private fun updateActionInsets() {
+        actionsLaidOut = true
         val start = (if (clipboard.visibility == VISIBLE) dp(44) else 0) +
             (if (emoji.visibility == VISIBLE) dp(44) else 0)
         chipRow.setPadding(start, 0, dp(44), 0)
@@ -232,7 +244,8 @@ internal class SuggestionRail(
         chipRow.alpha = 1f
         emptyRow.animate().cancel()
         chipRow.animate().cancel()
-        settings.bringToFront()
+        // Reordering children re-lays out the rail; settings only needs moving when it is not already on top
+        if (indexOfChild(settings) != childCount - 1) settings.bringToFront()
     }
 
     private fun divider() = View(context).apply {
@@ -336,6 +349,7 @@ internal class MorphLabel(context: Context, color: Int) : ViewGroup(context) {
     private var pendingText: String? = null
     private var pendingAnimated = false
     private var motionCount = 0
+    private var lastChangeAt = Long.MIN_VALUE / 2
 
     init {
         blockForceDark()
@@ -399,7 +413,10 @@ internal class MorphLabel(context: Context, color: Int) : ViewGroup(context) {
 
     private fun apply(next: String, animated: Boolean) {
         settle()
-        val canAnimate = animated &&
+        val now = android.os.SystemClock.uptimeMillis()
+        val quickSuccession = now - lastChangeAt < SuggestionMorph.QUICK_SUCCESSION_MS
+        lastChangeAt = now
+        val canAnimate = animated && !quickSuccession &&
             ValueAnimator.areAnimatorsEnabled() &&
             isAttachedToWindow &&
             width > 1
@@ -614,11 +631,16 @@ internal class MorphLabel(context: Context, color: Int) : ViewGroup(context) {
             isFocusable = false
         }
 
+        private val fm = Paint.FontMetrics()
+
+        // A single text draw: fading it needs no offscreen layer per frame
+        override fun hasOverlappingRendering() = false
+
         override fun onDraw(canvas: Canvas) {
             if (glyph.isEmpty()) return
             val saved = paint.textAlign
             paint.textAlign = Paint.Align.CENTER
-            val fm = paint.fontMetrics
+            paint.getFontMetrics(fm)
             val y = height / 2f - (fm.ascent + fm.descent) / 2f
             canvas.drawText(glyph, width / 2f, y, paint)
             paint.textAlign = saved

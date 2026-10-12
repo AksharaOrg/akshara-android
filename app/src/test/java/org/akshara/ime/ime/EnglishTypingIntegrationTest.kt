@@ -47,6 +47,8 @@ class EnglishTypingIntegrationTest {
             val view = service.onCreateInputView() as KeyboardView
             service.onStartInput(info, false)
             service.onStartInputView(info, false)
+            // As on a phone a moment after the keyboard opens: Space only corrects once the word list has loaded
+            ReflectionHelpers.getField<org.akshara.ime.data.EnglishPredictionRepository>(service, "englishPrediction").warmup()
             test(service, editor, view, actions)
         } finally { service.onFinishInputView(true); controller.destroy() }
     }
@@ -317,19 +319,25 @@ class EnglishTypingIntegrationTest {
         assertEquals("A", view.typingLayout()!!.keyById("a")!!.output)
     }
 
+    @Test fun commaSitsBesideNumbersKeyAndLanguageKeyBesideSpace() = withEditor(InputType.TYPE_CLASS_TEXT) { _, _, view, _ ->
+        layout(view)
+        val bottom = view.typingLayout()!!.rowKeys(view.typingLayout()!!.rows - 1).map { it.id }
+        assertEquals(listOf("?123", ",", "language"), bottom.take(3))
+    }
+
     @Test fun urlKeepsSlashAndLanguageKeyInBothLanguages() = withEditor(
         InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, EditorInfo.IME_ACTION_GO
     ) { service, editor, view, _ ->
         layout(view)
         assertNotNull(view.typingLayout()!!.keyById("/"))
         assertNotNull(view.typingLayout()!!.keyById("language"))
-        assertTrue(view.typingLayout()!!.keyById("language")!!.logical.left < view.typingLayout()!!.keyById("/")!!.logical.left)
+        assertTrue(view.typingLayout()!!.keyById("/")!!.logical.left < view.typingLayout()!!.keyById("language")!!.logical.left)
         assertEquals("a", view.typingLayout()!!.keyById("a")!!.output)
         service.onLanguageSwitch()
         layout(view)
         assertNotNull(view.typingLayout()!!.keyById("/"))
         assertNotNull(view.typingLayout()!!.keyById("language"))
-        assertTrue(view.typingLayout()!!.keyById("language")!!.logical.left < view.typingLayout()!!.keyById("/")!!.logical.left)
+        assertTrue(view.typingLayout()!!.keyById("/")!!.logical.left < view.typingLayout()!!.keyById("language")!!.logical.left)
         "amma".forEach { service.onCharacter(it.toString()) }
         assertTrue(editor.text.any { it in '\u0D80'..'\u0DFF' })
     }

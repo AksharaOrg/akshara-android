@@ -2,7 +2,7 @@ package org.akshara.ime.ime
 
 import org.akshara.ime.engine.InputMode
 
-/** Long-press extras. Base glyph is prepended by the keyboard, Gboard-style. */
+/** Long-press extras. The picker shows only these; the key's own glyph is a plain tap. */
 internal object KeyAlternates {
     fun extras(identity: String, mode: InputMode, layer: KeyboardLayer, shifted: Boolean): List<Pair<String, String>> {
         if (layer == KeyboardLayer.LETTERS && mode == InputMode.WIJESEKARA) {

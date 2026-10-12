@@ -26,7 +26,6 @@ import androidx.core.view.WindowCompat
 import org.akshara.ime.BuildConfig
 import org.akshara.ime.R
 import org.akshara.ime.data.ClipboardHistoryStore
-import org.akshara.ime.data.LocalLearningStore
 import org.akshara.ime.engine.InputMode
 import org.akshara.ime.ime.AksharaInputMethodService
 import org.akshara.ime.ime.KeyShape
@@ -524,7 +523,8 @@ class SettingsActivity : ComponentActivity() {
         section(0) {
             action(R.string.clear_learning_title, R.string.clear_learning_summary, R.drawable.ic_delete, R.color.settings_icon_red) {
                 confirm(R.string.clear_learning_title, R.string.clear_learning_message, R.string.clear) {
-                    LocalLearningStore(this@SettingsActivity).clear()
+                    // The running keyboard shares this copy; clearing a separate one would be saved over
+                    org.akshara.ime.data.KeyboardData.of(this@SettingsActivity).learning.clear()
                 }
             }
             action(R.string.reset_touch_title, R.string.reset_touch_summary, R.drawable.ic_restart, R.color.settings_icon_orange) {
@@ -626,6 +626,10 @@ class SettingsActivity : ComponentActivity() {
         copy(R.string.notices_english_frequency_title, R.string.notices_english_frequency_body)
         section(0) {
             action(R.string.notices_english_frequency_source, 0, R.drawable.ic_code, R.color.settings_icon_blue) { openUrl(R.string.link_english_frequency) }
+        }
+        copy(R.string.notices_icons_title, R.string.notices_icons_body)
+        section(0) {
+            action(R.string.notices_icons_source, 0, R.drawable.ic_code, R.color.settings_icon_blue) { openUrl(R.string.link_material_symbols) }
         }
         copy(R.string.notices_privacy_title, R.string.notices_privacy_body)
     }

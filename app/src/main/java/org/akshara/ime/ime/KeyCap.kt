@@ -57,7 +57,8 @@ internal class KeyCap(context: Context) : View(context) {
         val pressed = isPressed
         fill.color = when {
             key.action == KeyCode.ENTER -> if (pressed) theme.accentPressed else theme.accent
-            key.utility -> if (pressed) theme.functionPressed else theme.function
+            // The language key is drawn like a letter key, as Gboard does, though its label stays function-sized
+            key.utility && key.action != KeyCode.LANGUAGE -> if (pressed) theme.functionPressed else theme.function
             else -> if (pressed) theme.keyPressed else theme.key
         }
         val radius = when (key.action) {
@@ -153,7 +154,7 @@ internal class KeyCap(context: Context) : View(context) {
         mainLeft: Float = width.toFloat(), mainRight: Float = 0f
     ) {
         val sinhala = KeyTypography.isSinhala(hint)
-        hintPaint.color = ColorUtils.setAlphaComponent(theme.hint, if (prominentHint) 180 else if (sinhala) 175 else 140)
+        hintPaint.color = ColorUtils.setAlphaComponent(theme.hint, if (prominentHint) 180 else 175)
         hintPaint.typeface = KeyTypography.keyTypeface()
         hintPaint.textAlign = align
         var hintSize = KeyTypography.hintPx(resources, hint, prominentHint)

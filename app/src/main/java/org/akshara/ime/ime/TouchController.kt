@@ -53,6 +53,7 @@ internal class TouchController(
         fun onBackspace(word: Boolean)
         fun onSpace()
         fun onSpaceLongPress() {}
+        fun onKeyboardPicker() {}
         fun onEnter()
         fun onShift()
         fun onLayer(layer: KeyboardLayer)
@@ -131,6 +132,8 @@ internal class TouchController(
                 scheduler.post(KeyboardGeometry.DELETE_REPEAT_START_MS, REPEAT) { repeatDelete() }
             } else if (key.action == KeyCode.SPACE) {
                 scheduler.post(KeyboardGeometry.LANGUAGE_SWITCH_HOLD_MS, SPACE_LONG_PRESS) { openLanguageSwitcher() }
+            } else if (key.action == KeyCode.LANGUAGE) {
+                scheduler.post(KeyboardGeometry.LANGUAGE_SWITCH_HOLD_MS, SPACE_LONG_PRESS) { openKeyboardPicker() }
             } else if (key.action == KeyCode.CHAR && key.extras.isNotEmpty()) {
                 scheduler.post(longPressMs, LONG_PRESS) { openPicker() }
             }
@@ -304,6 +307,15 @@ internal class TouchController(
         state = PointerState.SPACE_LONG_PRESS
         listener.onHidePreview()
         listener.onSpaceLongPress()
+    }
+
+    /** Holding the language key opens Android's keyboard picker instead of switching language on release. */
+    private fun openKeyboardPicker() {
+        val key = selected ?: return
+        if (key.action != KeyCode.LANGUAGE || state != PointerState.PRESSED) return
+        state = PointerState.SPACE_LONG_PRESS   // consumed: releasing the key does nothing more
+        listener.onHaptic()
+        listener.onKeyboardPicker()
     }
 
     private fun repeatDelete() {

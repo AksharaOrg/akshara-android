@@ -43,7 +43,7 @@ internal class ClipboardBoard(
     private var confirmingClear = false
     private val recentTab = tabChip { select(Tab.RECENT) }
     private val pinnedTab = tabChip { select(Tab.PINNED) }
-    private val clear = toolbarIcon(R.drawable.ic_delete, string(R.string.clip_clear)) { askToClear() }
+    private val clear = toolbarIcon(R.drawable.ic_key_delete, string(R.string.clip_clear)) { askToClear() }
     private val tabs = tabs()
     private val confirmBar = confirmBar()
     private val empty = TextView(context).apply {

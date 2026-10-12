@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("androidx.baselineprofile")
 }
 
 android {
@@ -40,6 +41,11 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // Build types the Baseline Profile plugin uses to profile the app on a device; never published, so
+        // the debug key will do on machines without the upload keystore
+        for (name in listOf("nonMinifiedRelease", "benchmarkRelease")) {
+            maybeCreate(name).signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     buildFeatures { buildConfig = true; compose = true }
@@ -60,6 +66,9 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.01.00"))
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.10.1")
+    // Installs the bundled Baseline Profile, so the keyboard's hot code is compiled ahead of first use
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    baselineProfile(project(":baselineprofile"))
     testImplementation(platform("androidx.compose:compose-bom:2026.01.00"))
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

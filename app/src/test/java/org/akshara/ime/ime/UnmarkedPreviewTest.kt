@@ -8,9 +8,23 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 class UnmarkedPreviewTest {
+    @Test @Config(sdk = [30]) fun movingToAnIdenticalLongContextInvalidatesThePreviewOnLegacyEditors() {
+        val editor = EditText(ApplicationProvider.getApplicationContext())
+        val repeated = "x".repeat(80) + " "
+        editor.setText(repeated + "abc " + repeated)
+        editor.setSelection(editor.text.length)
+        val ic = editor.onCreateInputConnection(EditorInfo())!!
+        val preview = UnmarkedPreview()
+        preview.replace(ic, "abc")
+        val original = editor.text.toString()
+        editor.setSelection(repeated.length + 3)
+        assertFalse("matching nearby text does not mean the cursor is still ours", preview.replace(ic, "wrong"))
+        assertEquals(original, editor.text.toString())
+    }
     @Test fun movingToAnIdenticalWordDoesNotReplaceOtherText() {
         val editor = EditText(ApplicationProvider.getApplicationContext())
         editor.setText("abc ")

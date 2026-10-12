@@ -11,6 +11,12 @@ internal object SuggestionMorph {
     const val STAGGER_MS = 6L
     const val MAX_STAGGER_MS = 36L
     const val APPEAR_SCALE = 0.28f
+    /**
+     * Changes closer together than this (fast typing) swap the text without the morph. Each morph draws about a
+     * dozen frames per suggestion; while typing, those animations overlapped constantly and drawing them was most
+     * of the keyboard's CPU time. A change after a pause, such as next words after Space, still morphs.
+     */
+    const val QUICK_SUCCESSION_MS = 300L
     const val TEXT_SP = 17f
     const val INSET_DP = 4f
 

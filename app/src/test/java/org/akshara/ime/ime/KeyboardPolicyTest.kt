@@ -34,14 +34,14 @@ class KeyboardPolicyTest {
         assertFalse(AksharaInputMethodService.isClipboardEditor(password))
         assertTrue(AksharaInputMethodService.isSecureEditor(password))
     }
-    @Test fun punctuationSettingKeepsCommaAndPeriodBesideSpace() {
+    @Test fun punctuationSettingPutsCommaBesideNumbersKeyAndPeriodBesideSpace() {
         val rows = KeyboardLayoutFactory.typingRows(
             org.akshara.ime.engine.InputMode.PHONETIC, KeyboardLayer.LETTERS, false, false,
             EditorLayout.TEXT, "none", false, "Done", "Akshara", false, "EN", true
         )
         val bottom = rows.last().keys
         val space = bottom.indexOfFirst { it.action == KeyCode.SPACE }
-        assertEquals(",", bottom[space - 1].id)
+        assertEquals(listOf("?123", ",", "language"), bottom.take(3).map { it.id })
         assertEquals(".", bottom[space + 1].id)
         assertTrue(bottom.none { it.action == KeyCode.EMOJI })
     }

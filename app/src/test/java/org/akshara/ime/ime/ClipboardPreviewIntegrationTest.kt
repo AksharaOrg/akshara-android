@@ -150,7 +150,7 @@ class ClipboardPreviewIntegrationTest {
             updated.layout(0, 0, 1080, 900)
             val bottom = updated.typingLayout()!!.rowKeys(updated.typingLayout()!!.rows - 1)
             val space = bottom.indexOfFirst { it.action == KeyCode.SPACE }
-            assertEquals(",", bottom[space - 1].id)
+            assertEquals(",", bottom[1].id)
             assertEquals(".", bottom[space + 1].id)
 
             KeyboardPreferences(context).theme = "dark"

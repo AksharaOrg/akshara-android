@@ -24,7 +24,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import org.akshara.ime.BuildConfig
 import org.akshara.ime.data.ClipboardHistoryStore
-import org.akshara.ime.data.EmojiRepository
 import org.akshara.ime.engine.InputMode
 import org.akshara.ime.engine.SinhalaEngine
 import org.akshara.ime.settings.EmojiButtonPlacement
@@ -49,6 +48,8 @@ interface KeyboardActions {
     fun onHide()
     fun onCursorDelta(delta: Int)
     fun onSettings() {}
+    /** Long-press on the language key: Android's keyboard picker, as in Gboard. */
+    fun onKeyboardPicker() {}
     /** Settings opened from the clipboard board, on its Clipboard page. */
     fun onClipboardSettings() = onSettings()
     fun onClipboardOpen() {}
@@ -88,7 +89,8 @@ class KeyboardView(
     private var clipboardPreviewLabel: String? = null
     private var clipboardPreviewIsImage = false
     private var recentEmoji = emptyList<String>()
-    private val emojiRepo = EmojiRepository(context)
+    // Shared with the service: recreating the keyboard (theme, key shape) does not parse the emoji data again
+    private val emojiRepo get() = org.akshara.ime.data.KeyboardData.of(context).emoji
     private val clipboardStore = ClipboardHistoryStore(context)
     private var emojiSearch = false
     private val searchQuery = EmojiSearchQuery()
@@ -192,6 +194,7 @@ class KeyboardView(
             }
             override fun onSpaceLongPress() = actions.onSpaceLongPress()
             override fun onLanguageSwitch() = actions.onLanguageSwitch()
+            override fun onKeyboardPicker() = actions.onKeyboardPicker()
             override fun onSpaceSwipe(up: Boolean) {
                 if (layer == KeyboardLayer.LETTERS) actions.onSpaceSwipe(up)
             }
@@ -227,13 +230,15 @@ class KeyboardView(
         clipChildren = false
         clipToPadding = false
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-            val types = WindowInsetsCompat.Type.navigationBars() or
-                WindowInsetsCompat.Type.mandatorySystemGestures() or
-                WindowInsetsCompat.Type.tappableElement()
-            val system = insets.getInsetsIgnoringVisibility(types).bottom
-            val resource = navigationBarFallback()
-            val bottom = maxOf(system + dp(5), resource + dp(5), dp(KeyboardGeometry.BOTTOM_PAD_DP))
-                .coerceAtMost(dp(64))
+            // Room for the navigation bar only, as Gboard leaves. The system gesture area and the old 48dp
+            // navigation_bar_height resource (still reported by phones using gesture navigation) left a large
+            // gap under the space bar.
+            // Tappable elements cover the hide and switch buttons Android draws under keyboards on some phones
+            val navigation = insets.getInsetsIgnoringVisibility(
+                WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.tappableElement()
+            ).bottom
+            val reported = if (navigation > 0 || Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) navigation else navigationBarFallback()
+            val bottom = reported.coerceIn(dp(KeyboardGeometry.BOTTOM_PAD_DP), dp(64))
             val params = homePad.layoutParams as LayoutParams
             if (params.height != bottom) {
                 params.height = bottom
@@ -538,8 +543,9 @@ class KeyboardView(
 
     private fun languageSwitchLabel(): String? = when {
         editorLayout !in setOf(EditorLayout.TEXT, EditorLayout.URI) -> null
-        persistentEnglish -> "සිං"
-        else -> "EN"
+        // The language being typed, like the space bar's label in Gboard
+        persistentEnglish -> "EN"
+        else -> "සිං"
     }
 
     private fun updateRailHeight() {
@@ -670,7 +676,7 @@ class KeyboardView(
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(8), 0, dp(4), 0)
-        addView(iconButton(org.akshara.ime.R.drawable.ic_nav_back, KeyRole.FUNCTION, "Letters") { closeEmoji() }.apply {
+        addView(iconButton(org.akshara.ime.R.drawable.ic_key_back, KeyRole.FUNCTION, "Letters") { closeEmoji() }.apply {
             background = emojiPill(theme.function)
             setPadding(dp(6), dp(6), dp(6), dp(6))
         }, LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(8) })
@@ -702,7 +708,7 @@ class KeyboardView(
         val icons = listOf(org.akshara.ime.R.drawable.ic_emoji_recent, org.akshara.ime.R.drawable.ic_key_emoji,
             org.akshara.ime.R.drawable.ic_emoji_nature, org.akshara.ime.R.drawable.ic_emoji_food,
             org.akshara.ime.R.drawable.ic_emoji_activity, org.akshara.ime.R.drawable.ic_emoji_travel,
-            org.akshara.ime.R.drawable.ic_emoji_objects, org.akshara.ime.R.drawable.ic_heart,
+            org.akshara.ime.R.drawable.ic_emoji_objects, org.akshara.ime.R.drawable.ic_key_symbols,
             org.akshara.ime.R.drawable.ic_emoji_flags)
         val names = listOf("Recent") + emojiRepo.categories.map { it.name }
         emojiTabs.clear()
@@ -763,7 +769,7 @@ class KeyboardView(
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8), 0, dp(8), 0)
         }
-        header.addView(iconButton(org.akshara.ime.R.drawable.ic_nav_back, KeyRole.FUNCTION, "Back to emoji") {
+        header.addView(iconButton(org.akshara.ime.R.drawable.ic_key_back, KeyRole.FUNCTION, "Back to emoji") {
             emojiSearch = false; render()
         }.apply {
             background = emojiPill(theme.function)

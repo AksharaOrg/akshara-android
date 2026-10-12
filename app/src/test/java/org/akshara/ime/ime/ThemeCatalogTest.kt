@@ -51,7 +51,8 @@ class ThemeCatalogTest {
                 check("${spec.id} flat", theme.ink, stop)
             }
             check("${spec.id} popup", theme.popupInk, theme.popup)
-            check("${spec.id} enter", theme.accentInk, theme.accent)
+            // Enter shows icons (graphics: WCAG 3:1); bold hues use a vivid accent with a white icon, like Gboard
+            check("${spec.id} enter", theme.accentInk, theme.accent, 3.0)
         }
         assertTrue(failures.joinToString("; "), failures.isEmpty())
     }

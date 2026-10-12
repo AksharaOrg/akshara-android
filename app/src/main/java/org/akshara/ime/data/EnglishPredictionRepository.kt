@@ -9,6 +9,8 @@ class EnglishPredictionRepository(private val context: Context, private val lear
     private data class Entry(val word: String, val rank: Int)
     private data class NextWord(val word: String, val frequency: Int)
     @Volatile private var loaded = false
+    /** Set once loading has finished; the tables are only read after that, so readers need no lock. */
+    @Volatile private var ready = false
     private val entries = ArrayList<Entry>(25_000)
     private val exact = HashMap<String, Int>(25_000)
     private val deletionIndex = HashMap<String, MutableList<Int>>(100_000)
@@ -50,6 +52,13 @@ class EnglishPredictionRepository(private val context: Context, private val lear
 
     @Synchronized fun correction(word: String): String? {
         load()
+        return loadedCorrection(word)
+    }
+
+    /** For the main thread (Space, Enter): never waits for loading or for a prediction on another thread. */
+    fun correctionIfReady(word: String): String? = if (ready) loadedCorrection(word) else null
+
+    private fun loadedCorrection(word: String): String? {
         val normalized = word.lowercase(java.util.Locale.ROOT).replace('’', '\'')
         if (normalized == "i") return "I".takeIf { it != word }
         commonTypos[normalized]?.let { return matchCase(it, word) }
@@ -62,6 +71,10 @@ class EnglishPredictionRepository(private val context: Context, private val lear
     private fun load() {
         if (loaded) return
         loaded = true
+        try { readTables() } finally { ready = true }
+    }
+
+    private fun readTables() {
         val rows = runCatching {
             JSONArray(context.resources.openRawResource(org.akshara.ime.R.raw.english_wordfreq_25000).bufferedReader().use { it.readText() })
         }.getOrNull() ?: return

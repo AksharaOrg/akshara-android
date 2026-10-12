@@ -16,6 +16,8 @@ class SinhalaAutocorrection(private val context: Context) {
     private data class Entry(val text: String, val frequency: Int)
 
     @Volatile private var loaded = false
+    /** Set once loading has finished; the tables are only read after that, so readers need no lock. */
+    @Volatile private var ready = false
     private val entries = ArrayList<Entry>()
     private val exact = HashMap<String, Int>()
     private val deletionIndex = HashMap<String, MutableList<Int>>()
@@ -31,6 +33,13 @@ class SinhalaAutocorrection(private val context: Context) {
 
     @Synchronized fun correction(word: String): String? {
         load()
+        return loadedCorrection(word)
+    }
+
+    /** For the main thread (Space, Enter): never waits for loading or for a lookup on another thread. */
+    fun correctionIfReady(word: String): String? = if (ready) loadedCorrection(word) else null
+
+    private fun loadedCorrection(word: String): String? {
         val normalized = normalize(word)
         if (!eligible(normalized) || exact.containsKey(normalized)) return null
         return candidates(normalized).singleOrNull()?.text
@@ -39,6 +48,10 @@ class SinhalaAutocorrection(private val context: Context) {
     private fun load() {
         if (loaded) return
         loaded = true
+        try { readTables() } finally { ready = true }
+    }
+
+    private fun readTables() {
         val bytes = runCatching { context.resources.openRawResource(org.akshara.ime.R.raw.sinhala_autocorrect).use { it.readBytes() } }.getOrNull() ?: return
         val magic = "AKSHARA_AUTOCORRECT_V1\u0000".toByteArray(Charsets.UTF_8)
         if (bytes.size < magic.size + 4 || !bytes.copyOfRange(0, magic.size).contentEquals(magic)) return
